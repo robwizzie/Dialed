@@ -15,9 +15,7 @@ struct ChecklistCard: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Daily Routine")
                 .font(.headline)
-                .foregroundColor(AppColors.textPrimary)
-                .padding(.horizontal)
-                .padding(.top)
+                .foregroundStyle(.primary)
 
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
@@ -26,12 +24,12 @@ struct ChecklistCard: View {
                     if index < items.count - 1 {
                         Divider()
                             .padding(.leading, 56)
+                            .overlay(.ultraThinMaterial)
                     }
                 }
             }
         }
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .elevatedGlassCard(cornerRadius: 16, padding: 16)
     }
 }
 
@@ -50,14 +48,28 @@ struct ChecklistRow: View {
         }
     }
 
-    private var iconColor: Color {
+    @ViewBuilder
+    private var iconView: some View {
         switch item.checklistStatus {
         case .done:
-            return AppColors.success
+            Image(systemName: iconName)
+                .font(.title3)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [.green, .mint],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
         case .skipped:
-            return AppColors.textSecondary
+            Image(systemName: iconName)
+                .font(.title3)
+                .foregroundStyle(.secondary)
         case .open:
-            return AppColors.textSecondary.opacity(0.3)
+            Image(systemName: iconName)
+                .font(.title3)
+                .foregroundStyle(.secondary.opacity(0.3))
         }
     }
 
@@ -85,9 +97,7 @@ struct ChecklistRow: View {
         }) {
             HStack(spacing: 12) {
                 // Checkbox icon
-                Image(systemName: iconName)
-                    .font(.title3)
-                    .foregroundColor(iconColor)
+                iconView
                     .frame(width: 32, height: 32)
 
                 // Content
@@ -95,21 +105,31 @@ struct ChecklistRow: View {
                     if let type = item.checklistType {
                         Text(type.rawValue)
                             .font(.subheadline.bold())
-                            .foregroundColor(item.checklistStatus == .done ? AppColors.textSecondary : AppColors.textPrimary)
+                            .foregroundStyle(item.checklistStatus == .done ? .secondary : .primary)
                             .strikethrough(item.checklistStatus == .done)
 
                         Text(type.description)
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 Spacer()
 
-                // Time
+                // Time with glass pill
                 Text(timeString)
-                    .font(.caption.monospacedDigit())
-                    .foregroundColor(AppColors.textSecondary)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                Capsule()
+                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    )
             }
             .padding()
             .contentShape(Rectangle())

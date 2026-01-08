@@ -33,52 +33,73 @@ struct SleepTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Image(systemName: "bed.double.fill")
-                    .foregroundColor(AppColors.primary)
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.indigo, .purple],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                 Text("Sleep")
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 if let score = sleepScore {
-                    HStack(spacing: 4) {
-                        Text("\(score)/5")
-                            .font(.title3.bold())
+                    HStack(spacing: 6) {
+                        Text("\(score)")
+                            .font(.title2.bold())
                             .foregroundColor(scoreColor)
+                        Text("/5")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         Image(systemName: "moon.stars.fill")
                             .font(.caption)
                             .foregroundColor(scoreColor)
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule()
+                            .fill(scoreColor.opacity(0.15))
+                            .overlay(
+                                Capsule()
+                                    .stroke(scoreColor.opacity(0.3), lineWidth: 1)
+                            )
+                    )
                 }
             }
 
-            // Metrics
+            // Metrics with glass dividers
             HStack(spacing: 16) {
                 // Duration
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 4) {
                     Text("Duration")
                         .font(.caption2)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                     Text(durationText)
                         .font(.callout.bold())
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
                 }
 
                 Divider()
                     .frame(height: 30)
+                    .overlay(.ultraThinMaterial)
 
                 // Deep sleep
                 if let deep = deepSleep {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("Deep")
                             .font(.caption2)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                         Text("\(deep)m")
                             .font(.callout.bold())
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(.primary)
                     }
                 }
 
@@ -86,13 +107,13 @@ struct SleepTile: View {
 
                 // Efficiency
                 if let eff = efficiency {
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: .trailing, spacing: 4) {
                         Text("Efficiency")
                             .font(.caption2)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                         Text("\(Int(eff * 100))%")
                             .font(.callout.bold())
-                            .foregroundColor(eff >= 0.85 ? AppColors.success : AppColors.textPrimary)
+                            .foregroundColor(eff >= 0.85 ? .green : .primary)
                     }
                 }
             }
@@ -100,12 +121,12 @@ struct SleepTile: View {
             if sleepScore == nil && duration == nil {
                 Text("No sleep data yet")
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
             }
         }
-        .padding()
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .elevatedGlassCard(cornerRadius: 16, padding: 16)
     }
 }
 
@@ -127,72 +148,101 @@ struct WorkoutTile: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Image(systemName: "figure.strengthtraining.traditional")
-                    .foregroundColor(AppColors.success)
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.green, .mint],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                 Text("Workout")
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 if workoutDetected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(AppColors.success)
+                        .font(.title3)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.green, .mint],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
                 }
             }
 
             if workoutDetected {
-                // Workout details
-                HStack(spacing: 12) {
-                    // Tag
-                    Text(tagDisplay)
-                        .font(.caption.bold())
-                        .foregroundColor(AppColors.primary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(AppColors.primary.opacity(0.2))
-                        .cornerRadius(6)
+                // Workout details with glass pills
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 10) {
+                        // Tag
+                        Text(tagDisplay)
+                            .font(.caption.bold())
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(
+                                Capsule()
+                                    .fill(.blue.opacity(0.15))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.blue.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
 
-                    if let duration = duration {
-                        Text("\(duration) min")
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                        if let duration = duration {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock.fill")
+                                    .font(.caption2)
+                                Text("\(duration) min")
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+
+                        if let calories = calories {
+                            HStack(spacing: 4) {
+                                Image(systemName: "flame.fill")
+                                    .font(.caption2)
+                                Text("\(calories)")
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(.secondary)
+                        }
                     }
-
-                    if let calories = calories {
-                        Text("\(calories) cal")
-                            .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                    }
-
-                    Spacer()
 
                     // Quality score
-                    if let score = workoutScore {
-                        HStack(spacing: 2) {
+                    HStack(spacing: 4) {
+                        if let score = workoutScore {
                             ForEach(1...5, id: \.self) { index in
                                 Image(systemName: index <= score ? "star.fill" : "star")
-                                    .font(.caption2)
-                                    .foregroundColor(index <= score ? AppColors.warning : AppColors.textSecondary)
+                                    .font(.caption)
+                                    .foregroundColor(index <= score ? .yellow : .secondary.opacity(0.3))
                             }
+                        } else {
+                            Text("Tap to rate quality")
+                                .font(.caption)
+                                .foregroundColor(.blue)
                         }
-                    } else {
-                        Text("Tap to rate")
-                            .font(.caption)
-                            .foregroundColor(AppColors.primary)
                     }
                 }
             } else {
                 Text("No workout detected today")
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
             }
         }
-        .padding()
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .elevatedGlassCard(cornerRadius: 16, padding: 16)
     }
 }
 
@@ -203,61 +253,83 @@ struct ActivityTile: View {
     let activeEnergy: Int?
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Steps
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 12) {
+            // Steps card
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "figure.walk")
                         .font(.caption)
-                        .foregroundColor(AppColors.primary)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.blue, .cyan],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                     Text("Steps")
                         .font(.caption.bold())
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
                 }
 
                 if let steps = steps {
                     Text(steps >= 1000 ? String(format: "%.1fk", Double(steps) / 1000.0) : "\(steps)")
                         .font(.title2.bold())
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.primary, .primary.opacity(0.8)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
                 } else {
                     Text("--")
                         .font(.title2.bold())
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(AppColors.surface.opacity(0.5))
-            .cornerRadius(12)
+            .glassCard(cornerRadius: 14, padding: 14)
 
-            // Active Energy
-            VStack(alignment: .leading, spacing: 8) {
+            // Active Energy card
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Image(systemName: "flame.fill")
                         .font(.caption)
-                        .foregroundColor(AppColors.warning)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.orange, .red],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                     Text("Active")
                         .font(.caption.bold())
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
                 }
 
                 if let energy = activeEnergy {
-                    Text("\(energy)")
-                        .font(.title2.bold())
-                        .foregroundColor(AppColors.textPrimary)
-                    + Text(" cal")
-                        .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(energy)")
+                            .font(.title2.bold())
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.primary, .primary.opacity(0.8)],
+                                    startPoint: .top,
+                                    endPoint: .bottom
+                                )
+                            )
+                        Text("cal")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 } else {
                     Text("--")
                         .font(.title2.bold())
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
-            .background(AppColors.surface.opacity(0.5))
-            .cornerRadius(12)
+            .glassCard(cornerRadius: 14, padding: 14)
         }
     }
 }
