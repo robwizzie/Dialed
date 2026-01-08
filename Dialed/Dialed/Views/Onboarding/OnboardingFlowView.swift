@@ -56,8 +56,38 @@ struct OnboardingFlowView: View {
                     }
                 )
 
+            case .checklist:
+                ChecklistSetupView(
+                    selectedItems: $viewModel.selectedChecklistItems,
+                    customTimes: $viewModel.customChecklistTimes,
+                    onContinue: {
+                        withAnimation {
+                            viewModel.moveToNext()
+                        }
+                    },
+                    onBack: {
+                        withAnimation {
+                            viewModel.moveToPrevious()
+                        }
+                    }
+                )
+
             case .permissions:
                 PermissionsView(
+                    onContinue: {
+                        withAnimation {
+                            viewModel.moveToNext()
+                        }
+                    },
+                    onBack: {
+                        withAnimation {
+                            viewModel.moveToPrevious()
+                        }
+                    }
+                )
+
+            case .notifications:
+                NotificationsView(
                     onContinue: {
                         viewModel.completeOnboarding()
                         appState.completeOnboarding()
@@ -90,11 +120,27 @@ class OnboardingViewModel: ObservableObject {
     @Published var calorieTarget: Double?
     @Published var workoutsPerWeek: Int = 6
 
+    // Checklist setup
+    @Published var selectedChecklistItems: Set<Constants.ChecklistType> = [
+        .amSkincare,
+        .lunchVitamins,
+        .creatine,
+        .pmSkincare
+    ]
+    @Published var customChecklistTimes: [Constants.ChecklistType: (hour: Int, minute: Int)] = [
+        .amSkincare: (7, 0),
+        .lunchVitamins: (12, 0),
+        .creatine: (16, 0),
+        .pmSkincare: (21, 0)
+    ]
+
     enum OnboardingStep: Int, CaseIterable {
         case welcome = 0
         case profile = 1
         case targets = 2
-        case permissions = 3
+        case checklist = 3
+        case permissions = 4
+        case notifications = 5
     }
 
     init() {
@@ -119,6 +165,12 @@ class OnboardingViewModel: ObservableObject {
     }
 
     func completeOnboarding() {
+        // Convert checklist times to UserSettings format
+        var customTimes: [String: UserSettings.ScheduledTime] = [:]
+        for (type, time) in customChecklistTimes {
+            customTimes[type.rawValue] = UserSettings.ScheduledTime(hour: time.hour, minute: time.minute)
+        }
+
         // Save settings
         let settings = UserSettings(
             currentWeight: currentWeight,
@@ -129,9 +181,9 @@ class OnboardingViewModel: ObservableObject {
             calorieTarget: calorieTarget,
             expectedWorkoutsPerWeek: workoutsPerWeek,
             notificationsEnabled: true,
-            enabledNotifications: Set(Constants.ChecklistType.allCases.map { $0.rawValue }),
+            enabledNotifications: Set(selectedChecklistItems.map { $0.rawValue }),
             healthKitEnabled: HealthKitManager.shared.checkAuthorizationStatus(),
-            customChecklistTimes: nil
+            customChecklistTimes: customTimes.isEmpty ? nil : customTimes
         )
 
         settings.save()

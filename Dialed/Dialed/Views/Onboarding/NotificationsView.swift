@@ -1,17 +1,17 @@
 //
-//  PermissionsView.swift
+//  NotificationsView.swift
 //  Dialed
 //
-//  Request HealthKit permissions with clear benefits
+//  Request notification permissions and configure preferences
 //
 
 import SwiftUI
+import UserNotifications
 
-struct PermissionsView: View {
+struct NotificationsView: View {
     @State private var isRequestingPermissions = false
     @State private var permissionGranted = false
-    @State private var showError = false
-    @State private var errorMessage = ""
+    @State private var permissionDenied = false
 
     let onContinue: () -> Void
     let onBack: () -> Void
@@ -20,7 +20,7 @@ struct PermissionsView: View {
         VStack(spacing: 0) {
             // Header
             VStack(spacing: 8) {
-                Image(systemName: "heart.text.square.fill")
+                Image(systemName: "bell.badge.fill")
                     .font(.system(size: 60))
                     .foregroundStyle(
                         LinearGradient(
@@ -31,11 +31,11 @@ struct PermissionsView: View {
                     )
                     .padding(.bottom, 16)
 
-                Text("Connect to Apple Health")
+                Text("Stay on Track")
                     .font(.system(size: 34, weight: .bold))
                     .foregroundStyle(.primary)
 
-                Text("Dialed works best with automated data from your devices")
+                Text("Get gentle reminders for your daily routine tasks")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -44,36 +44,36 @@ struct PermissionsView: View {
             .padding(.top, 60)
             .padding(.bottom, 40)
 
-            // What we'll read
+            // Benefits
             VStack(alignment: .leading, spacing: 20) {
-                Text("What we'll access:")
+                Text("Notification benefits:")
                     .font(.headline)
                     .foregroundStyle(.primary)
                     .padding(.horizontal, 30)
 
                 VStack(spacing: 16) {
-                    PermissionRow(
-                        icon: "bed.double.fill",
-                        title: "Sleep Data",
-                        description: "Auto-score sleep from RingConn metrics"
+                    NotificationBenefitRow(
+                        icon: "clock.fill",
+                        title: "Timely Reminders",
+                        description: "Stay consistent with your routine"
                     )
 
-                    PermissionRow(
-                        icon: "figure.walk",
-                        title: "Workouts & Activity",
-                        description: "Detect workouts and mile runs automatically"
+                    NotificationBenefitRow(
+                        icon: "checkmark.seal.fill",
+                        title: "Never Miss a Task",
+                        description: "Get notified for uncompleted items"
                     )
 
-                    PermissionRow(
-                        icon: "drop.fill",
-                        title: "Water Intake",
-                        description: "Sync from your smart water bottle"
+                    NotificationBenefitRow(
+                        icon: "flame.fill",
+                        title: "Maintain Your Streak",
+                        description: "Keep your momentum going daily"
                     )
 
-                    PermissionRow(
-                        icon: "heart.fill",
-                        title: "Heart Metrics",
-                        description: "HRV and resting HR for recovery insights"
+                    NotificationBenefitRow(
+                        icon: "moon.zzz.fill",
+                        title: "Sleep Reminders",
+                        description: "Wind-down alerts for better rest"
                     )
                 }
                 .padding(.horizontal, 30)
@@ -81,49 +81,61 @@ struct PermissionsView: View {
 
             Spacer()
 
-            // Privacy note
-            VStack(spacing: 12) {
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.shield.fill")
-                        .foregroundColor(AppColors.success)
+            // Status message
+            if permissionDenied {
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(AppColors.warning)
 
-                    Text("Your health data stays on your device")
+                        Text("Notifications are disabled")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Text("You can enable them later in iOS Settings")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                }
-
-                if showError {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundColor(AppColors.danger)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 30)
                 }
+                .padding(.horizontal, 30)
+                .padding(.bottom, 16)
+            } else if permissionGranted {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(AppColors.success)
+
+                    Text("Notifications enabled")
+                        .font(.caption.bold())
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.bottom, 16)
             }
-            .padding(.bottom, 16)
 
             // Navigation buttons
             VStack(spacing: 12) {
-                Button(action: requestHealthKitPermissions) {
-                    HStack {
-                        if isRequestingPermissions {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text(permissionGranted ? "✓ Connected" : "Enable Health Access")
+                if !permissionGranted && !permissionDenied {
+                    Button(action: requestNotificationPermissions) {
+                        HStack {
+                            if isRequestingPermissions {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text("Enable Notifications")
+                            }
                         }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(AppColors.primary)
+                                .shadow(color: AppColors.primary.opacity(0.3), radius: 8, x: 0, y: 4)
+                        )
                     }
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(permissionGranted ? AppColors.success : AppColors.primary)
-                            .shadow(color: (permissionGranted ? AppColors.success : AppColors.primary).opacity(0.3), radius: 8, x: 0, y: 4)
-                    )
+                    .disabled(isRequestingPermissions)
                 }
-                .disabled(isRequestingPermissions || permissionGranted)
 
                 HStack(spacing: 16) {
                     Button(action: onBack) {
@@ -168,31 +180,49 @@ struct PermissionsView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppColors.background.ignoresSafeArea())
+        .onAppear {
+            checkCurrentPermissions()
+        }
     }
 
-    private func requestHealthKitPermissions() {
-        isRequestingPermissions = true
-        showError = false
-
-        Task {
-            do {
-                try await HealthKitManager.shared.requestAuthorization()
-                await MainActor.run {
+    private func checkCurrentPermissions() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .authorized, .provisional:
                     permissionGranted = true
-                    isRequestingPermissions = false
+                    permissionDenied = false
+                case .denied:
+                    permissionGranted = false
+                    permissionDenied = true
+                default:
+                    permissionGranted = false
+                    permissionDenied = false
                 }
-            } catch {
-                await MainActor.run {
-                    isRequestingPermissions = false
-                    showError = true
-                    errorMessage = "Could not connect to Health. You can enable this later in Settings."
+            }
+        }
+    }
+
+    private func requestNotificationPermissions() {
+        isRequestingPermissions = true
+
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+            DispatchQueue.main.async {
+                isRequestingPermissions = false
+
+                if granted {
+                    permissionGranted = true
+                    permissionDenied = false
+                } else {
+                    permissionGranted = false
+                    permissionDenied = true
                 }
             }
         }
     }
 }
 
-struct PermissionRow: View {
+struct NotificationBenefitRow: View {
     let icon: String
     let title: String
     let description: String
@@ -226,5 +256,5 @@ struct PermissionRow: View {
 }
 
 #Preview {
-    PermissionsView(onContinue: {}, onBack: {})
+    NotificationsView(onContinue: {}, onBack: {})
 }
