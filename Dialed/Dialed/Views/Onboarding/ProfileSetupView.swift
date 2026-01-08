@@ -44,21 +44,27 @@ struct ProfileSetupView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Current Weight")
                         .font(.headline)
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
 
                     HStack {
                         TextField("190", value: $currentWeight, format: .number)
                             .keyboardType(.decimalPad)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(.primary)
                             .padding()
-                            .background(AppColors.surface)
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
                             .focused($focusedField, equals: .weight)
 
                         Text("lbs")
                             .font(.title3)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 50)
                     }
                 }
@@ -67,21 +73,27 @@ struct ProfileSetupView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Height")
                         .font(.headline)
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
 
                     HStack {
                         TextField("72", value: $height, format: .number)
                             .keyboardType(.decimalPad)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(.primary)
                             .padding()
-                            .background(AppColors.surface)
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
                             .focused($focusedField, equals: .height)
 
                         Text("in")
                             .font(.title3)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 50)
                     }
                 }
@@ -90,21 +102,27 @@ struct ProfileSetupView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Goal Weight")
                         .font(.headline)
-                        .foregroundColor(AppColors.textPrimary)
+                        .foregroundStyle(.primary)
 
                     HStack {
                         TextField("185", value: $goalWeight, format: .number)
                             .keyboardType(.decimalPad)
                             .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(.primary)
                             .padding()
-                            .background(AppColors.surface)
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(.ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                            )
                             .focused($focusedField, equals: .goal)
 
                         Text("lbs")
                             .font(.title3)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                             .frame(width: 50)
                     }
                 }
@@ -114,11 +132,17 @@ struct ProfileSetupView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "info.circle.fill")
                             .font(.caption)
-                            .foregroundColor(AppColors.primary)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.blue, .cyan],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
 
                         Text("We'll calculate \(Int(goalWeight * 0.85))g daily protein from your goal weight")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.top, 8)
                 }
@@ -135,11 +159,17 @@ struct ProfileSetupView: View {
                         Text("Back")
                     }
                     .font(.headline)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(AppColors.surface)
-                    .cornerRadius(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    )
                 }
 
                 Button(action: onContinue) {
@@ -148,8 +178,11 @@ struct ProfileSetupView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(isValid ? AppColors.primary : AppColors.primary.opacity(0.5))
-                        .cornerRadius(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isValid ? AppColors.primary : AppColors.primary.opacity(0.5))
+                                .shadow(color: isValid ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                        )
                 }
                 .disabled(!isValid)
             }

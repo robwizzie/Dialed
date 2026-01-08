@@ -46,7 +46,7 @@ struct TargetsSetupView: View {
                         HStack {
                             Text("Protein")
                                 .font(.headline)
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
 
                             Spacer()
 
@@ -55,29 +55,41 @@ struct TargetsSetupView: View {
                                 .foregroundColor(AppColors.primary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.primary.opacity(0.2))
-                                .cornerRadius(6)
+                                .background(
+                                    Capsule()
+                                        .fill(AppColors.primary.opacity(0.15))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
                         }
 
                         HStack {
                             TextField("190", value: $proteinTarget, format: .number)
                                 .keyboardType(.decimalPad)
                                 .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
                                 .padding()
-                                .background(AppColors.surface)
-                                .cornerRadius(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.ultraThinMaterial)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                        )
+                                )
                                 .focused($focusedField, equals: .protein)
 
                             Text("g/day")
                                 .font(.title3)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .frame(width: 70)
                         }
 
                         Text("Target: 0.8-1g per lb of goal weight")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     // Water
@@ -85,7 +97,7 @@ struct TargetsSetupView: View {
                         HStack {
                             Text("Water")
                                 .font(.headline)
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
 
                             Spacer()
 
@@ -94,29 +106,41 @@ struct TargetsSetupView: View {
                                 .foregroundColor(AppColors.primary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.primary.opacity(0.2))
-                                .cornerRadius(6)
+                                .background(
+                                    Capsule()
+                                        .fill(AppColors.primary.opacity(0.15))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
                         }
 
                         HStack {
                             TextField("120", value: $waterTarget, format: .number)
                                 .keyboardType(.decimalPad)
                                 .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
                                 .padding()
-                                .background(AppColors.surface)
-                                .cornerRadius(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.ultraThinMaterial)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                        )
+                                )
                                 .focused($focusedField, equals: .water)
 
                             Text("oz/day")
                                 .font(.title3)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .frame(width: 70)
                         }
 
                         Text("Target: Half your body weight in oz")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     // Calories (optional)
@@ -124,45 +148,57 @@ struct TargetsSetupView: View {
                         HStack {
                             Text("Calories")
                                 .font(.headline)
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
 
                             Spacer()
 
                             Text("Optional")
                                 .font(.caption)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(AppColors.textSecondary.opacity(0.2))
-                                .cornerRadius(6)
+                                .background(
+                                    Capsule()
+                                        .fill(.secondary.opacity(0.15))
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(.secondary.opacity(0.3), lineWidth: 1)
+                                        )
+                                )
                         }
 
                         HStack {
                             TextField("Optional", value: $calorieTarget, format: .number)
                                 .keyboardType(.decimalPad)
                                 .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(AppColors.textPrimary)
+                                .foregroundStyle(.primary)
                                 .padding()
-                                .background(AppColors.surface)
-                                .cornerRadius(12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(.ultraThinMaterial)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                        )
+                                )
                                 .focused($focusedField, equals: .calories)
 
                             Text("cal/day")
                                 .font(.title3)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundStyle(.secondary)
                                 .frame(width: 70)
                         }
 
                         Text("Leave blank to skip calorie tracking")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
 
                     // Workout frequency
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Expected Workouts")
                             .font(.headline)
-                            .foregroundColor(AppColors.textPrimary)
+                            .foregroundStyle(.primary)
 
                         HStack(spacing: 12) {
                             ForEach(3...7, id: \.self) { days in
@@ -171,17 +207,24 @@ struct TargetsSetupView: View {
                                 }) {
                                     Text("\(days)")
                                         .font(.title3.bold())
-                                        .foregroundColor(workoutsPerWeek == days ? .white : AppColors.textPrimary)
+                                        .foregroundColor(workoutsPerWeek == days ? .white : .primary)
                                         .frame(width: 50, height: 50)
-                                        .background(workoutsPerWeek == days ? AppColors.primary : AppColors.surface)
-                                        .cornerRadius(12)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 12)
+                                                .fill(workoutsPerWeek == days ? AppColors.primary : .ultraThinMaterial)
+                                                .overlay(
+                                                    RoundedRectangle(cornerRadius: 12)
+                                                        .stroke(workoutsPerWeek == days ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                                )
+                                                .shadow(color: workoutsPerWeek == days ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                                        )
                                 }
                             }
                         }
 
                         Text("days per week")
                             .font(.caption)
-                            .foregroundColor(AppColors.textSecondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .padding(.horizontal, 30)
@@ -197,11 +240,17 @@ struct TargetsSetupView: View {
                         Text("Back")
                     }
                     .font(.headline)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(AppColors.surface)
-                    .cornerRadius(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            )
+                    )
                 }
 
                 Button(action: onContinue) {
@@ -210,8 +259,11 @@ struct TargetsSetupView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(isValid ? AppColors.primary : AppColors.primary.opacity(0.5))
-                        .cornerRadius(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(isValid ? AppColors.primary : AppColors.primary.opacity(0.5))
+                                .shadow(color: isValid ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                        )
                 }
                 .disabled(!isValid)
             }
