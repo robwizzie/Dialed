@@ -22,16 +22,22 @@ struct PermissionsView: View {
             VStack(spacing: 8) {
                 Image(systemName: "heart.text.square.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(AppColors.primary)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .padding(.bottom, 16)
 
                 Text("Connect to Apple Health")
                     .font(.system(size: 34, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Text("Dialed works best with automated data from your devices")
                     .font(.subheadline)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
             }
@@ -42,7 +48,7 @@ struct PermissionsView: View {
             VStack(alignment: .leading, spacing: 20) {
                 Text("What we'll access:")
                     .font(.headline)
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
                     .padding(.horizontal, 30)
 
                 VStack(spacing: 16) {
@@ -83,7 +89,7 @@ struct PermissionsView: View {
 
                     Text("Your health data stays on your device")
                         .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
 
                 if showError {
@@ -111,8 +117,11 @@ struct PermissionsView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
-                    .background(permissionGranted ? AppColors.success : AppColors.primary)
-                    .cornerRadius(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(permissionGranted ? AppColors.success : AppColors.primary)
+                            .shadow(color: (permissionGranted ? AppColors.success : AppColors.primary).opacity(0.3), radius: 8, x: 0, y: 4)
+                    )
                 }
                 .disabled(isRequestingPermissions || permissionGranted)
 
@@ -123,21 +132,34 @@ struct PermissionsView: View {
                             Text("Back")
                         }
                         .font(.headline)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
-                        .background(AppColors.surface)
-                        .cornerRadius(12)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(.ultraThinMaterial)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                )
+                        )
                     }
 
                     Button(action: onContinue) {
                         Text(permissionGranted ? "Continue" : "Skip for Now")
                             .font(.headline)
-                            .foregroundColor(permissionGranted ? .white : AppColors.textSecondary)
+                            .foregroundColor(permissionGranted ? .white : .secondary)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
-                            .background(permissionGranted ? AppColors.primary : AppColors.surface)
-                            .cornerRadius(12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(permissionGranted ? AppColors.primary : .ultraThinMaterial)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .stroke(permissionGranted ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                    )
+                                    .shadow(color: permissionGranted ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                            )
                     }
                 }
             }
@@ -179,17 +201,23 @@ struct PermissionRow: View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 22))
-                .foregroundColor(AppColors.primary)
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
                 .frame(width: 36, height: 36)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
