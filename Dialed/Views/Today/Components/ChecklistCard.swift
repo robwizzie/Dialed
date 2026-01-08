@@ -69,7 +69,7 @@ struct ChecklistRow: View {
         formatter.dateFormat = "h:mm a"
 
         // Create a date from components
-        var calendar = Calendar.current
+        let calendar = Calendar.current
         let date = calendar.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
 
         return formatter.string(from: date)

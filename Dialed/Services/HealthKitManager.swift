@@ -200,27 +200,21 @@ class HealthKitManager: ObservableObject {
                     inBedMinutes = max(inBedMinutes, Int(end.timeIntervalSince(start) / 60.0))
                 }
 
-                // Fetch HRV and resting HR for the sleep period
-                Task { [weak self] in
-                    guard let self = self else { return }
-                    let hrv = try? await self.fetchAverageHRV(start: sleepStart, end: sleepEnd)
-                    let restingHR = try? await self.fetchRestingHeartRate(for: date)
+                // Return basic sleep data first, HRV/HR will be fetched separately if needed
+                let sleepData = SleepData(
+                    totalSleepMinutes: totalAsleepMinutes,
+                    deepSleepMinutes: deepMinutes > 0 ? deepMinutes : nil,
+                    remSleepMinutes: remMinutes > 0 ? remMinutes : nil,
+                    lightSleepMinutes: lightMinutes > 0 ? lightMinutes : nil,
+                    awakeDurationMinutes: awakeMinutes > 0 ? awakeMinutes : nil,
+                    timeInBedMinutes: inBedMinutes > 0 ? inBedMinutes : nil,
+                    hrv: nil,  // Will be enriched separately
+                    restingHR: nil,  // Will be enriched separately
+                    sleepStart: sleepStart,
+                    sleepEnd: sleepEnd
+                )
 
-                    let sleepData = SleepData(
-                        totalSleepMinutes: totalAsleepMinutes,
-                        deepSleepMinutes: deepMinutes > 0 ? deepMinutes : nil,
-                        remSleepMinutes: remMinutes > 0 ? remMinutes : nil,
-                        lightSleepMinutes: lightMinutes > 0 ? lightMinutes : nil,
-                        awakeDurationMinutes: awakeMinutes > 0 ? awakeMinutes : nil,
-                        timeInBedMinutes: inBedMinutes > 0 ? inBedMinutes : nil,
-                        hrv: hrv,
-                        restingHR: restingHR,
-                        sleepStart: sleepStart,
-                        sleepEnd: sleepEnd
-                    )
-
-                    continuation.resume(returning: sleepData)
-                }
+                continuation.resume(returning: sleepData)
             }
 
             healthStore.execute(query)
@@ -353,7 +347,7 @@ class HealthKitManager: ObservableObject {
 
     // MARK: - Heart Metrics
 
-    private func fetchAverageHRV(start: Date?, end: Date?) async throws -> Double? {
+    func fetchAverageHRV(start: Date?, end: Date?) async throws -> Double? {
         guard let hrvType = HKQuantityType.quantityType(forIdentifier: .heartRateVariabilitySDNN),
               let start = start,
               let end = end else {
@@ -381,7 +375,7 @@ class HealthKitManager: ObservableObject {
         }
     }
 
-    private func fetchRestingHeartRate(for date: Date) async throws -> Double? {
+    func fetchRestingHeartRate(for date: Date) async throws -> Double? {
         guard let restingHRType = HKQuantityType.quantityType(forIdentifier: .restingHeartRate) else {
             return nil
         }

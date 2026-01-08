@@ -54,7 +54,8 @@ struct TodayView: View {
                     }) {
                         Image(systemName: viewModel.isSyncing ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
                             .foregroundColor(AppColors.primary)
-                            .symbolEffect(.rotate, isActive: viewModel.isSyncing)
+                            .rotationEffect(.degrees(viewModel.isSyncing ? 360 : 0))
+                            .animation(viewModel.isSyncing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: viewModel.isSyncing)
                     }
                     .disabled(viewModel.isSyncing)
                 }
