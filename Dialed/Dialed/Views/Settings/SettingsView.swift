@@ -11,20 +11,50 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Targets") {
+                Section {
                     Text("Protein, water, calorie targets")
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Targets")
                 }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
 
-                Section("Notifications") {
+                Section {
                     Text("Notification preferences")
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Notifications")
                 }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
 
-                Section("Integrations") {
+                Section {
                     Text("HealthKit permissions")
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Integrations")
                 }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
             }
             .scrollContentBackground(.hidden)
             .background(AppColors.background.ignoresSafeArea())
