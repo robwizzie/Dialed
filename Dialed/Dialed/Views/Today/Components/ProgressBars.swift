@@ -26,51 +26,89 @@ struct WaterProgressBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "drop.fill")
-                    .foregroundColor(AppColors.primary)
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.blue, .cyan],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 Text("Water")
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 Text("\(displayCurrent) / \(displayTarget) oz")
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
             }
 
-            // Progress bar
+            // Liquid glass progress bar
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.surface)
+                    // Background track with material
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
 
-                    // Fill
-                    RoundedRectangle(cornerRadius: 8)
+                    // Liquid fill with shimmer
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(
                             LinearGradient(
-                                colors: [AppColors.primary.opacity(0.6), AppColors.primary],
+                                colors: [
+                                    .blue.opacity(0.7),
+                                    .cyan.opacity(0.8),
+                                    .blue
+                                ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
+                        .overlay(
+                            // Shimmer effect
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(0),
+                                    .white.opacity(0.3),
+                                    .white.opacity(0)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .blur(radius: 3)
+                        )
+                        .mask(
+                            RoundedRectangle(cornerRadius: 10)
+                        )
+                        .shadow(color: .blue.opacity(0.3), radius: 4, x: 0, y: 2)
                         .frame(width: geometry.size.width * progress)
-                        .animation(.spring(response: 0.6), value: progress)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
                 }
             }
-            .frame(height: 12)
+            .frame(height: 14)
 
-            // Percentage
-            Text("\(Int(progress * 100))%")
-                .font(.caption2.bold())
-                .foregroundColor(progress >= 1.0 ? AppColors.success : AppColors.primary)
+            // Percentage with glass pill
+            HStack(spacing: 6) {
+                Text("\(Int(progress * 100))%")
+                    .font(.caption2.bold())
+                    .foregroundColor(progress >= 1.0 ? .green : .blue)
+
+                if progress >= 1.0 {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.green)
+                }
+            }
         }
-        .padding()
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .glassCard(cornerRadius: 16, padding: 14)
     }
 }
 
@@ -93,62 +131,106 @@ struct ProteinProgressBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "flame.fill")
-                    .foregroundColor(AppColors.danger)
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.orange, .red],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 Text("Protein")
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 Text("\(displayCurrent) / \(displayTarget) g")
                     .font(.caption)
-                    .foregroundColor(AppColors.textSecondary)
+                    .foregroundStyle(.secondary)
             }
 
-            // Progress bar with "steak" gradient
+            // Protein "steak bar" with liquid glass
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // Background
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(AppColors.surface)
+                    // Background track with material
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
 
-                    // Fill (red gradient for protein)
-                    RoundedRectangle(cornerRadius: 8)
+                    // Protein fill with "meat" gradient
+                    RoundedRectangle(cornerRadius: 10)
                         .fill(
                             LinearGradient(
-                                colors: [AppColors.danger.opacity(0.6), AppColors.danger],
+                                colors: [
+                                    .red.opacity(0.6),
+                                    .pink.opacity(0.7),
+                                    .red.opacity(0.8)
+                                ],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
+                        .overlay(
+                            // Shimmer/sear marks effect
+                            LinearGradient(
+                                colors: [
+                                    .white.opacity(0),
+                                    .white.opacity(0.25),
+                                    .white.opacity(0),
+                                    .white.opacity(0.2),
+                                    .white.opacity(0)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .blur(radius: 2)
+                        )
+                        .mask(
+                            RoundedRectangle(cornerRadius: 10)
+                        )
+                        .shadow(color: .red.opacity(0.3), radius: 4, x: 0, y: 2)
                         .frame(width: geometry.size.width * progress)
-                        .animation(.spring(response: 0.6), value: progress)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
                 }
             }
-            .frame(height: 12)
+            .frame(height: 14)
 
             // Percentage with bonus indicator
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 Text("\(Int(progress * 100))%")
                     .font(.caption2.bold())
-                    .foregroundColor(progress >= 1.0 ? AppColors.success : AppColors.danger)
+                    .foregroundColor(progress >= 1.0 ? .green : .red)
 
                 if progress >= 1.0 {
-                    Image(systemName: "star.fill")
-                        .font(.caption2)
-                        .foregroundColor(AppColors.success)
-                    Text("+2 bonus")
-                        .font(.caption2)
-                        .foregroundColor(AppColors.success)
+                    HStack(spacing: 3) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundColor(.yellow)
+                        Text("+2 bonus")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundColor(.green)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(
+                        Capsule()
+                            .fill(.green.opacity(0.15))
+                            .overlay(
+                                Capsule()
+                                    .stroke(.green.opacity(0.3), lineWidth: 1)
+                            )
+                    )
                 }
             }
         }
-        .padding()
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .glassCard(cornerRadius: 16, padding: 14)
     }
 }
 
@@ -173,73 +255,121 @@ struct CaloriesProgressBar: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "bolt.fill")
-                    .foregroundColor(AppColors.warning)
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.yellow, .orange],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
                 Text("Calories")
                     .font(.subheadline.bold())
-                    .foregroundColor(AppColors.textPrimary)
+                    .foregroundStyle(.primary)
 
                 Spacer()
 
                 if let target = target {
                     Text("\(displayCurrent) / \(String(format: "%.0f", target)) cal")
                         .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                 } else {
                     Text("\(displayCurrent) cal")
                         .font(.caption)
-                        .foregroundColor(AppColors.textSecondary)
+                        .foregroundStyle(.secondary)
                 }
             }
 
             if target != nil {
-                // Progress bar
+                // Calories progress bar with energy gradient
                 GeometryReader { geometry in
                     ZStack(alignment: .leading) {
-                        // Background
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(AppColors.surface)
+                        // Background track with material
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            )
 
-                        // Fill
-                        RoundedRectangle(cornerRadius: 8)
+                        // Energy fill
+                        RoundedRectangle(cornerRadius: 10)
                             .fill(
                                 LinearGradient(
-                                    colors: [
-                                        isOverTarget ? AppColors.warning.opacity(0.6) : AppColors.success.opacity(0.6),
-                                        isOverTarget ? AppColors.warning : AppColors.success
+                                    colors: isOverTarget ? [
+                                        .orange.opacity(0.7),
+                                        .red.opacity(0.6)
+                                    ] : [
+                                        .green.opacity(0.7),
+                                        .mint.opacity(0.8)
                                     ],
                                     startPoint: .leading,
                                     endPoint: .trailing
                                 )
                             )
+                            .overlay(
+                                // Shimmer effect
+                                LinearGradient(
+                                    colors: [
+                                        .white.opacity(0),
+                                        .white.opacity(0.3),
+                                        .white.opacity(0)
+                                    ],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
+                                .blur(radius: 3)
+                            )
+                            .mask(
+                                RoundedRectangle(cornerRadius: 10)
+                            )
+                            .shadow(
+                                color: (isOverTarget ? .orange : .green).opacity(0.3),
+                                radius: 4,
+                                x: 0,
+                                y: 2
+                            )
                             .frame(width: geometry.size.width * progress)
-                            .animation(.spring(response: 0.6), value: progress)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
                     }
                 }
-                .frame(height: 12)
+                .frame(height: 14)
 
-                // Status
-                HStack(spacing: 4) {
-                    if let target = target {
-                        let remaining = target - current
+                // Status indicator
+                if let target = target {
+                    let remaining = target - current
+                    HStack(spacing: 6) {
                         if remaining > 0 {
                             Text("\(String(format: "%.0f", remaining)) remaining")
                                 .font(.caption2)
-                                .foregroundColor(AppColors.textSecondary)
+                                .foregroundStyle(.secondary)
                         } else {
-                            Text("\(String(format: "%.0f", -remaining)) over")
-                                .font(.caption2.bold())
-                                .foregroundColor(AppColors.warning)
+                            HStack(spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .font(.caption2)
+                                Text("\(String(format: "%.0f", -remaining)) over")
+                                    .font(.caption2.bold())
+                            }
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule()
+                                    .fill(.orange.opacity(0.15))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(.orange.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
                         }
                     }
                 }
             }
         }
-        .padding()
-        .background(AppColors.surface.opacity(0.5))
-        .cornerRadius(12)
+        .glassCard(cornerRadius: 16, padding: 14)
     }
 }
 
