@@ -37,7 +37,13 @@ class HealthDataSyncService: ObservableObject {
             async let water = try healthKitManager.fetchWaterIntake(for: date)
 
             // Update DayLog with sleep data
-            if let sleep = try await sleepData {
+            if var sleep = try await sleepData {
+                // Enrich with HRV and resting HR data
+                if let sleepStart = sleep.sleepStart, let sleepEnd = sleep.sleepEnd {
+                    sleep.hrv = try? await healthKitManager.fetchAverageHRV(start: sleepStart, end: sleepEnd)
+                }
+                sleep.restingHR = try? await healthKitManager.fetchRestingHeartRate(for: date)
+                
                 updateSleepData(dayLog: dayLog, sleepData: sleep)
             }
 
