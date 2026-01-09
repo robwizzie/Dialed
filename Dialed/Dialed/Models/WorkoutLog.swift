@@ -29,6 +29,9 @@ final class WorkoutLog {
     var endTime: Date?
     var loggedAt: Date
 
+    // Relationship to exercises
+    @Relationship(deleteRule: .cascade) var exercises: [WorkoutExercise]?
+
     init(
         dayDate: Date,
         tag: Constants.WorkoutTag,
