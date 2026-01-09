@@ -187,6 +187,14 @@ struct TodayView: View {
                 calories: viewModel.workoutSummary.calories
             )
 
+            // Mile tile
+            MileTile(
+                mileCompleted: viewModel.dayLog.mileCompleted,
+                distance: viewModel.dayLog.mileDistance,
+                timeSeconds: viewModel.dayLog.mileTimeSeconds,
+                score: viewModel.dayLog.mileScore
+            )
+
             // Activity metrics
             ActivityTile(
                 steps: viewModel.activityMetrics.steps,
