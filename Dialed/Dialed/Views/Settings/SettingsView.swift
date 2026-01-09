@@ -132,9 +132,9 @@ struct SettingsRow: View {
     let subtitle: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 22))
                 .foregroundStyle(
                     LinearGradient(
                         colors: iconGradient,
@@ -142,11 +142,11 @@ struct SettingsRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
-                    .font(.body)
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
 
                 Text(subtitle)
@@ -154,6 +154,7 @@ struct SettingsRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+        .padding(.vertical, Spacing.xxs)
     }
 }
 
