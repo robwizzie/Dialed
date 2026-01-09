@@ -126,13 +126,7 @@ struct TodayView: View {
             .buttonStyle(PlainButtonStyle())
             .sheet(isPresented: $showWaterEntry) {
                 WaterEntrySheet(
-                    currentAmount: Binding(
-                        get: { viewModel.dayLog.waterOz },
-                        set: { newValue in
-                            viewModel.dayLog.waterOz = newValue
-                            viewModel.updateDailyScore()
-                        }
-                    ),
+                    currentAmount: $viewModel.dayLog.waterOz,
                     target: viewModel.settings.waterTargetOz
                 )
             }
@@ -148,13 +142,7 @@ struct TodayView: View {
             .buttonStyle(PlainButtonStyle())
             .sheet(isPresented: $showProteinEntry) {
                 ProteinEntrySheet(
-                    currentAmount: Binding(
-                        get: { viewModel.dayLog.proteinGrams },
-                        set: { newValue in
-                            viewModel.dayLog.proteinGrams = newValue
-                            viewModel.updateDailyScore()
-                        }
-                    ),
+                    currentAmount: $viewModel.dayLog.proteinGrams,
                     target: viewModel.settings.proteinTargetGrams
                 )
             }
