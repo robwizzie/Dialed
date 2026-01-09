@@ -141,7 +141,7 @@ struct SettingsRow: View {
     let subtitle: String
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
                 .font(.system(size: 22))
                 .foregroundStyle(
@@ -151,11 +151,11 @@ struct SettingsRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 40, height: 40)
+                .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
-                    .font(.body)
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
 
                 Text(subtitle)
@@ -165,7 +165,7 @@ struct SettingsRow: View {
 
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, Spacing.xxs)
     }
 }
 
