@@ -23,7 +23,7 @@ final class ChecklistItem {
     var customTitle: String?
     var customDescription: String?
     var customPoints: Int?
-    var isCustomTask: Bool
+    var isCustomTask: Bool = false
 
     init(type: Constants.ChecklistType, dayDate: Date) {
         self.id = UUID()
@@ -41,7 +41,8 @@ final class ChecklistItem {
         self.id = UUID()
         self.dayDate = dayDate
         self.type = "custom"
-        self.scheduledTime = scheduledTime
+        self.scheduledHour = scheduledTime.hour ?? 12
+        self.scheduledMinute = scheduledTime.minute ?? 0
         self.status = ChecklistStatus.open.rawValue
         self.isCustomTask = true
         self.customTitle = customTitle
