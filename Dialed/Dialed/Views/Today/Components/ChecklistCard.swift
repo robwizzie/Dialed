@@ -102,13 +102,13 @@ struct ChecklistRow: View {
 
                 // Content
                 VStack(alignment: .leading, spacing: 2) {
-                    if let type = item.checklistType {
-                        Text(type.rawValue)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(item.checklistStatus == .done ? .secondary : .primary)
-                            .strikethrough(item.checklistStatus == .done)
+                    Text(item.displayTitle)
+                        .font(.subheadline.bold())
+                        .foregroundStyle(item.checklistStatus == .done ? .secondary : .primary)
+                        .strikethrough(item.checklistStatus == .done)
 
-                        Text(type.description)
+                    if let description = item.displayDescription {
+                        Text(description)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

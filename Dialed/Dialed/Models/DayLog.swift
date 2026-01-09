@@ -79,8 +79,32 @@ final class DayLog {
         self.isFinalized = false
 
         // Create default checklist items
-        self.checklistItems = Constants.ChecklistType.allCases.map { type in
+        var items = Constants.ChecklistType.allCases.map { type in
             ChecklistItem(type: type, dayDate: self.date)
+        }
+
+        // Add custom checklist items from saved templates
+        if let data = UserDefaults.standard.data(forKey: "routineTaskTemplates"),
+           let templates = try? JSONDecoder().decode([RoutineTaskTemplate].self, from: data) {
+            let customItems = templates.map { template in
+                ChecklistItem(
+                    customTitle: template.title,
+                    customDescription: template.description,
+                    customPoints: template.points,
+                    scheduledTime: template.scheduledTime,
+                    dayDate: self.date
+                )
+            }
+            items.append(contentsOf: customItems)
+        }
+
+        // Sort by scheduled time
+        self.checklistItems = items.sorted { item1, item2 in
+            let hour1 = item1.scheduledTime.hour ?? 0
+            let minute1 = item1.scheduledTime.minute ?? 0
+            let hour2 = item2.scheduledTime.hour ?? 0
+            let minute2 = item2.scheduledTime.minute ?? 0
+            return (hour1 * 60 + minute1) < (hour2 * 60 + minute2)
         }
     }
 

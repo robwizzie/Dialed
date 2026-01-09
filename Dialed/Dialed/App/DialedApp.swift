@@ -20,6 +20,7 @@ struct DialedApp: App {
                     DayLog.self,
                     FoodEntry.self,
                     WorkoutLog.self,
+                    WorkoutExercise.self,
                     ChecklistItem.self
                 ])
         }
