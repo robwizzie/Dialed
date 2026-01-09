@@ -13,7 +13,8 @@ final class ChecklistItem {
     var id: UUID
     var dayDate: Date
     var type: String  // ChecklistType rawValue
-    var scheduledTime: DateComponents
+    var scheduledHour: Int
+    var scheduledMinute: Int
     var status: String  // ChecklistStatus rawValue
     var completedAt: Date?
     var skippedAt: Date?
@@ -22,7 +23,9 @@ final class ChecklistItem {
         self.id = UUID()
         self.dayDate = dayDate
         self.type = type.rawValue
-        self.scheduledTime = type.defaultTime
+        let defaultTime = type.defaultTime
+        self.scheduledHour = defaultTime.hour ?? 12
+        self.scheduledMinute = defaultTime.minute ?? 0
         self.status = ChecklistStatus.open.rawValue
     }
 
@@ -33,6 +36,10 @@ final class ChecklistItem {
     var checklistStatus: ChecklistStatus {
         get { ChecklistStatus(rawValue: status) ?? .open }
         set { status = newValue.rawValue }
+    }
+    
+    var scheduledTime: DateComponents {
+        DateComponents(hour: scheduledHour, minute: scheduledMinute)
     }
 
     func markDone() {

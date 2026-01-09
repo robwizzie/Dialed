@@ -401,10 +401,12 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, and provide accurate daily scores.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = healthkit;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -432,10 +434,12 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, and provide accurate daily scores.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIRequiredDeviceCapabilities = healthkit;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
