@@ -14,11 +14,12 @@ struct TodayView: View {
 
     @State private var showWaterEntry = false
     @State private var showProteinEntry = false
+    @State private var showWorkoutLog = false
 
     init() {
         // Note: ViewModel will be properly initialized with injected context
         // This temporary initialization will be replaced when view appears
-        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, ChecklistItem.self)
+        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, ChecklistItem.self)
         _viewModel = StateObject(wrappedValue: TodayViewModel(modelContext: container.mainContext))
     }
 
@@ -179,13 +180,33 @@ struct TodayView: View {
             )
 
             // Workout tile
-            WorkoutTile(
-                workoutDetected: viewModel.workoutSummary.detected,
-                workoutTag: viewModel.workoutSummary.tag,
-                workoutScore: viewModel.workoutSummary.score,
-                duration: viewModel.workoutSummary.duration,
-                calories: viewModel.workoutSummary.calories
-            )
+            Button(action: {
+                showWorkoutLog = true
+            }) {
+                WorkoutTile(
+                    workoutDetected: viewModel.workoutSummary.detected,
+                    workoutTag: viewModel.workoutSummary.tag,
+                    workoutScore: viewModel.workoutSummary.score,
+                    duration: viewModel.workoutSummary.duration,
+                    calories: viewModel.workoutSummary.calories
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showWorkoutLog) {
+                WorkoutLogSheet(
+                    dayLog: Binding(
+                        get: { viewModel.dayLog },
+                        set: { newValue in
+                            viewModel.dayLog = newValue
+                        }
+                    ),
+                    onSave: {
+                        Task {
+                            await viewModel.refreshData()
+                        }
+                    }
+                )
+            }
 
             // Mile tile
             MileTile(

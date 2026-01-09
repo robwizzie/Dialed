@@ -88,6 +88,11 @@ class TodayViewModel: ObservableObject {
 
     // MARK: - Score Calculation
 
+    func updateDailyScore() {
+        updateProvisionalScore()
+        try? modelContext.save()
+    }
+
     private func updateProvisionalScore() {
         // Update nutrition totals from food entries
         dayLog.updateNutritionTotals()
