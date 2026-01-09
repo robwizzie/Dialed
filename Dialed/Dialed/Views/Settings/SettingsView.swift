@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var settings = UserSettings.load()
+    @State private var healthKitConnected = false
 
     var body: some View {
         NavigationStack {
@@ -82,7 +83,7 @@ struct SettingsView: View {
                             icon: "heart.text.square.fill",
                             iconGradient: [.red, .pink],
                             title: "Apple Health",
-                            subtitle: settings.healthKitEnabled ? "Connected" : "Not connected"
+                            subtitle: healthKitConnected ? "Connected" : "Not connected"
                         )
                     }
                 } header: {
@@ -121,7 +122,15 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(AppColors.background.ignoresSafeArea())
             .navigationTitle("Settings")
+            .onAppear {
+                refreshSettings()
+            }
         }
+    }
+
+    private func refreshSettings() {
+        settings = UserSettings.load()
+        healthKitConnected = HealthKitManager.shared.checkAuthorizationStatus()
     }
 }
 
@@ -132,9 +141,9 @@ struct SettingsRow: View {
     let subtitle: String
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 16) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 22))
                 .foregroundStyle(
                     LinearGradient(
                         colors: iconGradient,
@@ -142,9 +151,9 @@ struct SettingsRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 32, height: 32)
+                .frame(width: 40, height: 40)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.body)
                     .foregroundStyle(.primary)
@@ -153,7 +162,10 @@ struct SettingsRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer()
         }
+        .padding(.vertical, 4)
     }
 }
 
