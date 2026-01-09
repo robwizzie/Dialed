@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @State private var settings = UserSettings.load()
+    @State private var healthKitConnected = false
 
     var body: some View {
         NavigationStack {
@@ -82,7 +83,7 @@ struct SettingsView: View {
                             icon: "heart.text.square.fill",
                             iconGradient: [.red, .pink],
                             title: "Apple Health",
-                            subtitle: settings.healthKitEnabled ? "Connected" : "Not connected"
+                            subtitle: healthKitConnected ? "Connected" : "Not connected"
                         )
                     }
                 } header: {
@@ -121,7 +122,15 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .background(AppColors.background.ignoresSafeArea())
             .navigationTitle("Settings")
+            .onAppear {
+                refreshSettings()
+            }
         }
+    }
+
+    private func refreshSettings() {
+        settings = UserSettings.load()
+        healthKitConnected = HealthKitManager.shared.checkAuthorizationStatus()
     }
 }
 
@@ -153,6 +162,8 @@ struct SettingsRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Spacer()
         }
         .padding(.vertical, Spacing.xxs)
     }
