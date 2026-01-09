@@ -18,7 +18,9 @@ class TodayViewModel: ObservableObject {
 
     // Services
     private let healthSyncService = HealthDataSyncService()
-    private let settings: UserSettings
+    
+    // Settings (exposed for view access)
+    let settings: UserSettings
 
     // Model context (injected)
     private let modelContext: ModelContext
