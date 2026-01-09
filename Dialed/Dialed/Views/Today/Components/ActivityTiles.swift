@@ -246,6 +246,142 @@ struct WorkoutTile: View {
     }
 }
 
+// MARK: - Mile Tile
+
+struct MileTile: View {
+    let mileCompleted: Bool
+    let distance: Double?  // miles
+    let timeSeconds: Int?
+    let score: Int?
+
+    private var paceText: String {
+        guard let distance = distance, distance > 0, let timeSeconds = timeSeconds else {
+            return "--"
+        }
+        let paceSeconds = Int(Double(timeSeconds) / distance)
+        let minutes = paceSeconds / 60
+        let seconds = paceSeconds % 60
+        return String(format: "%d:%02d /mi", minutes, seconds)
+    }
+
+    private var timeText: String {
+        guard let timeSeconds = timeSeconds else { return "--" }
+        let minutes = timeSeconds / 60
+        let seconds = timeSeconds % 60
+        return String(format: "%d:%02d", minutes, seconds)
+    }
+
+    private var scoreColor: Color {
+        guard let score = score else { return AppColors.textSecondary }
+        switch score {
+        case 4...5: return AppColors.success
+        case 3: return AppColors.primary
+        case 2: return AppColors.warning
+        default: return AppColors.danger
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Image(systemName: "figure.run")
+                    .font(.caption)
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.orange, .red],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Text("Mile Run")
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+
+                Spacer()
+
+                if mileCompleted {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [.green, .mint],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+            }
+
+            if mileCompleted {
+                // Mile details
+                HStack(spacing: 16) {
+                    // Distance
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Distance")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(String(format: "%.2f mi", distance ?? 0))
+                            .font(.callout.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Divider()
+                        .frame(height: 30)
+                        .overlay(.ultraThinMaterial)
+
+                    // Time
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Time")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(timeText)
+                            .font(.callout.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Divider()
+                        .frame(height: 30)
+                        .overlay(.ultraThinMaterial)
+
+                    // Pace
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Pace")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(paceText)
+                            .font(.callout.bold())
+                            .foregroundStyle(.primary)
+                    }
+
+                    Spacer()
+                }
+
+                // Quality score
+                if let score = score {
+                    HStack(spacing: 4) {
+                        Text("Quality:")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        ForEach(1...5, id: \.self) { index in
+                            Image(systemName: index <= score ? "star.fill" : "star")
+                                .font(.caption)
+                                .foregroundColor(index <= score ? .yellow : .secondary.opacity(0.3))
+                        }
+                    }
+                }
+            } else {
+                Text("No mile run logged today")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 8)
+            }
+        }
+        .elevatedGlassCard(cornerRadius: 16, padding: 16)
+    }
+}
+
 // MARK: - Activity Tile (Steps, Calories)
 
 struct ActivityTile: View {

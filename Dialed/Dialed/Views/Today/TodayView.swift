@@ -12,6 +12,9 @@ struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: TodayViewModel
 
+    @State private var showWaterEntry = false
+    @State private var showProteinEntry = false
+
     init() {
         // Note: ViewModel will be properly initialized with injected context
         // This temporary initialization will be replaced when view appears
@@ -112,15 +115,49 @@ struct TodayView: View {
                 .foregroundColor(AppColors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            WaterProgressBar(
-                current: viewModel.dayLog.waterOz,
-                target: viewModel.settings.waterTargetOz
-            )
+            Button(action: {
+                showWaterEntry = true
+            }) {
+                WaterProgressBar(
+                    current: viewModel.dayLog.waterOz,
+                    target: viewModel.settings.waterTargetOz
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showWaterEntry) {
+                WaterEntrySheet(
+                    currentAmount: Binding(
+                        get: { viewModel.dayLog.waterOz },
+                        set: { newValue in
+                            viewModel.dayLog.waterOz = newValue
+                            viewModel.updateDailyScore()
+                        }
+                    ),
+                    target: viewModel.settings.waterTargetOz
+                )
+            }
 
-            ProteinProgressBar(
-                current: viewModel.dayLog.proteinGrams,
-                target: viewModel.settings.proteinTargetGrams
-            )
+            Button(action: {
+                showProteinEntry = true
+            }) {
+                ProteinProgressBar(
+                    current: viewModel.dayLog.proteinGrams,
+                    target: viewModel.settings.proteinTargetGrams
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: $showProteinEntry) {
+                ProteinEntrySheet(
+                    currentAmount: Binding(
+                        get: { viewModel.dayLog.proteinGrams },
+                        set: { newValue in
+                            viewModel.dayLog.proteinGrams = newValue
+                            viewModel.updateDailyScore()
+                        }
+                    ),
+                    target: viewModel.settings.proteinTargetGrams
+                )
+            }
 
             if viewModel.settings.calorieTarget != nil {
                 CaloriesProgressBar(
@@ -155,6 +192,14 @@ struct TodayView: View {
                 workoutScore: viewModel.workoutSummary.score,
                 duration: viewModel.workoutSummary.duration,
                 calories: viewModel.workoutSummary.calories
+            )
+
+            // Mile tile
+            MileTile(
+                mileCompleted: viewModel.dayLog.mileCompleted,
+                distance: viewModel.dayLog.mileDistance,
+                timeSeconds: viewModel.dayLog.mileTimeSeconds,
+                score: viewModel.dayLog.mileScore
             )
 
             // Activity metrics
