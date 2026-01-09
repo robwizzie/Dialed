@@ -7,6 +7,26 @@
 
 import Foundation
 
+// MARK: - Scheduled Time (Simple time storage)
+struct ScheduledTime: Codable, Hashable {
+    var hour: Int
+    var minute: Int
+    
+    var asDateComponents: DateComponents {
+        DateComponents(hour: hour, minute: minute)
+    }
+    
+    init(hour: Int, minute: Int) {
+        self.hour = hour
+        self.minute = minute
+    }
+    
+    init(from dateComponents: DateComponents) {
+        self.hour = dateComponents.hour ?? 0
+        self.minute = dateComponents.minute ?? 0
+    }
+}
+
 struct UserSettings: Codable {
     // Personal metrics
     var currentWeight: Double  // lbs
@@ -29,7 +49,7 @@ struct UserSettings: Codable {
     var healthKitEnabled: Bool
 
     // Customizable checklist times (if user wants to override defaults)
-    var customChecklistTimes: [String: DateComponents]?  // ChecklistType.rawValue: time
+    var customChecklistTimes: [String: ScheduledTime]?  // ChecklistType.rawValue: time
 
     static let defaultSettings = UserSettings(
         currentWeight: 190,

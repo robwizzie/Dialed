@@ -9,8 +9,9 @@
 import Foundation
 import HealthKit
 
+@MainActor
 class HealthKitManager: ObservableObject {
-    static let shared = HealthKitManager()
+    nonisolated static let shared = HealthKitManager()
 
     private let healthStore = HKHealthStore()
 
@@ -68,21 +69,47 @@ class HealthKitManager: ObservableObject {
         return types
     }()
 
-    private init() {}
+    nonisolated private init() {}
 
     // MARK: - Authorization
 
     func requestAuthorization() async throws {
+        print("🏥 [HealthKit] Requesting authorization...")
+        print("🏥 [HealthKit] Bundle ID: \(Bundle.main.bundleIdentifier ?? "unknown")")
+        
         guard HKHealthStore.isHealthDataAvailable() else {
+            print("❌ [HealthKit] Health data not available on this device")
             throw HealthKitError.notAvailable
         }
 
+        print("🏥 [HealthKit] Requesting access to \(typesToRead.count) data types:")
+        for (index, type) in typesToRead.enumerated() {
+            print("  \(index + 1). \(type)")
+        }
+        
         do {
+            // First check current status before requesting
+            print("🔍 [HealthKit] Current authorization status BEFORE request:")
+            _ = checkAuthorizationStatus()
+            
             try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+            print("✅ [HealthKit] Authorization request completed")
+            
+            // Wait for iOS to update the authorization state
+            print("⏳ [HealthKit] Waiting 2 seconds for permissions to propagate...")
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            
+            // Check status after delay
+            print("🔍 [HealthKit] Authorization status AFTER request (with 2s delay):")
+            let actualStatus = checkAuthorizationStatus()
+            
             await MainActor.run {
-                self.isAuthorized = true
+                self.isAuthorized = actualStatus
             }
+            
+            print("🏥 [HealthKit] Final result: \(actualStatus ? "AUTHORIZED ✅" : "NOT AUTHORIZED ❌")")
         } catch {
+            print("❌ [HealthKit] Authorization request failed: \(error.localizedDescription)")
             await MainActor.run {
                 self.authorizationError = error
             }
@@ -90,14 +117,86 @@ class HealthKitManager: ObservableObject {
         }
     }
 
-    func checkAuthorizationStatus() -> Bool {
-        // Check if at least the critical types are authorized
+    nonisolated func checkAuthorizationStatus() -> Bool {
+        print("🔍 [HealthKit] NOTE: For privacy, HealthKit hides READ authorization status")
+        print("🔍 [HealthKit] Status API may show DENIED even when access is granted")
+        print("🔍 [HealthKit] The only way to verify is to try reading data")
+        
+        // For READ permissions, authorizationStatus is unreliable
+        // Apple intentionally returns .sharingDenied to protect privacy
+        // We'll assume authorized if user completed the authorization flow
+        
+        // Still check the status for logging purposes
         guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            print("⚠️ [HealthKit] Could not get sleep type")
             return false
         }
 
+        let sleepStatus = healthStore.authorizationStatus(for: sleepType)
+        
+        print("🏥 [HealthKit] Sleep Analysis status: \(sleepStatus.rawValue)")
+        print("💡 [HealthKit] If status shows DENIED but Settings shows ON, this is normal!")
+        print("💡 [HealthKit] We'll try reading data to verify actual access")
+        
+        // Return true if not explicitly notDetermined
+        // This allows the app to attempt data reading
+        return sleepStatus != .notDetermined
+    }
+    
+    // New function to actually verify we can read data
+    func verifyDataAccess() async -> Bool {
+        print("🧪 [HealthKit] Testing actual data access by attempting to read...")
+        
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            print("❌ [HealthKit] Could not get sleep type for verification")
+            return false
+        }
+        
+        let predicate = HKQuery.predicateForSamples(
+            withStart: Calendar.current.date(byAdding: .day, value: -1, to: Date()),
+            end: Date(),
+            options: .strictStartDate
+        )
+        
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: sleepType,
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    print("❌ [HealthKit] Data read test failed: \(error.localizedDescription)")
+                    print("💡 [HealthKit] This means access is actually DENIED")
+                    continuation.resume(returning: false)
+                } else {
+                    print("✅ [HealthKit] Data read test succeeded!")
+                    print("✅ [HealthKit] Access is GRANTED (found \(samples?.count ?? 0) sleep samples)")
+                    continuation.resume(returning: true)
+                }
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    nonisolated func getAuthorizationStatusDescription() -> String {
+        guard let sleepType = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else {
+            return "Unable to check"
+        }
+        
         let status = healthStore.authorizationStatus(for: sleepType)
-        return status == .sharingAuthorized
+        
+        switch status {
+        case .notDetermined:
+            return "not_determined"
+        case .sharingDenied:
+            return "denied"
+        case .sharingAuthorized:
+            return "authorized"
+        @unknown default:
+            return "unknown"
+        }
     }
 
     // MARK: - Sleep Data Fetching
@@ -272,8 +371,8 @@ class HealthKitManager: ObservableObject {
                         startDate: workout.startDate,
                         endDate: workout.endDate,
                         durationMinutes: Int(workout.duration / 60.0),
-                        caloriesBurned: workout.totalEnergyBurned?.doubleValue(for: .kilocalorie()).map(Int.init),
-                        distance: workout.totalDistance?.doubleValue(for: .meter()),
+                        caloriesBurned: workout.totalEnergyBurned.map { Int($0.doubleValue(for: .kilocalorie())) },
+                        distance: workout.totalDistance.map { $0.doubleValue(for: .meter()) },
                         averageHeartRate: nil,  // Would need separate query
                         maxHeartRate: nil
                     )

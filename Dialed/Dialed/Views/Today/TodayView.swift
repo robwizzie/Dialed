@@ -25,7 +25,7 @@ struct TodayView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 20) {
+                VStack(spacing: Spacing.sectionSpacing) {
                     // Header with score ring
                     headerSection
 
@@ -38,7 +38,8 @@ struct TodayView: View {
                     // Checklist
                     checklistSection
                 }
-                .padding()
+                .padding(Spacing.screenPadding)
+                .padding(.bottom, Spacing.xl)
             }
             .background(AppColors.background.ignoresSafeArea())
             .navigationTitle("")
@@ -58,7 +59,13 @@ struct TodayView: View {
                     }) {
                         Image(systemName: viewModel.isSyncing ? "arrow.clockwise.circle.fill" : "arrow.clockwise")
                             .foregroundColor(AppColors.primary)
-                            .symbolEffect(.rotate, isActive: viewModel.isSyncing)
+                            .rotationEffect(.degrees(viewModel.isSyncing ? 360 : 0))
+                            .animation(
+                                viewModel.isSyncing ? 
+                                    Animation.linear(duration: 1).repeatForever(autoreverses: false) : 
+                                    .default,
+                                value: viewModel.isSyncing
+                            )
                     }
                     .disabled(viewModel.isSyncing)
                 }
@@ -76,14 +83,14 @@ struct TodayView: View {
     // MARK: - Header Section
 
     private var headerSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: Spacing.lg) {
             DailyScoreRing(
                 score: viewModel.provisionalScore,
                 isProvisional: !viewModel.dayLog.isFinalized
             )
 
             if viewModel.currentStreak > 0 {
-                HStack(spacing: 6) {
+                HStack(spacing: Spacing.xs) {
                     Image(systemName: "flame.fill")
                         .foregroundColor(AppColors.warning)
                     Text("\(viewModel.currentStreak)-day streak")
@@ -102,9 +109,9 @@ struct TodayView: View {
     // MARK: - Progress Section
 
     private var progressSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
             Text("Today's Progress")
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundColor(AppColors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -164,9 +171,9 @@ struct TodayView: View {
     // MARK: - Activity Section
 
     private var activitySection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: Spacing.md) {
             Text("Activity")
-                .font(.headline)
+                .font(.title3.bold())
                 .foregroundColor(AppColors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
