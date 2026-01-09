@@ -31,6 +31,38 @@ struct ManageDailyRoutineView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    // Automatic points info
+                    HStack(spacing: 10) {
+                        Image(systemName: "chart.bar.fill")
+                            .font(.title3)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.green, .mint],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Smart Point Distribution")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
+
+                            Text("The 10 routine points are automatically distributed equally among all your tasks. More tasks = fewer points each, ensuring your total never exceeds 100.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(.ultraThinMaterial)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(.green.opacity(0.3), lineWidth: 1)
+                            )
+                    )
+
                     // Default tasks section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Default Tasks")
@@ -278,7 +310,6 @@ struct AddCustomTaskSheet: View {
 
     @State private var taskTitle: String = ""
     @State private var taskDescription: String = ""
-    @State private var taskPoints: Int = 1
     @State private var selectedHour: Int = 9
     @State private var selectedMinute: Int = 0
 
@@ -331,25 +362,24 @@ struct AddCustomTaskSheet: View {
                             )
                     }
 
-                    // Points
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Points Value")
-                            .font(.caption.bold())
+                    // Info about automatic points
+                    HStack(spacing: 8) {
+                        Image(systemName: "info.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.blue)
+                        Text("Point values are automatically calculated based on your total number of tasks")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-
-                        Stepper("Worth \(taskPoints) point\(taskPoints == 1 ? "" : "s")", value: $taskPoints, in: 1...10)
-                            .font(.body)
-                            .foregroundStyle(.primary)
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                                    )
-                            )
                     }
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(.blue.opacity(0.1))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(.blue.opacity(0.2), lineWidth: 1)
+                            )
+                    )
 
                     // Time
                     VStack(alignment: .leading, spacing: 8) {
@@ -420,7 +450,7 @@ struct AddCustomTaskSheet: View {
                         let template = RoutineTaskTemplate(
                             title: taskTitle,
                             description: taskDescription.isEmpty ? nil : taskDescription,
-                            points: taskPoints,
+                            points: 0,  // Points are calculated dynamically
                             scheduledTime: DateComponents(hour: selectedHour, minute: selectedMinute)
                         )
                         onSave(template)

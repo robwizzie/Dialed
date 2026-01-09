@@ -72,13 +72,8 @@ final class ChecklistItem {
         }
     }
 
-    var displayPoints: Int {
-        if isCustomTask {
-            return customPoints ?? 1
-        } else {
-            return checklistType?.points ?? 0
-        }
-    }
+    // Note: Points are now calculated dynamically based on total task count
+    // Use ChecklistPointsCalculator.points(for:in:) to get actual point value
 
     func markDone() {
         checklistStatus = .done
