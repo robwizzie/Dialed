@@ -47,12 +47,12 @@ struct SettingsView: View {
                         )
                     }
 
-                    NavigationLink(destination: ChecklistSettingsView()) {
+                    NavigationLink(destination: ManageDailyRoutineView()) {
                         SettingsRow(
                             icon: "checkmark.circle.fill",
                             iconGradient: [.orange, .red],
-                            title: "Daily Routine",
-                            subtitle: "\(settings.enabledNotifications.count) tasks enabled"
+                            title: "Manage Routine",
+                            subtitle: "Customize your daily tasks"
                         )
                     }
                 } header: {

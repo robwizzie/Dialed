@@ -75,6 +75,9 @@ class TodayViewModel: ObservableObject {
     // MARK: - Checklist Actions
 
     func toggleChecklistItem(_ item: ChecklistItem) {
+        let wasOpen = item.checklistStatus == .open
+        let oldScore = provisionalScore
+
         switch item.checklistStatus {
         case .open:
             item.markDone()
@@ -86,9 +89,49 @@ class TodayViewModel: ObservableObject {
 
         updateProvisionalScore()
         try? modelContext.save()
+
+        // Send notifications
+        Task {
+            let notificationSettings = NotificationSettings.load()
+
+            // Notify task completion
+            if wasOpen && item.checklistStatus == .done && notificationSettings.completionNotificationsEnabled {
+                let pointsEarned = ChecklistPointsCalculator.points(for: item, in: dayLog.checklistItems ?? [])
+                await NotificationManager.shared.notifyTaskCompleted(task: item, pointsEarned: pointsEarned)
+            }
+
+            // Notify score increase
+            if provisionalScore > oldScore && notificationSettings.scoreUpdatesEnabled {
+                await NotificationManager.shared.notifyScoreIncrease(
+                    oldScore: oldScore,
+                    newScore: provisionalScore,
+                    reason: "Completed \(item.displayTitle)"
+                )
+            }
+        }
     }
 
     // MARK: - Score Calculation
+
+    func updateDailyScore() {
+        let oldScore = provisionalScore
+        updateProvisionalScore()
+        try? modelContext.save()
+
+        // Send score update notification if score increased
+        if provisionalScore > oldScore {
+            Task {
+                let notificationSettings = NotificationSettings.load()
+                if notificationSettings.scoreUpdatesEnabled {
+                    await NotificationManager.shared.notifyScoreIncrease(
+                        oldScore: oldScore,
+                        newScore: provisionalScore,
+                        reason: "Progress update"
+                    )
+                }
+            }
+        }
+    }
 
     private func updateProvisionalScore() {
         // Update nutrition totals from food entries

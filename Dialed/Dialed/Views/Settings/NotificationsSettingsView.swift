@@ -2,34 +2,27 @@
 //  NotificationsSettingsView.swift
 //  Dialed
 //
-//  Manage notification permissions and preferences
+//  Comprehensive notification settings and preferences
 //
 
 import SwiftUI
-import UserNotifications
 
 struct NotificationsSettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.openURL) private var openURL
-
-    @State private var settings = UserSettings.load()
-    @State private var notificationsEnabled: Bool
-    @State private var authorizationStatus: UNAuthorizationStatus = .notDetermined
-    @State private var isCheckingStatus = true
-
-    init() {
-        let settings = UserSettings.load()
-        _notificationsEnabled = State(initialValue: settings.notificationsEnabled)
-    }
+    @StateObject private var notificationManager = NotificationManager.shared
+    @State private var settings = NotificationSettings.load()
+    @State private var showPermissionAlert = false
 
     var body: some View {
         List {
-            // Status Section
+            // Authorization status
             Section {
                 HStack {
+                    Image(systemName: notificationManager.isEnabled ? "bell.badge.fill" : "bell.slash.fill")
+                        .foregroundStyle(notificationManager.isEnabled ? .green : .orange)
+
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Notification Status")
-                            .font(.subheadline.bold())
+                        Text("Notifications")
+                            .font(.body)
                             .foregroundStyle(.primary)
 
                         Text(statusText)
@@ -39,10 +32,26 @@ struct NotificationsSettingsView: View {
 
                     Spacer()
 
-                    statusIcon
+                    if !notificationManager.isEnabled {
+                        Button("Enable") {
+                            Task {
+                                let granted = await notificationManager.requestAuthorization()
+                                if !granted {
+                                    showPermissionAlert = true
+                                }
+                            }
+                        }
+                        .font(.subheadline.bold())
+                        .foregroundColor(.blue)
+                    }
                 }
+                .padding(.vertical, 4)
             } header: {
-                Text("Status")
+                Text("System")
+            } footer: {
+                if !notificationManager.isEnabled {
+                    Text("Allow notifications to receive reminders for tasks, completion confirmations, and score updates")
+                }
             }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 10)
@@ -53,14 +62,66 @@ struct NotificationsSettingsView: View {
                     )
             )
 
-            // Settings Section
-            if authorizationStatus == .authorized || authorizationStatus == .provisional {
+            if notificationManager.isEnabled {
+                // Task Reminders
                 Section {
-                    Toggle("Daily Reminders", isOn: $notificationsEnabled)
-                        .tint(AppColors.primary)
+                    Toggle(isOn: Binding(
+                        get: { settings.taskRemindersEnabled },
+                        set: { newValue in
+                            settings.taskRemindersEnabled = newValue
+                            settings.save()
+                            Task {
+                                if !newValue {
+                                    await notificationManager.cancelTaskReminders()
+                                }
+                            }
+                        }
+                    )) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.fill")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.orange, .red],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
 
-                    if notificationsEnabled {
-                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Task Reminders")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Get notified at scheduled times for each task")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Reminders")
+                } footer: {
+                    Text("Receive notifications at the scheduled time for each routine task")
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
+
+                // Completion & Progress
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { settings.completionNotificationsEnabled },
+                        set: { newValue in
+                            settings.completionNotificationsEnabled = newValue
+                            settings.save()
+                        }
+                    )) {
+                        HStack(spacing: 12) {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(
                                     LinearGradient(
@@ -69,15 +130,192 @@ struct NotificationsSettingsView: View {
                                         endPoint: .bottomTrailing
                                     )
                                 )
-                            Text("Reminders enabled for selected checklist items")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Task Completions")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Celebrate when you complete tasks")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { settings.scoreUpdatesEnabled },
+                        set: { newValue in
+                            settings.scoreUpdatesEnabled = newValue
+                            settings.save()
+                        }
+                    )) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.blue, .cyan],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Score Updates")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Track your daily score increases")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    Toggle(isOn: Binding(
+                        get: { settings.motivationalNotificationsEnabled },
+                        set: { newValue in
+                            settings.motivationalNotificationsEnabled = newValue
+                            settings.save()
+                        }
+                    )) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.orange, .yellow],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Motivational Messages")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Get encouragement based on your progress")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
                 } header: {
-                    Text("Preferences")
+                    Text("Progress & Motivation")
                 } footer: {
-                    Text("Get reminders for your daily routine tasks at their scheduled times.")
+                    Text("Receive positive reinforcement as you make progress throughout the day")
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
+
+                // Daily Summary
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { settings.dailySummaryEnabled },
+                        set: { newValue in
+                            settings.dailySummaryEnabled = newValue
+                            settings.save()
+                            Task {
+                                if newValue {
+                                    await notificationManager.scheduleDailySummary(
+                                        at: settings.dailySummaryHour,
+                                        minute: settings.dailySummaryMinute
+                                    )
+                                }
+                            }
+                        }
+                    )) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.pie.fill")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.purple, .pink],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Daily Summary")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Review your day's progress")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    if settings.dailySummaryEnabled {
+                        HStack {
+                            Text("Summary Time")
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            HStack(spacing: 4) {
+                                Picker("Hour", selection: Binding(
+                                    get: { settings.dailySummaryHour },
+                                    set: { newValue in
+                                        settings.dailySummaryHour = newValue
+                                        settings.save()
+                                        Task {
+                                            await notificationManager.scheduleDailySummary(
+                                                at: newValue,
+                                                minute: settings.dailySummaryMinute
+                                            )
+                                        }
+                                    }
+                                )) {
+                                    ForEach(0..<24) { hour in
+                                        Text(String(format: "%02d", hour)).tag(hour)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(width: 60)
+                                .clipped()
+
+                                Text(":")
+
+                                Picker("Minute", selection: Binding(
+                                    get: { settings.dailySummaryMinute },
+                                    set: { newValue in
+                                        settings.dailySummaryMinute = newValue
+                                        settings.save()
+                                        Task {
+                                            await notificationManager.scheduleDailySummary(
+                                                at: settings.dailySummaryHour,
+                                                minute: newValue
+                                            )
+                                        }
+                                    }
+                                )) {
+                                    ForEach([0, 15, 30, 45], id: \.self) { minute in
+                                        Text(String(format: "%02d", minute)).tag(minute)
+                                    }
+                                }
+                                .pickerStyle(.wheel)
+                                .frame(width: 60)
+                                .clipped()
+                            }
+                            .frame(height: 100)
+                        }
+                    }
+                } header: {
+                    Text("Daily Summary")
+                } footer: {
+                    if settings.dailySummaryEnabled {
+                        Text("Get a notification at \(String(format: "%02d:%02d", settings.dailySummaryHour, settings.dailySummaryMinute)) to review your day")
+                    } else {
+                        Text("Get a daily reminder to review your progress and finalize your score")
+                    }
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
@@ -88,209 +326,43 @@ struct NotificationsSettingsView: View {
                         )
                 )
             }
-
-            // Actions Section
-            Section {
-                if authorizationStatus == .denied {
-                    Button(action: {
-                        if let url = URL(string: UIApplication.openSettingsURLString) {
-                            openURL(url)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "gear")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            Text("Open Settings")
-                                .foregroundStyle(.primary)
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else if authorizationStatus == .notDetermined {
-                    Button(action: requestPermission) {
-                        HStack {
-                            Image(systemName: "bell.badge")
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
-                                )
-                            Text("Enable Notifications")
-                                .foregroundStyle(.primary)
-                        }
-                    }
-                }
-            } header: {
-                Text("Actions")
-            }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
-
-            // Info Section
-            Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
-                        Image(systemName: "clock.fill")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.blue, .cyan],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Timely Reminders")
-                                .font(.caption.bold())
-                                .foregroundStyle(.primary)
-                            Text("Get notified at your scheduled times")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        Image(systemName: "checkmark.seal.fill")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.green, .mint],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Never Miss a Task")
-                                .font(.caption.bold())
-                                .foregroundStyle(.primary)
-                            Text("Stay consistent with your routine")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    HStack(spacing: 12) {
-                        Image(systemName: "flame.fill")
-                            .foregroundStyle(
-                                LinearGradient(
-                                    colors: [.orange, .red],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Maintain Streaks")
-                                .font(.caption.bold())
-                                .foregroundStyle(.primary)
-                            Text("Keep your momentum going")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            } header: {
-                Text("Benefits")
-            }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
         }
         .scrollContentBackground(.hidden)
         .background(AppColors.background.ignoresSafeArea())
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") {
-                    saveChanges()
-                    dismiss()
+        .alert("Notification Permission Denied", isPresented: $showPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
                 }
             }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Please enable notifications in Settings to receive reminders and updates")
         }
-        .task {
-            await checkAuthorizationStatus()
+        .onAppear {
+            Task {
+                await notificationManager.checkAuthorizationStatus()
+            }
         }
     }
 
     private var statusText: String {
-        switch authorizationStatus {
-        case .authorized, .provisional:
-            return notificationsEnabled ? "Enabled" : "Disabled in app"
+        switch notificationManager.authorizationStatus {
+        case .authorized:
+            return "Enabled"
         case .denied:
-            return "Denied - Enable in iOS Settings"
+            return "Denied - Open Settings to enable"
         case .notDetermined:
-            return "Not configured"
+            return "Not set up"
+        case .provisional:
+            return "Provisional"
+        case .ephemeral:
+            return "Ephemeral"
         @unknown default:
             return "Unknown"
         }
-    }
-
-    @ViewBuilder
-    private var statusIcon: some View {
-        switch authorizationStatus {
-        case .authorized, .provisional:
-            if notificationsEnabled {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(AppColors.success)
-            } else {
-                Image(systemName: "bell.slash.fill")
-                    .foregroundStyle(.secondary)
-            }
-        case .denied:
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(AppColors.warning)
-        case .notDetermined:
-            Image(systemName: "bell.badge")
-                .foregroundStyle(.secondary)
-        @unknown default:
-            Image(systemName: "questionmark.circle")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func checkAuthorizationStatus() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        await MainActor.run {
-            authorizationStatus = settings.authorizationStatus
-            isCheckingStatus = false
-        }
-    }
-
-    private func requestPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            Task {
-                await checkAuthorizationStatus()
-                if granted {
-                    await MainActor.run {
-                        notificationsEnabled = true
-                    }
-                }
-            }
-        }
-    }
-
-    private func saveChanges() {
-        var updatedSettings = settings
-        updatedSettings.notificationsEnabled = notificationsEnabled
-        updatedSettings.save()
     }
 }
 

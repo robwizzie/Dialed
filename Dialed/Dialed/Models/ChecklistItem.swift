@@ -19,6 +19,12 @@ final class ChecklistItem {
     var completedAt: Date?
     var skippedAt: Date?
 
+    // Custom task fields
+    var customTitle: String?
+    var customDescription: String?
+    var customPoints: Int?
+    var isCustomTask: Bool
+
     init(type: Constants.ChecklistType, dayDate: Date) {
         self.id = UUID()
         self.dayDate = dayDate
@@ -27,6 +33,20 @@ final class ChecklistItem {
         self.scheduledHour = defaultTime.hour ?? 12
         self.scheduledMinute = defaultTime.minute ?? 0
         self.status = ChecklistStatus.open.rawValue
+        self.isCustomTask = false
+    }
+
+    // Custom task initializer
+    init(customTitle: String, customDescription: String? = nil, customPoints: Int = 1, scheduledTime: DateComponents, dayDate: Date) {
+        self.id = UUID()
+        self.dayDate = dayDate
+        self.type = "custom"
+        self.scheduledTime = scheduledTime
+        self.status = ChecklistStatus.open.rawValue
+        self.isCustomTask = true
+        self.customTitle = customTitle
+        self.customDescription = customDescription
+        self.customPoints = customPoints
     }
 
     var checklistType: Constants.ChecklistType? {
@@ -41,6 +61,26 @@ final class ChecklistItem {
     var scheduledTime: DateComponents {
         DateComponents(hour: scheduledHour, minute: scheduledMinute)
     }
+
+    // Display properties
+    var displayTitle: String {
+        if isCustomTask {
+            return customTitle ?? "Custom Task"
+        } else {
+            return checklistType?.rawValue ?? "Unknown"
+        }
+    }
+
+    var displayDescription: String? {
+        if isCustomTask {
+            return customDescription
+        } else {
+            return checklistType?.description
+        }
+    }
+
+    // Note: Points are now calculated dynamically based on total task count
+    // Use ChecklistPointsCalculator.points(for:in:) to get actual point value
 
     func markDone() {
         checklistStatus = .done

@@ -199,17 +199,10 @@ struct ScoringEngine {
         totalScore += waterPoints
 
         // 6. Routine checklist (10 points total)
-        // AM Skincare: 2pts, PM Skincare: 2pts, Lunch Vitamins: 3pts, Creatine: 3pts
-        var routinePoints = 0.0
-
-        for checklistType in Constants.ChecklistType.allCases {
-            let completed = checklistCompletion[checklistType.rawValue] ?? false
-            if completed {
-                routinePoints += Double(checklistType.points)
-            }
-        }
-
-        totalScore += routinePoints
+        // Points are distributed equally among all tasks (predefined + custom)
+        // This section just adds the points from the completion dictionary
+        let routinePoints = checklistCompletion.values.filter { $0 }.count
+        totalScore += Double(routinePoints)
 
         // Cap at 100 and round
         let finalScore = min(totalScore, 100.0).rounded()
@@ -224,26 +217,65 @@ struct ScoringEngine {
         from dayLog: DayLog,
         settings: UserSettings
     ) -> Int {
-        // Build checklist completion dictionary
-        var checklistCompletion: [String: Bool] = [:]
-        if let items = dayLog.checklistItems {
-            for item in items {
-                checklistCompletion[item.type] = (item.checklistStatus == .done)
+        var totalScore = 0.0
+
+        // 1. Protein adherence (25 points max)
+        let proteinRatio = min(dayLog.proteinGrams / settings.proteinTargetGrams, 1.0)
+        var proteinPoints = Double(Constants.Scoring.proteinWeight) * proteinRatio
+        if dayLog.proteinGrams >= settings.proteinTargetGrams {
+            proteinPoints += 2.0
+        }
+        proteinPoints = min(proteinPoints, 27.0)
+        totalScore += proteinPoints
+
+        // 2. Workout completion (10 points) + quality (10 points) = 20 total
+        if dayLog.workoutTag != nil {
+            totalScore += Double(Constants.Scoring.workoutCompletionWeight)
+            if let quality = dayLog.workoutScore {
+                totalScore += Double(quality) * 2.0
+            } else {
+                totalScore += 6.0
             }
         }
 
-        return calculateDailyScore(
-            protein: dayLog.proteinGrams,
-            proteinTarget: settings.proteinTargetGrams,
-            workoutCompleted: dayLog.workoutTag != nil,
-            workoutScore: dayLog.workoutScore,
-            mileCompleted: dayLog.mileCompleted,
-            mileScore: dayLog.mileScore,
-            sleepScore: dayLog.sleepScore,
-            sleepDurationMinutes: dayLog.sleepDurationMinutes,
-            water: dayLog.waterOz,
-            waterTarget: settings.waterTargetOz,
-            checklistCompletion: checklistCompletion
-        )
+        // 3. Mile completion (7 points) + quality (8 points) = 15 total
+        if dayLog.mileCompleted {
+            totalScore += Double(Constants.Scoring.mileCompletionWeight)
+            if let quality = dayLog.mileScore {
+                totalScore += Double(quality) * 1.6
+            } else {
+                totalScore += 5.0
+            }
+        }
+
+        // 4. Sleep (20 points total)
+        if let sleep = dayLog.sleepScore {
+            totalScore += Double(sleep) * 3.0
+        }
+        if let durationMin = dayLog.sleepDurationMinutes {
+            let hours = Double(durationMin) / 60.0
+            if hours >= 7.0 {
+                totalScore += 5.0
+            } else if hours >= 6.0 {
+                totalScore += 3.0
+            } else if hours >= 5.0 {
+                totalScore += 1.0
+            }
+        }
+
+        // 5. Hydration (10 points)
+        let waterRatio = min(dayLog.waterOz / settings.waterTargetOz, 1.0)
+        totalScore += Double(Constants.Scoring.hydrationWeight) * waterRatio
+
+        // 6. Routine checklist (10 points total - dynamically distributed)
+        if let items = dayLog.checklistItems {
+            let routinePoints = ChecklistPointsCalculator.totalPointsEarned(from: items)
+            totalScore += Double(routinePoints)
+        }
+
+        // Cap at 100 and round
+        let finalScore = min(totalScore, 100.0).rounded()
+
+        return Int(finalScore)
     }
 }

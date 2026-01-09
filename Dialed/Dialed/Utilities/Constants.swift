@@ -94,20 +94,12 @@ struct Constants {
             }
         }
 
-        var points: Int {
+        var countsForPoints: Bool {
             switch self {
-            case .amSkincare:
-                return 2
-            case .lunchVitamins:
-                return 3
-            case .creatine:
-                return 3
-            case .postWorkoutLog:
-                return 0  // Scoring handled separately via workout logging
-            case .closeTheDay:
-                return 0  // Just a reminder to review
-            case .pmSkincare:
-                return 2
+            case .postWorkoutLog, .closeTheDay:
+                return false  // These are reminders only, not scored
+            default:
+                return true
             }
         }
     }
