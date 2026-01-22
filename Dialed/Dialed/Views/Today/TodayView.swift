@@ -19,7 +19,7 @@ struct TodayView: View {
     init() {
         // Note: ViewModel will be properly initialized with injected context
         // This temporary initialization will be replaced when view appears
-        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, ChecklistItem.self)
+        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, WorkoutSet.self, ChecklistItem.self)
         _viewModel = StateObject(wrappedValue: TodayViewModel(modelContext: container.mainContext))
     }
 
