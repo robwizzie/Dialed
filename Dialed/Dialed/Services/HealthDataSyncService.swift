@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftData
+import HealthKit
 
 @MainActor
 class HealthDataSyncService: ObservableObject {

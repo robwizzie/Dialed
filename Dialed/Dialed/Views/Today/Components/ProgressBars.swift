@@ -327,7 +327,7 @@ struct CaloriesProgressBar: View {
                                 RoundedRectangle(cornerRadius: 10)
                             )
                             .shadow(
-                                color: (isOverTarget ? .orange : .green).opacity(0.3),
+                                color: (isOverTarget ? Color.orange : Color.green).opacity(0.3),
                                 radius: 4,
                                 x: 0,
                                 y: 2

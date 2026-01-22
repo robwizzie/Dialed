@@ -152,13 +152,20 @@ struct PermissionsView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(permissionGranted ? AppColors.primary : .ultraThinMaterial)
-                                    .overlay(
+                                Group {
+                                    if permissionGranted {
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(permissionGranted ? .clear : .white.opacity(0.1), lineWidth: 0.5)
-                                    )
-                                    .shadow(color: permissionGranted ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                                            .fill(AppColors.primary)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(.ultraThinMaterial)
+                                    }
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(permissionGranted ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                )
+                                .shadow(color: permissionGranted ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
                             )
                     }
                 }

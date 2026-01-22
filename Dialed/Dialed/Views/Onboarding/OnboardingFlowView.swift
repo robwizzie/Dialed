@@ -166,9 +166,9 @@ class OnboardingViewModel: ObservableObject {
 
     func completeOnboarding() {
         // Convert checklist times to UserSettings format
-        var customTimes: [String: UserSettings.ScheduledTime] = [:]
+        var customTimes: [String: ScheduledTime] = [:]
         for (type, time) in customChecklistTimes {
-            customTimes[type.rawValue] = UserSettings.ScheduledTime(hour: time.hour, minute: time.minute)
+            customTimes[type.rawValue] = ScheduledTime(hour: time.hour, minute: time.minute)
         }
 
         // Save settings

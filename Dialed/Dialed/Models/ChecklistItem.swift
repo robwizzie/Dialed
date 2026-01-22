@@ -12,8 +12,9 @@ import SwiftData
 final class ChecklistItem {
     var id: UUID
     var dayDate: Date
-    var type: String  // ChecklistType rawValue or "custom"
-    var scheduledTime: DateComponents
+    var type: String  // ChecklistType rawValue
+    var scheduledHour: Int
+    var scheduledMinute: Int
     var status: String  // ChecklistStatus rawValue
     var completedAt: Date?
     var skippedAt: Date?
@@ -22,13 +23,15 @@ final class ChecklistItem {
     var customTitle: String?
     var customDescription: String?
     var customPoints: Int?
-    var isCustomTask: Bool
+    var isCustomTask: Bool = false
 
     init(type: Constants.ChecklistType, dayDate: Date) {
         self.id = UUID()
         self.dayDate = dayDate
         self.type = type.rawValue
-        self.scheduledTime = type.defaultTime
+        let defaultTime = type.defaultTime
+        self.scheduledHour = defaultTime.hour ?? 12
+        self.scheduledMinute = defaultTime.minute ?? 0
         self.status = ChecklistStatus.open.rawValue
         self.isCustomTask = false
     }
@@ -38,7 +41,8 @@ final class ChecklistItem {
         self.id = UUID()
         self.dayDate = dayDate
         self.type = "custom"
-        self.scheduledTime = scheduledTime
+        self.scheduledHour = scheduledTime.hour ?? 12
+        self.scheduledMinute = scheduledTime.minute ?? 0
         self.status = ChecklistStatus.open.rawValue
         self.isCustomTask = true
         self.customTitle = customTitle
@@ -53,6 +57,10 @@ final class ChecklistItem {
     var checklistStatus: ChecklistStatus {
         get { ChecklistStatus(rawValue: status) ?? .open }
         set { status = newValue.rawValue }
+    }
+    
+    var scheduledTime: DateComponents {
+        DateComponents(hour: scheduledHour, minute: scheduledMinute)
     }
 
     // Display properties
