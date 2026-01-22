@@ -13,24 +13,68 @@ final class WorkoutExercise {
     var id: UUID
     var date: Date
     var exerciseName: String
-    var sets: Int
-    var reps: Int
-    var weightLbs: Double
     var notes: String?
     var createdAt: Date
 
-    // Relationship to workout log
+    // Relationships
     var workoutLog: WorkoutLog?
+    @Relationship(deleteRule: .cascade) var workoutSets: [WorkoutSet]?
 
-    init(exerciseName: String, sets: Int, reps: Int, weightLbs: Double, notes: String? = nil) {
+    init(exerciseName: String, notes: String? = nil) {
         self.id = UUID()
         self.date = Date()
         self.exerciseName = exerciseName
-        self.sets = sets
-        self.reps = reps
-        self.weightLbs = weightLbs
         self.notes = notes
         self.createdAt = Date()
+        self.workoutSets = []
+    }
+
+    // MARK: - Computed Properties
+
+    /// Total number of sets (including warmups)
+    var totalSets: Int {
+        return workoutSets?.count ?? 0
+    }
+
+    /// Total number of working sets (excluding warmups)
+    var workingSets: Int {
+        return workoutSets?.filter { !$0.isWarmup }.count ?? 0
+    }
+
+    /// Total volume for this exercise (sum of all set volumes)
+    var totalVolume: Double {
+        return workoutSets?.reduce(0) { $0 + $1.volume } ?? 0
+    }
+
+    /// Average weight across all working sets
+    var averageWeight: Double {
+        let working = workoutSets?.filter { !$0.isWarmup } ?? []
+        guard !working.isEmpty else { return 0 }
+        let total = working.reduce(0.0) { $0 + $1.weightLbs }
+        return total / Double(working.count)
+    }
+
+    /// Average reps across all working sets
+    var averageReps: Double {
+        let working = workoutSets?.filter { !$0.isWarmup } ?? []
+        guard !working.isEmpty else { return 0 }
+        let total = working.reduce(0) { $0 + $1.reps }
+        return Double(total) / Double(working.count)
+    }
+
+    /// Top set (highest weight × reps)
+    var topSet: WorkoutSet? {
+        return workoutSets?.filter { !$0.isWarmup }.max { $0.volume < $1.volume }
+    }
+
+    /// Display string for sets (e.g., "3 sets")
+    var setsDisplay: String {
+        let working = workingSets
+        let warmup = totalSets - working
+        if warmup > 0 {
+            return "\(working) sets + \(warmup) warmup"
+        }
+        return "\(working) \(working == 1 ? "set" : "sets")"
     }
 
     // Get previous session for this exercise to track progress

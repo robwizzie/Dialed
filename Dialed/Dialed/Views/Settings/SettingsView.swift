@@ -36,6 +36,28 @@ struct SettingsView: View {
                         )
                 )
 
+                // Tracking Section
+                Section {
+                    NavigationLink(destination: TrackingSettingsView()) {
+                        SettingsRow(
+                            icon: "chart.bar.fill",
+                            iconGradient: [.green, .mint],
+                            title: "What to Track",
+                            subtitle: TrackingPreferences.load().trackingSummary
+                        )
+                    }
+                } header: {
+                    Text("Tracking")
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
+
                 // Daily Routine Section
                 Section {
                     NavigationLink(destination: TargetsSettingsView()) {
