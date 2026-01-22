@@ -57,6 +57,52 @@ class NotificationManager: ObservableObject {
         isEnabled = settings.authorizationStatus == .authorized
     }
 
+    /// Register notification categories with actions
+    func registerCategories() async {
+        let completeAction = UNNotificationAction(
+            identifier: "COMPLETE",
+            title: "Mark Done",
+            options: [.foreground]
+        )
+
+        let snoozeAction = UNNotificationAction(
+            identifier: "SNOOZE",
+            title: "Remind in 15m",
+            options: []
+        )
+
+        let takePhotoAction = UNNotificationAction(
+            identifier: "TAKE_PHOTO",
+            title: "Take Photo",
+            options: [.foreground]
+        )
+
+        let laterAction = UNNotificationAction(
+            identifier: "LATER",
+            title: "Later",
+            options: []
+        )
+
+        let taskReminderCategory = UNNotificationCategory(
+            identifier: NotificationCategory.taskReminder.rawValue,
+            actions: [completeAction, snoozeAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        let workoutPhotoCategory = UNNotificationCategory(
+            identifier: "WORKOUT_PHOTO_REMINDER",
+            actions: [takePhotoAction, laterAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        notificationCenter.setNotificationCategories([
+            taskReminderCategory,
+            workoutPhotoCategory
+        ])
+    }
+
     // MARK: - Task Reminders
 
     /// Schedule notifications for all checklist items
@@ -234,6 +280,32 @@ class NotificationManager: ObservableObject {
             try await notificationCenter.add(request)
         } catch {
             print("Error sending motivational notification: \(error)")
+        }
+    }
+
+    // MARK: - Workout Photo Reminder
+
+    /// Send notification prompting user to add a progress photo after workout
+    func sendWorkoutPhotoReminder() async {
+        guard isEnabled else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "📸 Great Workout!"
+        content.body = "Add a progress photo to track your journey"
+        content.categoryIdentifier = "WORKOUT_PHOTO_REMINDER"
+        content.sound = .default
+
+        // Immediate delivery
+        let request = UNNotificationRequest(
+            identifier: "workout_photo_\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await notificationCenter.add(request)
+        } catch {
+            print("Error sending workout photo reminder: \(error)")
         }
     }
 

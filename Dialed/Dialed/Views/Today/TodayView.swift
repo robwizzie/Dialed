@@ -15,11 +15,12 @@ struct TodayView: View {
     @State private var showWaterEntry = false
     @State private var showProteinEntry = false
     @State private var showWorkoutLog = false
+    @State private var trackingPreferences = TrackingPreferences.load()
 
     init() {
         // Note: ViewModel will be properly initialized with injected context
         // This temporary initialization will be replaced when view appears
-        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, ChecklistItem.self)
+        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, WorkoutSet.self, WorkoutPhoto.self, ChecklistItem.self)
         _viewModel = StateObject(wrappedValue: TodayViewModel(modelContext: container.mainContext))
     }
 
@@ -30,14 +31,18 @@ struct TodayView: View {
                     // Header with score ring
                     headerSection
 
-                    // Progress bars
-                    progressSection
+                    // Progress bars (conditional)
+                    if trackingPreferences.trackWater || trackingPreferences.trackProtein {
+                        progressSection
+                    }
 
-                    // Activity tiles
+                    // Activity tiles (conditional)
                     activitySection
 
-                    // Checklist
-                    checklistSection
+                    // Checklist (conditional)
+                    if trackingPreferences.trackChecklist {
+                        checklistSection
+                    }
                 }
                 .padding(Spacing.screenPadding)
                 .padding(.bottom, Spacing.xl)
@@ -78,6 +83,10 @@ struct TodayView: View {
                 // Auto-refresh on appear
                 await viewModel.quickRefresh()
             }
+            .onAppear {
+                // Refresh tracking preferences on appear
+                trackingPreferences = TrackingPreferences.load()
+            }
         }
     }
 
@@ -116,36 +125,52 @@ struct TodayView: View {
                 .foregroundColor(AppColors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(action: {
-                showWaterEntry = true
-            }) {
-                WaterProgressBar(
-                    current: viewModel.dayLog.waterOz,
-                    target: viewModel.settings.waterTargetOz
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .sheet(isPresented: $showWaterEntry) {
-                WaterEntrySheet(
-                    currentAmount: $viewModel.dayLog.waterOz,
-                    target: viewModel.settings.waterTargetOz
-                )
+            if trackingPreferences.trackWater {
+                Button(action: {
+                    showWaterEntry = true
+                }) {
+                    WaterProgressBar(
+                        current: viewModel.dayLog.waterOz,
+                        target: viewModel.settings.waterTargetOz
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .sheet(isPresented: $showWaterEntry) {
+                    WaterEntrySheet(
+                        currentAmount: Binding(
+                            get: { viewModel.dayLog.waterOz },
+                            set: { newValue in
+                                viewModel.dayLog.waterOz = newValue
+                                viewModel.updateDailyScore()
+                            }
+                        ),
+                        target: viewModel.settings.waterTargetOz
+                    )
+                }
             }
 
-            Button(action: {
-                showProteinEntry = true
-            }) {
-                ProteinProgressBar(
-                    current: viewModel.dayLog.proteinGrams,
-                    target: viewModel.settings.proteinTargetGrams
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-            .sheet(isPresented: $showProteinEntry) {
-                ProteinEntrySheet(
-                    currentAmount: $viewModel.dayLog.proteinGrams,
-                    target: viewModel.settings.proteinTargetGrams
-                )
+            if trackingPreferences.trackProtein {
+                Button(action: {
+                    showProteinEntry = true
+                }) {
+                    ProteinProgressBar(
+                        current: viewModel.dayLog.proteinGrams,
+                        target: viewModel.settings.proteinTargetGrams
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .sheet(isPresented: $showProteinEntry) {
+                    ProteinEntrySheet(
+                        currentAmount: Binding(
+                            get: { viewModel.dayLog.proteinGrams },
+                            set: { newValue in
+                                viewModel.dayLog.proteinGrams = newValue
+                                viewModel.updateDailyScore()
+                            }
+                        ),
+                        target: viewModel.settings.proteinTargetGrams
+                    )
+                }
             }
 
             if viewModel.settings.calorieTarget != nil {
@@ -160,58 +185,67 @@ struct TodayView: View {
     // MARK: - Activity Section
 
     private var activitySection: some View {
-        VStack(spacing: Spacing.md) {
-            Text("Activity")
-                .font(.title3.bold())
-                .foregroundColor(AppColors.textPrimary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Sleep tile
-            SleepTile(
-                sleepScore: viewModel.sleepSummary.score,
-                duration: viewModel.sleepSummary.duration,
-                deepSleep: viewModel.sleepSummary.deepSleep,
-                efficiency: viewModel.sleepSummary.efficiency
-            )
-
-            // Workout tile
-            Button(action: {
-                showWorkoutLog = true
-            }) {
-                WorkoutTile(
-                    workoutDetected: viewModel.workoutSummary.detected,
-                    workoutTag: viewModel.workoutSummary.tag,
-                    workoutScore: viewModel.workoutSummary.score,
-                    duration: viewModel.workoutSummary.duration,
-                    calories: viewModel.workoutSummary.calories
-                )
+        VStack(spacing: 12) {
+            // Only show section if any activity categories are enabled
+            if trackingPreferences.trackSleep || trackingPreferences.trackWorkout || trackingPreferences.trackMile {
+                Text("Activity")
+                    .font(.headline)
+                    .foregroundColor(AppColors.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(PlainButtonStyle())
-            .sheet(isPresented: $showWorkoutLog) {
-                WorkoutLogSheet(
-                    dayLog: Binding(
-                        get: { viewModel.dayLog },
-                        set: { newValue in
-                            viewModel.dayLog = newValue
-                        }
-                    ),
-                    onSave: {
-                        Task {
-                            await viewModel.refreshData()
-                        }
-                    }
+
+            // Sleep tile (conditional)
+            if trackingPreferences.trackSleep {
+                SleepTile(
+                    sleepScore: viewModel.sleepSummary.score,
+                    duration: viewModel.sleepSummary.duration,
+                    deepSleep: viewModel.sleepSummary.deepSleep,
+                    efficiency: viewModel.sleepSummary.efficiency
                 )
             }
 
-            // Mile tile
-            MileTile(
-                mileCompleted: viewModel.dayLog.mileCompleted,
-                distance: viewModel.dayLog.mileDistance,
-                timeSeconds: viewModel.dayLog.mileTimeSeconds,
-                score: viewModel.dayLog.mileScore
-            )
+            // Workout tile (conditional)
+            if trackingPreferences.trackWorkout {
+                Button(action: {
+                    showWorkoutLog = true
+                }) {
+                    WorkoutTile(
+                        workoutDetected: viewModel.workoutSummary.detected,
+                        workoutTag: viewModel.workoutSummary.tag,
+                        workoutScore: viewModel.workoutSummary.score,
+                        duration: viewModel.workoutSummary.duration,
+                        calories: viewModel.workoutSummary.calories
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .sheet(isPresented: $showWorkoutLog) {
+                    WorkoutLogSheet(
+                        dayLog: Binding(
+                            get: { viewModel.dayLog },
+                            set: { newValue in
+                                viewModel.dayLog = newValue
+                            }
+                        ),
+                        onSave: {
+                            Task {
+                                await viewModel.refreshData()
+                            }
+                        }
+                    )
+                }
+            }
 
-            // Activity metrics
+            // Mile tile (conditional)
+            if trackingPreferences.trackMile {
+                MileTile(
+                    mileCompleted: viewModel.dayLog.mileCompleted,
+                    distance: viewModel.dayLog.mileDistance,
+                    timeSeconds: viewModel.dayLog.mileTimeSeconds,
+                    score: viewModel.dayLog.mileScore
+                )
+            }
+
+            // Activity metrics (always shown if available - general step tracking)
             ActivityTile(
                 steps: viewModel.activityMetrics.steps,
                 activeEnergy: viewModel.activityMetrics.activeEnergy
