@@ -212,65 +212,94 @@ struct ScoringEngine {
 
     // MARK: - Helper: Calculate provisional score from DayLog
 
-    /// Calculate provisional score from a DayLog object
+    /// Calculate provisional score from a DayLog object with tracking preferences
     static func calculateProvisionalScore(
         from dayLog: DayLog,
         settings: UserSettings
     ) -> Int {
+        // Load tracking preferences
+        let prefs = TrackingPreferences.load()
+
+        // If nothing is being tracked, return 0
+        guard prefs.hasAnyEnabled else { return 0 }
+
         var totalScore = 0.0
 
-        // 1. Protein adherence (25 points max)
-        let proteinRatio = min(dayLog.proteinGrams / settings.proteinTargetGrams, 1.0)
-        var proteinPoints = Double(Constants.Scoring.proteinWeight) * proteinRatio
-        if dayLog.proteinGrams >= settings.proteinTargetGrams {
-            proteinPoints += 2.0
+        // 1. Protein adherence (27 points base -> scaled)
+        if prefs.trackProtein {
+            let proteinRatio = min(dayLog.proteinGrams / settings.proteinTargetGrams, 1.0)
+            var proteinPoints = 25.0 * proteinRatio
+            if dayLog.proteinGrams >= settings.proteinTargetGrams {
+                proteinPoints += 2.0
+            }
+            proteinPoints = min(proteinPoints, 27.0)
+            // Apply scale factor
+            totalScore += prefs.adjustedPoints(for: proteinPoints)
         }
-        proteinPoints = min(proteinPoints, 27.0)
-        totalScore += proteinPoints
 
-        // 2. Workout completion (10 points) + quality (10 points) = 20 total
-        if dayLog.workoutTag != nil {
-            totalScore += Double(Constants.Scoring.workoutCompletionWeight)
-            if let quality = dayLog.workoutScore {
-                totalScore += Double(quality) * 2.0
-            } else {
-                totalScore += 6.0
+        // 2. Workout completion (10) + quality (10) = 20 points base -> scaled
+        if prefs.trackWorkout {
+            if dayLog.workoutTag != nil {
+                var workoutPoints = 10.0  // Completion
+                if let quality = dayLog.workoutScore {
+                    workoutPoints += Double(quality) * 2.0  // Quality (0-10)
+                } else {
+                    workoutPoints += 6.0  // Default quality
+                }
+                // Apply scale factor
+                totalScore += prefs.adjustedPoints(for: workoutPoints)
             }
         }
 
-        // 3. Mile completion (7 points) + quality (8 points) = 15 total
-        if dayLog.mileCompleted {
-            totalScore += Double(Constants.Scoring.mileCompletionWeight)
-            if let quality = dayLog.mileScore {
-                totalScore += Double(quality) * 1.6
-            } else {
-                totalScore += 5.0
+        // 3. Mile completion (7) + quality (8) = 15 points base -> scaled
+        if prefs.trackMile {
+            if dayLog.mileCompleted {
+                var milePoints = 7.0  // Completion
+                if let quality = dayLog.mileScore {
+                    milePoints += Double(quality) * 1.6  // Quality (0-8)
+                } else {
+                    milePoints += 5.0  // Default quality
+                }
+                // Apply scale factor
+                totalScore += prefs.adjustedPoints(for: milePoints)
             }
         }
 
-        // 4. Sleep (20 points total)
-        if let sleep = dayLog.sleepScore {
-            totalScore += Double(sleep) * 3.0
-        }
-        if let durationMin = dayLog.sleepDurationMinutes {
-            let hours = Double(durationMin) / 60.0
-            if hours >= 7.0 {
-                totalScore += 5.0
-            } else if hours >= 6.0 {
-                totalScore += 3.0
-            } else if hours >= 5.0 {
-                totalScore += 1.0
+        // 4. Sleep (20 points base -> scaled)
+        if prefs.trackSleep {
+            var sleepPoints = 0.0
+            if let sleep = dayLog.sleepScore {
+                sleepPoints += Double(sleep) * 3.0  // Quality (0-15)
             }
+            if let durationMin = dayLog.sleepDurationMinutes {
+                let hours = Double(durationMin) / 60.0
+                if hours >= 7.0 {
+                    sleepPoints += 5.0
+                } else if hours >= 6.0 {
+                    sleepPoints += 3.0
+                } else if hours >= 5.0 {
+                    sleepPoints += 1.0
+                }
+            }
+            // Apply scale factor
+            totalScore += prefs.adjustedPoints(for: sleepPoints)
         }
 
-        // 5. Hydration (10 points)
-        let waterRatio = min(dayLog.waterOz / settings.waterTargetOz, 1.0)
-        totalScore += Double(Constants.Scoring.hydrationWeight) * waterRatio
+        // 5. Hydration (10 points base -> scaled)
+        if prefs.trackWater {
+            let waterRatio = min(dayLog.waterOz / settings.waterTargetOz, 1.0)
+            let waterPoints = 10.0 * waterRatio
+            // Apply scale factor
+            totalScore += prefs.adjustedPoints(for: waterPoints)
+        }
 
-        // 6. Routine checklist (10 points total - dynamically distributed)
-        if let items = dayLog.checklistItems {
-            let routinePoints = ChecklistPointsCalculator.totalPointsEarned(from: items)
-            totalScore += Double(routinePoints)
+        // 6. Routine checklist (10 points base -> scaled)
+        if prefs.trackChecklist {
+            if let items = dayLog.checklistItems {
+                let routinePoints = ChecklistPointsCalculator.totalPointsEarned(from: items)
+                // Apply scale factor
+                totalScore += prefs.adjustedPoints(for: Double(routinePoints))
+            }
         }
 
         // Cap at 100 and round
