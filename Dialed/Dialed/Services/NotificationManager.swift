@@ -283,6 +283,32 @@ class NotificationManager: ObservableObject {
         }
     }
 
+    // MARK: - Workout Photo Reminder
+
+    /// Send notification prompting user to add a progress photo after workout
+    func sendWorkoutPhotoReminder() async {
+        guard isEnabled else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "📸 Great Workout!"
+        content.body = "Add a progress photo to track your journey"
+        content.categoryIdentifier = "WORKOUT_PHOTO_REMINDER"
+        content.sound = .default
+
+        // Immediate delivery
+        let request = UNNotificationRequest(
+            identifier: "workout_photo_\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil
+        )
+
+        do {
+            try await notificationCenter.add(request)
+        } catch {
+            print("Error sending workout photo reminder: \(error)")
+        }
+    }
+
     // MARK: - Utility
 
     /// Get all pending notifications (for debugging/settings)
