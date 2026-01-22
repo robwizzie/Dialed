@@ -16,6 +16,7 @@ struct HealthKitSettingsView: View {
     @State private var isRequesting = false
     @State private var showError = false
     @State private var errorMessage = ""
+    @State private var showPermissionDeniedAlert = false
 
     var body: some View {
         List {
@@ -120,6 +121,15 @@ struct HealthKitSettingsView: View {
                         }
                     }
                     .disabled(isRequesting)
+                    
+                    Button(action: { showPermissionDeniedAlert = true }) {
+                        HStack {
+                            Image(systemName: "gearshape")
+                                .foregroundStyle(.secondary)
+                            Text("Reset Health Permissions")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
 
                     if showError {
                         Text(errorMessage)
@@ -163,8 +173,8 @@ struct HealthKitSettingsView: View {
 
             // Privacy Section
             Section {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: Spacing.md) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "lock.shield.fill")
                             .foregroundColor(AppColors.success)
                         VStack(alignment: .leading, spacing: 2) {
@@ -177,7 +187,7 @@ struct HealthKitSettingsView: View {
                         }
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
                             .foregroundStyle(
                                 LinearGradient(
@@ -196,7 +206,7 @@ struct HealthKitSettingsView: View {
                         }
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: Spacing.sm) {
                         Image(systemName: "arrow.clockwise")
                             .foregroundStyle(
                                 LinearGradient(
@@ -238,32 +248,84 @@ struct HealthKitSettingsView: View {
                 }
             }
         }
-        .task {
+        .onAppear {
+            print("👀 [HealthKitSettings] View appeared, checking authorization status...")
             checkAuthorizationStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            print("👀 [HealthKitSettings] App entered foreground, rechecking authorization...")
+            checkAuthorizationStatus()
+        }
+        .alert("Reset Health Permissions", isPresented: $showPermissionDeniedAlert) {
+            Button("Cancel", role: .cancel) {}
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+        } message: {
+            Text("If you previously denied Health access, you need to enable it in iOS Settings:\n\n1. Open Settings app\n2. Scroll to 'Dialed'\n3. Tap 'Health'\n4. Enable 'Sleep Analysis' and other data types\n5. Return to Dialed and check connection status")
         }
     }
 
     private func checkAuthorizationStatus() {
-        isAuthorized = HealthKitManager.shared.checkAuthorizationStatus()
+        let status = HealthKitManager.shared.checkAuthorizationStatus()
+        print("👀 [HealthKitSettings] Authorization status check: \(status)")
+        
+        // For READ permissions, we need to try reading data to verify
+        Task {
+            let actualAccess = await HealthKitManager.shared.verifyDataAccess()
+            await MainActor.run {
+                print("👀 [HealthKitSettings] Actual data access verified: \(actualAccess)")
+                isAuthorized = actualAccess
+                
+                // Update settings
+                var updatedSettings = settings
+                updatedSettings.healthKitEnabled = actualAccess
+                updatedSettings.save()
+                settings = UserSettings.load()
+                
+                if actualAccess {
+                    print("✅ [HealthKitSettings] Connected to Apple Health!")
+                } else {
+                    print("❌ [HealthKitSettings] Cannot read health data")
+                }
+            }
+        }
     }
 
     private func requestHealthKitPermissions() {
+        print("🔄 [HealthKitSettings] User tapped Connect button")
         isRequesting = true
         showError = false
 
         Task {
             do {
                 try await HealthKitManager.shared.requestAuthorization()
+                print("✅ [HealthKitSettings] Authorization request completed")
+                
+                // Wait for HealthKit to fully update
+                print("⏳ [HealthKitSettings] Waiting for permissions to sync...")
+                try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+                
                 await MainActor.run {
-                    isAuthorized = true
+                    // Recheck actual status
+                    checkAuthorizationStatus()
                     isRequesting = false
-
-                    // Update settings
-                    var updatedSettings = settings
-                    updatedSettings.healthKitEnabled = true
-                    updatedSettings.save()
+                    
+                    let statusDesc = HealthKitManager.shared.getAuthorizationStatusDescription()
+                    print("✅ [HealthKitSettings] Final status: \(statusDesc)")
+                    
+                    if statusDesc == "denied" {
+                        print("⚠️ [HealthKitSettings] Permission was denied - showing alert")
+                        showPermissionDeniedAlert = true
+                    } else if !isAuthorized {
+                        showError = true
+                        errorMessage = "Please allow access when the Health permission dialog appears. Tap 'Allow' to grant access."
+                    }
                 }
             } catch {
+                print("❌ [HealthKitSettings] Authorization failed: \(error.localizedDescription)")
                 await MainActor.run {
                     isRequesting = false
                     showError = true
@@ -281,9 +343,9 @@ struct DataAccessRow: View {
     let isEnabled: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 20))
+                .font(.system(size: 22))
                 .foregroundStyle(
                     isEnabled ?
                     LinearGradient(
@@ -297,11 +359,11 @@ struct DataAccessRow: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
                 Text(title)
-                    .font(.subheadline.bold())
+                    .font(.body.weight(.medium))
                     .foregroundStyle(isEnabled ? .primary : .secondary)
 
                 Text(description)

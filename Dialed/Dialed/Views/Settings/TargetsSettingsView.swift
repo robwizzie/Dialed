@@ -33,8 +33,40 @@ struct TargetsSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Protein
-                VStack(alignment: .leading, spacing: 8) {
+                proteinSection
+                waterSection
+                caloriesSection
+                workoutFrequencySection
+            }
+            .padding()
+        }
+        .background(AppColors.background.ignoresSafeArea())
+        .navigationTitle("Targets")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") {
+                    dismiss()
+                }
+            }
+
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    saveChanges()
+                    dismiss()
+                }
+                .disabled(!isValid)
+            }
+        }
+        .onTapGesture {
+            focusedField = nil
+        }
+    }
+    
+    // MARK: - Sections
+    
+    private var proteinSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Protein")
                             .font(.headline)
@@ -69,13 +101,14 @@ struct TargetsSettingsView: View {
                             .frame(width: 70)
                     }
 
-                    Text("Target: 0.8-1g per lb of goal weight")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Water
-                VStack(alignment: .leading, spacing: 8) {
+            Text("Target: 0.8-1g per lb of goal weight")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var waterSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Water")
                             .font(.headline)
@@ -110,13 +143,14 @@ struct TargetsSettingsView: View {
                             .frame(width: 70)
                     }
 
-                    Text("Target: Half your body weight in oz")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                // Calories (optional)
-                VStack(alignment: .leading, spacing: 8) {
+            Text("Target: Half your body weight in oz")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+    
+    private var caloriesSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
                     HStack {
                         Text("Calories")
                             .font(.headline)
@@ -161,88 +195,72 @@ struct TargetsSettingsView: View {
                             .frame(width: 70)
                     }
 
-                    HStack(spacing: 12) {
-                        if calorieTarget != nil {
-                            Button(action: {
-                                calorieTarget = nil
-                            }) {
-                                Text("Remove calorie tracking")
-                                    .font(.caption.bold())
-                                    .foregroundColor(.red)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
+            HStack(spacing: 12) {
+                if calorieTarget != nil {
+                    Button(action: {
+                        calorieTarget = nil
+                    }) {
+                        Text("Remove calorie tracking")
+                            .font(.caption.bold())
+                            .foregroundColor(.red)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(.red.opacity(0.15))
+                                    .overlay(
                                         Capsule()
-                                            .fill(.red.opacity(0.15))
-                                            .overlay(
-                                                Capsule()
-                                                    .stroke(.red.opacity(0.3), lineWidth: 1)
-                                            )
+                                            .stroke(.red.opacity(0.3), lineWidth: 1)
                                     )
-                            }
-                        } else {
-                            Text("Leave blank to skip calorie tracking")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                            )
                     }
-                }
-
-                // Workout frequency
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Expected Workouts")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-
-                    HStack(spacing: 12) {
-                        ForEach(3...7, id: \.self) { days in
-                            Button(action: {
-                                workoutsPerWeek = days
-                            }) {
-                                Text("\(days)")
-                                    .font(.title3.bold())
-                                    .foregroundColor(workoutsPerWeek == days ? .white : .primary)
-                                    .frame(width: 50, height: 50)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 12)
-                                            .fill(workoutsPerWeek == days ? AppColors.primary : .ultraThinMaterial)
-                                            .overlay(
-                                                RoundedRectangle(cornerRadius: 12)
-                                                    .stroke(workoutsPerWeek == days ? .clear : .white.opacity(0.1), lineWidth: 0.5)
-                                            )
-                                            .shadow(color: workoutsPerWeek == days ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
-                                    )
-                            }
-                        }
-                    }
-
-                    Text("days per week")
+                } else {
+                    Text("Leave blank to skip calorie tracking")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .padding()
         }
-        .background(AppColors.background.ignoresSafeArea())
-        .navigationTitle("Targets")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") {
-                    dismiss()
+    }
+    
+    private var workoutFrequencySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+                    Text("Expected Workouts")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+
+            HStack(spacing: 12) {
+                ForEach(3...7, id: \.self) { days in
+                    Button(action: {
+                        workoutsPerWeek = days
+                    }) {
+                        Text("\(days)")
+                            .font(.title3.bold())
+                            .foregroundColor(workoutsPerWeek == days ? .white : .primary)
+                            .frame(width: 50, height: 50)
+                            .background(
+                                Group {
+                                    if workoutsPerWeek == days {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(AppColors.primary)
+                                    } else {
+                                        RoundedRectangle(cornerRadius: 12)
+                                            .fill(.ultraThinMaterial)
+                                    }
+                                }
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(workoutsPerWeek == days ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                )
+                                .shadow(color: workoutsPerWeek == days ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                            )
+                    }
                 }
             }
 
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Save") {
-                    saveChanges()
-                    dismiss()
-                }
-                .disabled(!isValid)
-            }
-        }
-        .onTapGesture {
-            focusedField = nil
+            Text("days per week")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 
