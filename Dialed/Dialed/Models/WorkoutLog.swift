@@ -29,8 +29,9 @@ final class WorkoutLog {
     var endTime: Date?
     var loggedAt: Date
 
-    // Relationship to exercises
+    // Relationships
     @Relationship(deleteRule: .cascade) var exercises: [WorkoutExercise]?
+    @Relationship(deleteRule: .cascade) var photos: [WorkoutPhoto]?
 
     init(
         dayDate: Date,

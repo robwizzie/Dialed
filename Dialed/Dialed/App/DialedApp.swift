@@ -30,6 +30,7 @@ struct DialedApp: App {
                     WorkoutLog.self,
                     WorkoutExercise.self,
                     WorkoutSet.self,
+                    WorkoutPhoto.self,
                     ChecklistItem.self
                 ])
         }
