@@ -10,7 +10,15 @@ import SwiftData
 
 @main
 struct DialedApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
+
+    init() {
+        // Request notification permissions on app launch
+        Task {
+            await NotificationManager.shared.checkAuthorizationStatus()
+        }
+    }
 
     var body: some Scene {
         WindowGroup {

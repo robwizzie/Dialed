@@ -325,6 +325,53 @@ struct NotificationsSettingsView: View {
                                 .stroke(.white.opacity(0.1), lineWidth: 0.5)
                         )
                 )
+
+                // Test Notification Section
+                Section {
+                    Button(action: {
+                        Task {
+                            await sendTestNotification()
+                        }
+                    }) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "bell.badge.fill")
+                                .foregroundStyle(
+                                    LinearGradient(
+                                        colors: [.blue, .cyan],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Send Test Notification")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+
+                                Text("Verify notifications are working")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "arrow.right.circle")
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Testing")
+                } footer: {
+                    Text("Send an immediate test notification to confirm everything is set up correctly")
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        )
+                )
             }
         }
         .scrollContentBackground(.hidden)
@@ -362,6 +409,25 @@ struct NotificationsSettingsView: View {
             return "Ephemeral"
         @unknown default:
             return "Unknown"
+        }
+    }
+
+    private func sendTestNotification() async {
+        let content = UNMutableNotificationContent()
+        content.title = "🔔 Test Notification"
+        content.body = "Notifications are working perfectly! You're all set."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "test_\(Date().timeIntervalSince1970)",
+            content: content,
+            trigger: nil // Immediate delivery
+        )
+
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+        } catch {
+            print("Error sending test notification: \(error)")
         }
     }
 }
