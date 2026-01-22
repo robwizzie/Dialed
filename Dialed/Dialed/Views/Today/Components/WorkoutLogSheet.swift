@@ -20,6 +20,8 @@ struct WorkoutLogSheet: View {
     @State private var notes: String = ""
     @State private var exercises: [ExerciseEntry] = []
     @State private var showAddExercise = false
+    @State private var showPhotoPrompt = false
+    @State private var savedWorkoutLog: WorkoutLog?
 
     var body: some View {
         NavigationStack {
@@ -57,6 +59,23 @@ struct WorkoutLogSheet: View {
             }
             .sheet(isPresented: $showAddExercise) {
                 AddExerciseSheet(exercises: $exercises)
+            }
+            .alert("Add Progress Photo?", isPresented: $showPhotoPrompt) {
+                Button("Take Photo") {
+                    // Show photo capture
+                    if let workout = savedWorkoutLog {
+                        // Will be handled by TodayView through notification
+                        Task {
+                            await NotificationManager.shared.sendWorkoutPhotoReminder()
+                        }
+                    }
+                    dismiss()
+                }
+                Button("Later") {
+                    dismiss()
+                }
+            } message: {
+                Text("Document your progress with a photo")
             }
         }
         .presentationDetents([.large])
@@ -289,7 +308,10 @@ struct WorkoutLogSheet: View {
         try? modelContext.save()
 
         onSave()
-        dismiss()
+
+        // Save workout log reference and show photo prompt
+        savedWorkoutLog = workoutLog
+        showPhotoPrompt = true
     }
 }
 
