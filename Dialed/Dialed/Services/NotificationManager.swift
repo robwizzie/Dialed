@@ -57,6 +57,52 @@ class NotificationManager: ObservableObject {
         isEnabled = settings.authorizationStatus == .authorized
     }
 
+    /// Register notification categories with actions
+    func registerCategories() async {
+        let completeAction = UNNotificationAction(
+            identifier: "COMPLETE",
+            title: "Mark Done",
+            options: [.foreground]
+        )
+
+        let snoozeAction = UNNotificationAction(
+            identifier: "SNOOZE",
+            title: "Remind in 15m",
+            options: []
+        )
+
+        let takePhotoAction = UNNotificationAction(
+            identifier: "TAKE_PHOTO",
+            title: "Take Photo",
+            options: [.foreground]
+        )
+
+        let laterAction = UNNotificationAction(
+            identifier: "LATER",
+            title: "Later",
+            options: []
+        )
+
+        let taskReminderCategory = UNNotificationCategory(
+            identifier: NotificationCategory.taskReminder.rawValue,
+            actions: [completeAction, snoozeAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        let workoutPhotoCategory = UNNotificationCategory(
+            identifier: "WORKOUT_PHOTO_REMINDER",
+            actions: [takePhotoAction, laterAction],
+            intentIdentifiers: [],
+            options: []
+        )
+
+        notificationCenter.setNotificationCategories([
+            taskReminderCategory,
+            workoutPhotoCategory
+        ])
+    }
+
     // MARK: - Task Reminders
 
     /// Schedule notifications for all checklist items
