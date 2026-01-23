@@ -19,6 +19,7 @@ final class WorkoutLog {
     // Auto-detected data from HealthKit
     var detectedFromHealth: Bool
     var healthKitWorkoutType: String?
+    var healthKitWorkoutID: String?  // UUID string for linking to Apple Health workout
     var durationMinutes: Int?
     var caloriesBurned: Int?
     var averageHeartRate: Double?
@@ -35,21 +36,47 @@ final class WorkoutLog {
 
     init(
         dayDate: Date,
-        tag: Constants.WorkoutTag,
+        tag: String,
         workoutScore: Int,
         notes: String? = nil,
-        detectedFromHealth: Bool = false
+        detectedFromHealth: Bool = false,
+        healthKitWorkoutID: String? = nil
     ) {
         self.id = UUID()
         self.dayDate = dayDate
-        self.tag = tag.rawValue
+        self.tag = tag
         self.workoutScore = workoutScore
         self.notes = notes
         self.detectedFromHealth = detectedFromHealth
+        self.healthKitWorkoutID = healthKitWorkoutID
         self.loggedAt = Date()
+    }
+
+    // Convenience initializer for built-in tags
+    convenience init(
+        dayDate: Date,
+        tag: Constants.WorkoutTag,
+        workoutScore: Int,
+        notes: String? = nil,
+        detectedFromHealth: Bool = false,
+        healthKitWorkoutID: String? = nil
+    ) {
+        self.init(
+            dayDate: dayDate,
+            tag: tag.rawValue,
+            workoutScore: workoutScore,
+            notes: notes,
+            detectedFromHealth: detectedFromHealth,
+            healthKitWorkoutID: healthKitWorkoutID
+        )
     }
 
     var workoutTag: Constants.WorkoutTag? {
         Constants.WorkoutTag(rawValue: tag)
+    }
+    
+    /// Whether this workout is linked to an Apple Health workout
+    var isLinkedToHealth: Bool {
+        healthKitWorkoutID != nil
     }
 }

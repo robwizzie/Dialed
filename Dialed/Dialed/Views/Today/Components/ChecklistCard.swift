@@ -139,20 +139,24 @@ struct ChecklistRow: View {
 }
 
 #Preview {
-    let calendar = Calendar.current
-    let today = calendar.startOfDay(for: Date())
+    @Previewable @State var sampleItems: [ChecklistItem] = {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
 
-    let sampleItems = [
-        ChecklistItem(type: .amSkincare, dayDate: today),
-        ChecklistItem(type: .lunchVitamins, dayDate: today),
-        ChecklistItem(type: .creatine, dayDate: today),
-        ChecklistItem(type: .pmSkincare, dayDate: today),
-    ]
+        let items = [
+            ChecklistItem(type: .amSkincare, dayDate: today),
+            ChecklistItem(type: .lunchVitamins, dayDate: today),
+            ChecklistItem(type: .creatine, dayDate: today),
+            ChecklistItem(type: .pmSkincare, dayDate: today),
+        ]
 
-    sampleItems[0].markDone()
-    sampleItems[1].markDone()
+        items[0].markDone()
+        items[1].markDone()
 
-    return ChecklistCard(items: sampleItems, onToggle: { _ in })
+        return items
+    }()
+
+    ChecklistCard(items: sampleItems, onToggle: { _ in })
         .padding()
         .background(AppColors.background)
 }

@@ -28,6 +28,9 @@ struct ScheduledTime: Codable, Hashable {
 }
 
 struct UserSettings: Codable {
+    // Notification name for settings changes
+    static let didChangeNotification = Notification.Name("UserSettingsDidChange")
+
     // Personal metrics
     var currentWeight: Double  // lbs
     var height: Double  // inches
@@ -72,6 +75,8 @@ struct UserSettings: Codable {
     func save() {
         if let encoded = try? JSONEncoder().encode(self) {
             UserDefaults.standard.set(encoded, forKey: Self.userDefaultsKey)
+            // Post notification so views can update
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
         }
     }
 

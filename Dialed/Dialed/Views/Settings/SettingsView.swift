@@ -46,6 +46,15 @@ struct SettingsView: View {
                             subtitle: TrackingPreferences.load().trackingSummary
                         )
                     }
+
+                    NavigationLink(destination: WorkoutTypeSettingsView()) {
+                        SettingsRow(
+                            icon: "figure.strengthtraining.traditional",
+                            iconGradient: [.orange, .red],
+                            title: "Workout Types",
+                            subtitle: "Manage workout categories"
+                        )
+                    }
                 } header: {
                     Text("Tracking")
                 }
