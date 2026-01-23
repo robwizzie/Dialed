@@ -60,12 +60,10 @@ class HealthDataSyncService: ObservableObject {
             dayLog.activeEnergyBurned = try await activeEnergy
             dayLog.exerciseMinutes = try await exerciseMinutes
 
-            // Update water (combine with manual entries)
+            // Update water (use maximum of manual entries or HealthKit)
             if let healthWater = try await water {
-                // If user hasn't manually logged water, use HealthKit data
-                if dayLog.waterOz == 0 {
-                    dayLog.waterOz = healthWater
-                }
+                // Take the maximum to ensure we capture all water intake
+                dayLog.waterOz = max(dayLog.waterOz, healthWater)
             }
 
             lastSyncDate = Date()
@@ -104,6 +102,19 @@ class HealthDataSyncService: ObservableObject {
     }
 
     private func updateWorkoutData(dayLog: DayLog, workout: HealthKitManager.WorkoutData) {
+        // Check workout type preferences
+        let prefs = WorkoutTypePreferences.load()
+
+        // If filtering for traditional strength only, check workout type
+        if prefs.trackOnlyTraditionalStrength {
+            // Only track traditional and functional strength training
+            guard workout.workoutType == .traditionalStrengthTraining ||
+                  workout.workoutType == .functionalStrengthTraining else {
+                print("Skipping workout - not traditional strength training: \(workout.workoutType)")
+                return
+            }
+        }
+
         dayLog.workoutDetectedFromHealth = true
         dayLog.workoutDurationMinutes = workout.durationMinutes
         dayLog.workoutCaloriesBurned = workout.caloriesBurned
@@ -141,8 +152,9 @@ class HealthDataSyncService: ObservableObject {
             async let water = try healthKitManager.fetchWaterIntake(for: date)
             async let steps = try healthKitManager.fetchSteps(for: date)
 
-            if let healthWater = try await water, dayLog.waterOz == 0 {
-                dayLog.waterOz = healthWater
+            if let healthWater = try await water {
+                // Take the maximum to ensure we capture all water intake
+                dayLog.waterOz = max(dayLog.waterOz, healthWater)
             }
 
             dayLog.steps = try await steps

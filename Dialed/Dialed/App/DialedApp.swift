@@ -22,7 +22,7 @@ struct DialedApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SplashScreenView()
                 .environmentObject(appState)
                 .modelContainer(for: [
                     DayLog.self,
@@ -31,7 +31,11 @@ struct DialedApp: App {
                     WorkoutExercise.self,
                     WorkoutSet.self,
                     WorkoutPhoto.self,
-                    ChecklistItem.self
+                    ChecklistItem.self,
+                    CustomWorkoutType.self,
+                    WorkoutTemplate.self,
+                    TemplateExercise.self,
+                    TemplateSet.self
                 ])
         }
     }

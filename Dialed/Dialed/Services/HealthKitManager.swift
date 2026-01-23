@@ -328,6 +328,7 @@ class HealthKitManager: ObservableObject {
     // MARK: - Workout Detection
 
     struct WorkoutData {
+        var id: UUID  // HealthKit workout UUID for linking
         var workoutType: HKWorkoutActivityType
         var startDate: Date
         var endDate: Date
@@ -336,6 +337,74 @@ class HealthKitManager: ObservableObject {
         var distance: Double?  // meters
         var averageHeartRate: Double?
         var maxHeartRate: Double?
+        var sourceName: String?  // e.g. "Apple Watch", "Fitness App"
+        
+        /// Formatted display name for the workout type
+        var workoutTypeName: String {
+            switch workoutType {
+            case .traditionalStrengthTraining: return "Strength Training"
+            case .functionalStrengthTraining: return "Functional Training"
+            case .running: return "Running"
+            case .walking: return "Walking"
+            case .cycling: return "Cycling"
+            case .swimming: return "Swimming"
+            case .yoga: return "Yoga"
+            case .pilates: return "Pilates"
+            case .hiking: return "Hiking"
+            case .coreTraining: return "Core Training"
+            case .highIntensityIntervalTraining: return "HIIT"
+            case .crossTraining: return "Cross Training"
+            case .elliptical: return "Elliptical"
+            case .rowing: return "Rowing"
+            case .stairClimbing: return "Stair Climbing"
+            case .jumpRope: return "Jump Rope"
+            case .flexibility: return "Flexibility"
+            case .mixedCardio: return "Mixed Cardio"
+            case .cooldown: return "Cooldown"
+            case .dance: return "Dance"
+            case .mindAndBody: return "Mind & Body"
+            case .other: return "Other"
+            default: return "Workout"
+            }
+        }
+        
+        /// SF Symbol name for the workout type
+        var workoutTypeIcon: String {
+            switch workoutType {
+            case .traditionalStrengthTraining, .functionalStrengthTraining:
+                return "dumbbell.fill"
+            case .running:
+                return "figure.run"
+            case .walking:
+                return "figure.walk"
+            case .cycling:
+                return "bicycle"
+            case .swimming:
+                return "figure.pool.swim"
+            case .yoga, .pilates, .flexibility, .mindAndBody:
+                return "figure.yoga"
+            case .hiking:
+                return "figure.hiking"
+            case .coreTraining:
+                return "figure.core.training"
+            case .highIntensityIntervalTraining:
+                return "flame.fill"
+            case .crossTraining:
+                return "figure.cross.training"
+            case .elliptical:
+                return "figure.elliptical"
+            case .rowing:
+                return "figure.rower"
+            case .stairClimbing:
+                return "figure.stairs"
+            case .jumpRope:
+                return "figure.jumprope"
+            case .dance:
+                return "figure.dance"
+            default:
+                return "figure.strengthtraining.traditional"
+            }
+        }
     }
 
     /// Fetch workouts for a specific date
@@ -367,6 +436,7 @@ class HealthKitManager: ObservableObject {
 
                 let workoutData = workouts.map { workout in
                     WorkoutData(
+                        id: workout.uuid,
                         workoutType: workout.workoutActivityType,
                         startDate: workout.startDate,
                         endDate: workout.endDate,
@@ -374,13 +444,57 @@ class HealthKitManager: ObservableObject {
                         caloriesBurned: workout.totalEnergyBurned.map { Int($0.doubleValue(for: .kilocalorie())) },
                         distance: workout.totalDistance.map { $0.doubleValue(for: .meter()) },
                         averageHeartRate: nil,  // Would need separate query
-                        maxHeartRate: nil
+                        maxHeartRate: nil,
+                        sourceName: workout.sourceRevision.source.name
                     )
                 }
 
                 continuation.resume(returning: workoutData)
             }
 
+            healthStore.execute(query)
+        }
+    }
+    
+    /// Fetch a specific workout by UUID
+    func fetchWorkout(byID id: String) async throws -> WorkoutData? {
+        guard let uuid = UUID(uuidString: id) else { return nil }
+        
+        let predicate = HKQuery.predicateForObject(with: uuid)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKObjectType.workoutType(),
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let workout = (samples as? [HKWorkout])?.first else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                
+                let workoutData = WorkoutData(
+                    id: workout.uuid,
+                    workoutType: workout.workoutActivityType,
+                    startDate: workout.startDate,
+                    endDate: workout.endDate,
+                    durationMinutes: Int(workout.duration / 60.0),
+                    caloriesBurned: workout.totalEnergyBurned.map { Int($0.doubleValue(for: .kilocalorie())) },
+                    distance: workout.totalDistance.map { $0.doubleValue(for: .meter()) },
+                    averageHeartRate: nil,
+                    maxHeartRate: nil,
+                    sourceName: workout.sourceRevision.source.name
+                )
+                
+                continuation.resume(returning: workoutData)
+            }
+            
             healthStore.execute(query)
         }
     }
@@ -405,6 +519,104 @@ class HealthKitManager: ObservableObject {
         }
 
         return (false, nil, nil)
+    }
+    
+    /// Fetch running/walking workouts for a date with their details
+    func fetchRunningWorkouts(for date: Date) async throws -> [WorkoutData] {
+        let workouts = try await fetchWorkouts(for: date)
+        
+        return workouts.filter { workout in
+            workout.workoutType == .running ||
+            workout.workoutType == .walking ||
+            workout.workoutType == .hiking
+        }
+    }
+    
+    /// Fetch split times (quarter-mile splits) for a specific workout
+    /// Returns split times in seconds for each 0.25 mile segment
+    func fetchSplitTimes(for workoutID: UUID) async throws -> [Int]? {
+        // First get the workout
+        guard let workout = try await fetchWorkoutHK(byID: workoutID) else {
+            return nil
+        }
+        
+        // Get distance samples from the workout
+        guard let distanceType = HKQuantityType.quantityType(forIdentifier: .distanceWalkingRunning) else {
+            return nil
+        }
+        
+        let predicate = HKQuery.predicateForObjects(from: workout)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: distanceType,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                guard let distanceSamples = samples as? [HKQuantitySample], !distanceSamples.isEmpty else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                
+                // Calculate quarter-mile split times (0.25 miles = ~402.3 meters)
+                let quarterMileMeters = 402.336
+                var splits: [Int] = []
+                var cumulativeDistance = 0.0
+                var splitStartTime = workout.startDate
+                var targetDistance = quarterMileMeters
+                
+                for sample in distanceSamples {
+                    let sampleDistance = sample.quantity.doubleValue(for: .meter())
+                    cumulativeDistance += sampleDistance
+                    
+                    // Check if we've crossed a quarter-mile threshold
+                    while cumulativeDistance >= targetDistance {
+                        // Calculate the split time
+                        let splitEndTime = sample.endDate
+                        let splitSeconds = Int(splitEndTime.timeIntervalSince(splitStartTime))
+                        splits.append(splitSeconds)
+                        
+                        // Move to next split
+                        splitStartTime = splitEndTime
+                        targetDistance += quarterMileMeters
+                    }
+                }
+                
+                continuation.resume(returning: splits.isEmpty ? nil : splits)
+            }
+            
+            healthStore.execute(query)
+        }
+    }
+    
+    /// Fetch the HKWorkout object by ID (private helper)
+    private func fetchWorkoutHK(byID workoutID: UUID) async throws -> HKWorkout? {
+        let predicate = HKQuery.predicateForObject(with: workoutID)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: HKObjectType.workoutType(),
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: nil
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                
+                let workout = (samples as? [HKWorkout])?.first
+                continuation.resume(returning: workout)
+            }
+            
+            healthStore.execute(query)
+        }
     }
 
     // MARK: - Activity Metrics

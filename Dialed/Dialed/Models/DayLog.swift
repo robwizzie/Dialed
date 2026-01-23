@@ -29,6 +29,7 @@ final class DayLog {
     var mileScore: Int?  // 0-5 quality rating
     var mileDistance: Double?  // Actual distance run
     var mileTimeSeconds: Int?
+    var mileSplitTimes: [Int]?  // Split times in seconds for each quarter/lap
 
     // Sleep data (from RingConn/HealthKit)
     var sleepScore: Int?  // 0-5 calculated from metrics

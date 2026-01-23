@@ -15,12 +15,14 @@ struct TodayView: View {
     @State private var showWaterEntry = false
     @State private var showProteinEntry = false
     @State private var showWorkoutLog = false
+    @State private var showWorkoutDetail = false
+    @State private var showMileRun = false
     @State private var trackingPreferences = TrackingPreferences.load()
 
     init() {
         // Note: ViewModel will be properly initialized with injected context
         // This temporary initialization will be replaced when view appears
-        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, WorkoutSet.self, WorkoutPhoto.self, ChecklistItem.self)
+        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, WorkoutSet.self, WorkoutPhoto.self, ChecklistItem.self, CustomWorkoutType.self, WorkoutTemplate.self, TemplateExercise.self, TemplateSet.self)
         _viewModel = StateObject(wrappedValue: TodayViewModel(modelContext: container.mainContext))
     }
 
@@ -207,14 +209,24 @@ struct TodayView: View {
             // Workout tile (conditional)
             if trackingPreferences.trackWorkout {
                 Button(action: {
-                    showWorkoutLog = true
+                    if viewModel.dayLog.workoutLog != nil {
+                        // Existing workout - show details/edit
+                        showWorkoutDetail = true
+                    } else {
+                        // No workout - log new one
+                        showWorkoutLog = true
+                    }
                 }) {
                     WorkoutTile(
                         workoutDetected: viewModel.workoutSummary.detected,
                         workoutTag: viewModel.workoutSummary.tag,
                         workoutScore: viewModel.workoutSummary.score,
                         duration: viewModel.workoutSummary.duration,
-                        calories: viewModel.workoutSummary.calories
+                        calories: viewModel.workoutSummary.calories,
+                        isLinkedToHealth: viewModel.dayLog.workoutLog?.isLinkedToHealth ?? false,
+                        exerciseCount: viewModel.workoutExerciseStats.exerciseCount,
+                        totalSets: viewModel.workoutExerciseStats.totalSets,
+                        totalVolume: viewModel.workoutExerciseStats.totalVolume
                     )
                 }
                 .buttonStyle(PlainButtonStyle())
@@ -233,16 +245,53 @@ struct TodayView: View {
                         }
                     )
                 }
+                .sheet(isPresented: $showWorkoutDetail) {
+                    if let workout = viewModel.dayLog.workoutLog {
+                        WorkoutDetailSheet(
+                            workout: workout,
+                            onDelete: {
+                                Task {
+                                    await viewModel.refreshData()
+                                }
+                            },
+                            onUpdate: {
+                                Task {
+                                    await viewModel.refreshData()
+                                }
+                            }
+                        )
+                    }
+                }
             }
 
             // Mile tile (conditional)
             if trackingPreferences.trackMile {
-                MileTile(
-                    mileCompleted: viewModel.dayLog.mileCompleted,
-                    distance: viewModel.dayLog.mileDistance,
-                    timeSeconds: viewModel.dayLog.mileTimeSeconds,
-                    score: viewModel.dayLog.mileScore
-                )
+                Button(action: {
+                    showMileRun = true
+                }) {
+                    MileTile(
+                        mileCompleted: viewModel.dayLog.mileCompleted,
+                        distance: viewModel.dayLog.mileDistance,
+                        timeSeconds: viewModel.dayLog.mileTimeSeconds,
+                        score: viewModel.dayLog.mileScore
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .sheet(isPresented: $showMileRun) {
+                    MileRunSheet(
+                        dayLog: Binding(
+                            get: { viewModel.dayLog },
+                            set: { newValue in
+                                viewModel.dayLog = newValue
+                            }
+                        ),
+                        onSave: {
+                            Task {
+                                await viewModel.refreshData()
+                            }
+                        }
+                    )
+                }
             }
 
             // Activity metrics (always shown if available - general step tracking)

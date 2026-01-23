@@ -15,15 +15,16 @@ class TodayViewModel: ObservableObject {
     @Published var dayLog: DayLog
     @Published var provisionalScore: Int = 0
     @Published var isSyncing = false
+    @Published var settings: UserSettings
 
     // Services
     private let healthSyncService = HealthDataSyncService()
-    
-    // Settings (exposed for view access)
-    let settings: UserSettings
 
     // Model context (injected)
     private let modelContext: ModelContext
+
+    // Notification observer
+    private var settingsObserver: NSObjectProtocol?
 
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
@@ -46,12 +47,51 @@ class TodayViewModel: ObservableObject {
 
         // Calculate initial score
         updateProvisionalScore()
+
+        // Listen for settings changes
+        settingsObserver = NotificationCenter.default.addObserver(
+            forName: UserSettings.didChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.reloadSettings()
+        }
+    }
+
+    deinit {
+        if let observer = settingsObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    private func reloadSettings() {
+        settings = UserSettings.load()
+        updateProvisionalScore()
     }
 
     // MARK: - Data Refresh
 
     func refreshData() async {
         isSyncing = true
+
+        // Re-fetch the day log to get updated relationships
+        let today = Calendar.current.startOfDay(for: dayLog.date)
+        let fetchDescriptor = FetchDescriptor<DayLog>(
+            predicate: #Predicate { $0.date == today }
+        )
+
+        if let refreshedLog = try? modelContext.fetch(fetchDescriptor).first {
+            dayLog = refreshedLog
+        }
+
+        // Sync DayLog properties from WorkoutLog if exists
+        if let workoutLog = dayLog.workoutLog {
+            dayLog.workoutTag = workoutLog.tag
+            dayLog.workoutScore = workoutLog.workoutScore
+            dayLog.workoutDetectedFromHealth = workoutLog.detectedFromHealth
+            dayLog.workoutDurationMinutes = workoutLog.durationMinutes
+            dayLog.workoutCaloriesBurned = workoutLog.caloriesBurned
+        }
 
         // Sync HealthKit data
         await healthSyncService.syncHealthData(for: dayLog.date, dayLog: dayLog)
@@ -208,6 +248,19 @@ class TodayViewModel: ObservableObject {
             duration: dayLog.workoutDurationMinutes,
             calories: dayLog.workoutCaloriesBurned
         )
+    }
+    
+    var workoutExerciseStats: (exerciseCount: Int?, totalSets: Int?, totalVolume: Double?) {
+        guard let workoutLog = dayLog.workoutLog,
+              let exercises = workoutLog.exercises, !exercises.isEmpty else {
+            return (nil, nil, nil)
+        }
+        
+        let exerciseCount = exercises.count
+        let totalSets = exercises.reduce(0) { $0 + $1.totalSets }
+        let totalVolume = exercises.reduce(0.0) { $0 + $1.totalVolume }
+        
+        return (exerciseCount, totalSets, totalVolume > 0 ? totalVolume : nil)
     }
 
     // Activity metrics

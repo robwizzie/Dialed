@@ -138,13 +138,43 @@ struct WorkoutTile: View {
     let workoutScore: Int?
     let duration: Int?  // minutes
     let calories: Int?
+    let isLinkedToHealth: Bool
+    let exerciseCount: Int?
+    let totalSets: Int?
+    let totalVolume: Double?
+    
+    // Default initializer for compatibility
+    init(workoutDetected: Bool, workoutTag: String?, workoutScore: Int?, duration: Int?, calories: Int?, isLinkedToHealth: Bool = false, exerciseCount: Int? = nil, totalSets: Int? = nil, totalVolume: Double? = nil) {
+        self.workoutDetected = workoutDetected
+        self.workoutTag = workoutTag
+        self.workoutScore = workoutScore
+        self.duration = duration
+        self.calories = calories
+        self.isLinkedToHealth = isLinkedToHealth
+        self.exerciseCount = exerciseCount
+        self.totalSets = totalSets
+        self.totalVolume = totalVolume
+    }
 
     private var tagDisplay: String {
         guard let tag = workoutTag,
               let workoutType = Constants.WorkoutTag(rawValue: tag) else {
-            return "Workout"
+            return workoutTag ?? "Workout"
         }
         return workoutType.shortName
+    }
+    
+    private var volumeDisplay: String {
+        guard let volume = totalVolume, volume > 0 else { return "" }
+        if volume >= 1000 {
+            return String(format: "%.1fk", volume / 1000)
+        }
+        return "\(Int(volume))"
+    }
+    
+    private var hasExerciseData: Bool {
+        if let count = exerciseCount, count > 0 { return true }
+        return false
     }
 
     var body: some View {
@@ -159,90 +189,195 @@ struct WorkoutTile: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                Text("Workout")
+                Text("Today's Workout")
                     .font(.subheadline.bold())
                     .foregroundStyle(.primary)
 
                 Spacer()
 
                 if workoutDetected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.green, .mint],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                    HStack(spacing: 6) {
+                        if isLinkedToHealth {
+                            Image(systemName: "heart.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.red)
+                        }
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.green, .mint],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .shadow(color: .green.opacity(0.3), radius: 4, x: 0, y: 2)
+                    }
                 }
             }
 
             if workoutDetected {
-                // Workout details with glass pills
-                VStack(alignment: .leading, spacing: 10) {
+                // Workout details
+                VStack(alignment: .leading, spacing: 12) {
+                    // Type and stats row
                     HStack(spacing: 10) {
                         // Tag
                         Text(tagDisplay)
-                            .font(.caption.bold())
-                            .foregroundColor(.blue)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
+                            .font(.subheadline.bold())
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(.blue.opacity(0.15))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(.blue.opacity(0.3), lineWidth: 1)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.green, .mint],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
                             )
 
+                        Spacer()
+                        
+                        // Duration
                         if let duration = duration {
                             HStack(spacing: 4) {
                                 Image(systemName: "clock.fill")
                                     .font(.caption2)
+                                    .foregroundStyle(.blue)
                                 Text("\(duration) min")
-                                    .font(.caption)
+                                    .font(.caption.bold())
                             }
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
                         }
 
+                        // Calories
                         if let calories = calories {
                             HStack(spacing: 4) {
                                 Image(systemName: "flame.fill")
                                     .font(.caption2)
+                                    .foregroundStyle(.orange)
                                 Text("\(calories)")
-                                    .font(.caption)
+                                    .font(.caption.bold())
                             }
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.primary)
+                        }
+                    }
+                    
+                    // Exercise stats row (if exercises were logged)
+                    if hasExerciseData {
+                        HStack(spacing: 12) {
+                            // Exercise count
+                            if let count = exerciseCount, count > 0 {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "dumbbell.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.purple)
+                                    Text("\(count) exercise\(count == 1 ? "" : "s")")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+                            
+                            // Total sets
+                            if let sets = totalSets, sets > 0 {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "repeat")
+                                        .font(.caption2)
+                                        .foregroundStyle(.cyan)
+                                    Text("\(sets) sets")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+                            
+                            // Volume
+                            if let volume = totalVolume, volume > 0 {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "scalemass.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(.pink)
+                                    Text("\(volumeDisplay) lbs")
+                                        .font(.caption)
+                                }
+                                .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
                         }
                     }
 
-                    // Quality score
-                    HStack(spacing: 4) {
+                    // Quality score row
+                    HStack(spacing: 6) {
                         if let score = workoutScore {
                             ForEach(1...5, id: \.self) { index in
                                 Image(systemName: index <= score ? "star.fill" : "star")
                                     .font(.caption)
-                                    .foregroundColor(index <= score ? .yellow : .secondary.opacity(0.3))
+                                    .foregroundColor(index <= score ? .yellow : Color.secondary.opacity(0.3))
                             }
-                        } else {
-                            Text("Tap to rate quality")
-                                .font(.caption)
-                                .foregroundColor(.blue)
+                            
+                            Text(qualityText(for: score))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+
+                        HStack(spacing: 4) {
+                            Text("Tap to Edit")
+                                .font(.caption2.bold())
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                        }
+                        .foregroundColor(.blue)
                     }
                 }
             } else {
-                Text("No workout detected today")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 8)
+                // Empty state - prompt to log workout
+                VStack(spacing: 10) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title2)
+                            .foregroundStyle(
+                                LinearGradient(
+                                    colors: [.green, .mint],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                        
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Log Today's Workout")
+                                .font(.subheadline.bold())
+                                .foregroundStyle(.primary)
+                            
+                            Text("Track your training session")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 4)
             }
         }
         .elevatedGlassCard(cornerRadius: 16, padding: 16)
+    }
+    
+    private func qualityText(for score: Int) -> String {
+        switch score {
+        case 1: return "Poor"
+        case 2: return "Fair"
+        case 3: return "Good"
+        case 4: return "Great"
+        case 5: return "Perfect"
+        default: return ""
+        }
     }
 }
 
@@ -491,7 +626,11 @@ struct ActivityTile: View {
             workoutTag: Constants.WorkoutTag.push.rawValue,
             workoutScore: 4,
             duration: 65,
-            calories: 420
+            calories: 420,
+            isLinkedToHealth: true,
+            exerciseCount: 5,
+            totalSets: 18,
+            totalVolume: 12500
         )
 
         WorkoutTile(
@@ -499,7 +638,11 @@ struct ActivityTile: View {
             workoutTag: nil,
             workoutScore: nil,
             duration: nil,
-            calories: nil
+            calories: nil,
+            isLinkedToHealth: false,
+            exerciseCount: nil,
+            totalSets: nil,
+            totalVolume: nil
         )
 
         ActivityTile(steps: 8450, activeEnergy: 520)
