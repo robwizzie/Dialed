@@ -31,6 +31,7 @@ enum DialedSchema {
         BiometricSnapshot.self,
         SleepSession.self,
         PersonalBaseline.self,
+        DailyScoreSnapshot.self,
 
         // Dialed 2.0 — adaptive scheduling (Phase 3)
         WeeklyTemplate.self,

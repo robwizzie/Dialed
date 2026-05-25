@@ -2,20 +2,17 @@
 //  PillarTrendsViewModel.swift
 //  Dialed
 //
-//  Builds per-day score series for the four pillars over a chosen window.
-//  Pulls historical SleepSession + BiometricSnapshot + ContextEvent +
-//  DayLog rows out of SwiftData and reconstructs StateEngine scores for
-//  each day, then surfaces the series + simple summary stats (avg, min,
-//  max, trend) to the Trends view.
+//  Reads persisted per-pillar scores from DailyScoreSnapshot and surfaces
+//  the series + summary stats (avg, min, max, trend) to the Trends view.
+//  Snapshot creation lives in DailyScoreSnapshotter; this view model only
+//  triggers a one-shot backfill on first read and then queries the table.
 //
-//  Limitations:
-//    - StateEngine.energy is intentionally time-of-day sensitive (caffeine
-//      decay, circadian curve, post-meal slump). Historical "energy" is
-//      modeled here as the day's average self-reported energy/mood from
-//      ContextEvent — a fair proxy without inventing fake circadian state.
-//    - StateEngine.readiness needs weeklyAdherence + recentStrain. We
-//      approximate adherence as a 1.0 placeholder until the adherence
-//      tracker lands; recentStrain is the prior day's strain score.
+//  Limitations inherited from the snapshotter:
+//    - Energy is a proxy (avg self-reported mood/energy scaled 1–5 → 0–100),
+//      not StateEngine.energy — that's a "right now" score that can't be
+//      back-fitted to a historical day.
+//    - Readiness uses a 1.0 adherence placeholder until the adherence
+//      tracker lands; recentStrain reads from the prior day's snapshot.
 //
 
 import Foundation
@@ -81,61 +78,29 @@ final class PillarTrendsViewModel: ObservableObject {
             cal.date(byAdding: .day, value: -$0, to: today)
         }.reversed().map { $0 }  // oldest → newest
 
-        // Pull baseline once — used for every day's recovery calc.
-        let baseline = (try? context.fetch(FetchDescriptor<PersonalBaseline>()))?.first
-        let baselineInputs = StateEngine.BaselineInputs.from(baseline)
+        // Backfill any missing snapshots once before reading. Idempotent —
+        // existing rows are skipped. Keeps the chart honest after a fresh
+        // install or a long absence from the app.
+        DailyScoreSnapshotter.backfill(days: window.days, context: context)
+
+        let snapshots = DailyScoreSnapshotter.fetch(
+            from: days.first ?? today,
+            to: days.last ?? today,
+            context: context
+        )
+        let byDate = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.logicalDate, $0) })
 
         var recovery: [DailyPoint] = []
         var readiness: [DailyPoint] = []
         var energy: [DailyPoint] = []
         var strain: [DailyPoint] = []
 
-        var priorDayStrain = 0
         for day in days {
-            let sleep = latestSleep(for: day, context: context)
-            let biometric = latestBiometric(for: day, context: context)
-            let load = dayLoad(for: day, context: context)
-            let selfEnergy = averageSelfEnergy(for: day, context: context)
-
-            let inputs = StateEngine.LiveInputs(
-                now: cal.date(byAdding: .hour, value: 21, to: day) ?? day,  // pretend 9pm — score is "end-of-day" snapshot
-                baseline: baselineInputs,
-                lastSleep: StateEngine.SleepInputs.from(sleep),
-                latestBiometric: StateEngine.BiometricInputs.from(biometric),
-                dayLoad: load,
-                energyContext: StateEngine.EnergyContext(selfReported: selfEnergy)
-            )
-
-            // Recovery needs sleep — without it the score is misleading,
-            // so we emit nil for the day and let the chart break.
-            let recBreakdown: StateEngine.ScoreBreakdown? = (sleep != nil)
-                ? StateEngine.recovery(inputs) : nil
-            let strainBreakdown = StateEngine.strain(inputs)
-
-            recovery.append(.init(date: day, score: recBreakdown?.score))
-            strain.append(.init(date: day, score: strainBreakdown.score))
-
-            if let recScore = recBreakdown?.score {
-                let readinessBreakdown = StateEngine.readiness(
-                    inputs,
-                    recoveryScore: recScore,
-                    weeklyAdherence: 1.0,
-                    recentStrain: priorDayStrain
-                )
-                readiness.append(.init(date: day, score: readinessBreakdown.score))
-            } else {
-                readiness.append(.init(date: day, score: nil))
-            }
-
-            // Energy stand-in: avg self-reported mood/energy scaled 1–5 → 0–100.
-            if let selfReported = selfEnergy {
-                let scaled = Int((Double(selfReported) / 5.0 * 100).rounded())
-                energy.append(.init(date: day, score: scaled))
-            } else {
-                energy.append(.init(date: day, score: nil))
-            }
-
-            priorDayStrain = strainBreakdown.score
+            let snap = byDate[day]
+            recovery.append(.init(date: day, score: snap?.recoveryScore))
+            readiness.append(.init(date: day, score: snap?.readinessScore))
+            energy.append(.init(date: day, score: snap?.energyScore))
+            strain.append(.init(date: day, score: snap?.strainScore))
         }
 
         series = [
@@ -169,82 +134,7 @@ final class PillarTrendsViewModel: ObservableObject {
         )
     }
 
-    // MARK: - Fetch helpers
-
-    private func latestSleep(for day: Date, context: ModelContext) -> SleepSession? {
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: day)
-        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
-        let desc = FetchDescriptor<SleepSession>(
-            predicate: #Predicate {
-                $0.logicalDate >= start && $0.logicalDate < end
-            },
-            sortBy: [SortDescriptor(\.endTime, order: .reverse)]
-        )
-        return (try? context.fetch(desc))?.first
-    }
-
-    private func latestBiometric(for day: Date, context: ModelContext) -> BiometricSnapshot? {
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: day)
-        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
-        let desc = FetchDescriptor<BiometricSnapshot>(
-            predicate: #Predicate {
-                $0.logicalDate >= start && $0.logicalDate < end
-            },
-            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
-        )
-        return (try? context.fetch(desc))?.first
-    }
-
-    /// Sum step/workout/calorie load from ContextEvent rows on the day.
-    /// Steps come from the latest BiometricSnapshot.stepsSoFar — that's a
-    /// running total maintained by the Fitbit sync, so we use the last
-    /// observation rather than summing event totals.
-    private func dayLoad(for day: Date, context: ModelContext) -> StateEngine.DayLoadInputs {
-        var load = StateEngine.DayLoadInputs()
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: day)
-        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
-
-        if let bio = latestBiometric(for: day, context: context) {
-            load.steps = bio.stepsSoFar ?? 0
-        }
-
-        let workoutDesc = FetchDescriptor<ContextEvent>(
-            predicate: #Predicate {
-                $0.logicalDate >= start
-                && $0.logicalDate < end
-                && $0.kindRaw == "workout"
-            }
-        )
-        let workouts = (try? context.fetch(workoutDesc)) ?? []
-        for w in workouts {
-            load.workoutDurationMinutes += Int(w.value ?? 0)
-            load.activeCalories += Int(w.secondaryValue ?? 0)
-        }
-        return load
-    }
-
-    /// Average of self-reported mood + energy events for the day, returns
-    /// 1–5 integer (or nil when nothing logged).
-    private func averageSelfEnergy(for day: Date, context: ModelContext) -> Int? {
-        let cal = Calendar.current
-        let start = cal.startOfDay(for: day)
-        let end = cal.date(byAdding: .day, value: 1, to: start) ?? start
-        let desc = FetchDescriptor<ContextEvent>(
-            predicate: #Predicate {
-                $0.logicalDate >= start
-                && $0.logicalDate < end
-                && ($0.kindRaw == "mood" || $0.kindRaw == "energy")
-            }
-        )
-        let events = (try? context.fetch(desc)) ?? []
-        let values = events.compactMap { $0.value }
-        guard !values.isEmpty else { return nil }
-        let avg = values.reduce(0, +) / Double(values.count)
-        return Int(avg.rounded())
-    }
+    // MARK: - Helpers
 
     /// Naive least-squares slope in points/day. Returns nil when fewer
     /// than two scored points are available.
