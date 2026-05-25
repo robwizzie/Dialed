@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @EnvironmentObject var appState: AppState
+    @Environment(\.modelContext) private var modelContext
     @State private var isActive = false
     @State private var size = 0.8
     @State private var opacity = 0.5
@@ -69,6 +70,11 @@ struct SplashScreenView: View {
                         self.isActive = true
                     }
                 }
+            }
+            .task {
+                // Run the legacy → Dialed 2.0 migration once. Cheap no-op
+                // after the first launch; failure mode is "try again next launch".
+                LegacyMigrationService.runIfNeeded(context: modelContext)
             }
         }
     }
