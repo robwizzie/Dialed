@@ -12,11 +12,12 @@ struct TimelineEventRow: View {
     let event: ContextEvent
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: Spacing.sm) {
             // Time gutter
             Text(timeString)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.white.opacity(0.55))
+                .monospacedDigit()
                 .frame(width: 50, alignment: .trailing)
                 .padding(.top, 4)
 
@@ -27,14 +28,14 @@ struct TimelineEventRow: View {
                         colors: gradient,
                         startPoint: .top,
                         endPoint: .bottom
-                    ).opacity(0.18))
+                    ).opacity(0.22))
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(colors: gradient, startPoint: .top, endPoint: .bottom)
                     )
             }
-            .frame(width: 30, height: 30)
+            .frame(width: 32, height: 32)
 
             // Body
             VStack(alignment: .leading, spacing: 4) {
@@ -45,38 +46,58 @@ struct TimelineEventRow: View {
                     if let badge = sourceBadge {
                         Text(badge)
                             .font(.system(size: 9, weight: .bold, design: .rounded))
-                            .foregroundColor(.white.opacity(0.55))
+                            .foregroundColor(.white.opacity(0.6))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
                             .background(
-                                Capsule().fill(.white.opacity(0.06))
+                                Capsule().fill(.white.opacity(0.08))
                             )
                     }
                 }
                 if let subtitle {
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(.white.opacity(0.65))
                 }
                 if let annotation = event.aiAnnotation, !annotation.isEmpty {
-                    Text(annotation)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(AppColors.Pillar.recovery.gradient.last)
-                        .padding(.top, 2)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(annotation)
+                            .font(.system(size: 11, weight: .medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundColor(AppColors.Pillar.recovery.gradient.last)
+                    .padding(.top, 2)
                 }
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
+        .padding(.vertical, Spacing.sm - 2)
+        .padding(.horizontal, Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.4))
+            // Use the nowCard token at full opacity — the previous
+            // .ultraThinMaterial.opacity(0.4) washed out on a dark
+            // background and cards looked nearly invisible.
+            RoundedRectangle(cornerRadius: Spacing.md, style: .continuous)
+                .fill(AppColors.nowCard)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(gradient.first?.opacity(0.12) ?? .clear, lineWidth: 0.6)
+                    RoundedRectangle(cornerRadius: Spacing.md, style: .continuous)
+                        .stroke(gradient.first?.opacity(0.14) ?? AppColors.glassStroke, lineWidth: 0.6)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        var parts: [String] = [timeString, title]
+        if let s = subtitle { parts.append(s) }
+        if let s = sourceBadge { parts.append("from \(s.capitalized)") }
+        if let annotation = event.aiAnnotation, !annotation.isEmpty {
+            parts.append("insight: \(annotation)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Derived presentation
@@ -125,8 +146,13 @@ struct TimelineEventRow: View {
             return AppColors.Pillar.strain.gradient
         case .energy:
             return AppColors.Pillar.energy.gradient
-        case .routineTask, .weather, .calendarEvent, .location:
-            return [.white.opacity(0.55), .white.opacity(0.35)]
+        // Calendar/weather/location aren't pillar-owned but inherit the
+        // readiness palette so they still feel of-a-piece rather than
+        // dead inert grey.
+        case .calendarEvent, .weather, .location:
+            return AppColors.Pillar.readiness.gradient
+        case .routineTask:
+            return AppColors.Pillar.recovery.gradient
         case .aiInsight:
             return AppColors.Pillar.recovery.gradient
         }
@@ -208,15 +234,9 @@ struct TimelineEventRow: View {
         case .healthkit: return "HEALTH"
         case .fitbit: return "FITBIT"
         case .weatherkit: return "WEATHER"
-        case .eventkit: return "CAL"
+        case .eventkit: return "CALENDAR"
         case .ai: return "AI"
         case .migration: return nil
         }
-    }
-}
-
-private extension String {
-    func ifEmpty(_ fallback: String) -> String {
-        isEmpty ? fallback : self
     }
 }

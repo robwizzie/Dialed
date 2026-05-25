@@ -23,7 +23,7 @@ struct MealCaptureSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            grabber
+            GrabberHandle()
                 .frame(maxWidth: .infinity)
 
             HStack(spacing: 10) {
@@ -39,6 +39,7 @@ struct MealCaptureSheet: View {
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
             }
+            .accessibilityElement(children: .combine)
 
             VStack(spacing: 12) {
                 numberField(
@@ -60,19 +61,16 @@ struct MealCaptureSheet: View {
 
             Spacer()
 
-            saveButton
+            Button("Log meal") { save() }
+                .buttonStyle(.dialedPrimary(.energy))
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
+                .accessibilityLabel("Save meal entry")
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.lg)
         .background(AppColors.nowBackground.ignoresSafeArea())
         .onAppear { focusedField = .calories }
-    }
-
-    private var grabber: some View {
-        Capsule()
-            .fill(.white.opacity(0.15))
-            .frame(width: 38, height: 4)
-            .padding(.top, 10)
     }
 
     private func numberField(
@@ -92,16 +90,17 @@ struct MealCaptureSheet: View {
                 .foregroundColor(.white)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: field)
+                .accessibilityLabel(title)
             Text(suffix)
                 .font(.system(size: 13, weight: .medium, design: .rounded))
-                .foregroundColor(.white.opacity(0.45))
+                .foregroundColor(.white.opacity(0.55))
         }
-        .padding(14)
+        .padding(Spacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                 .fill(.white.opacity(0.06))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                         .stroke(.white.opacity(0.08), lineWidth: 0.6)
                 )
         )
@@ -116,12 +115,12 @@ struct MealCaptureSheet: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white)
                 .focused($focusedField, equals: .items)
-                .padding(12)
+                .padding(Spacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                         .fill(.white.opacity(0.06))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                                 .stroke(.white.opacity(0.08), lineWidth: 0.6)
                         )
                 )
@@ -130,28 +129,6 @@ struct MealCaptureSheet: View {
 
     private var canSave: Bool {
         (Double(calories) ?? 0) > 0 || (Double(protein) ?? 0) > 0
-    }
-
-    private var saveButton: some View {
-        Button {
-            save()
-        } label: {
-            Text("Log meal")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: AppColors.Pillar.energy.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSave)
-        .opacity(canSave ? 1 : 0.5)
     }
 
     private func save() {

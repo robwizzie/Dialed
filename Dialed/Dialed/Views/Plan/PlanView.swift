@@ -27,13 +27,13 @@ struct PlanView: View {
                 AppColors.nowBackground.ignoresSafeArea()
 
                 ScrollView {
-                    VStack(spacing: 22) {
+                    VStack(spacing: Spacing.lg) {
                         weekStrip
                         anchorRow
                         timeline
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
+                    .padding(.horizontal, Spacing.screenPadding)
+                    .padding(.top, Spacing.xs)
                     .padding(.bottom, 48)
                 }
             }
@@ -41,13 +41,7 @@ struct PlanView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await viewModel.regenerate(context: modelContext) }
-                    } label: {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.75))
-                    }
+                    regenerateButton
                 }
             }
             .task {
@@ -58,20 +52,50 @@ struct PlanView: View {
         }
     }
 
+    // MARK: - Regenerate toolbar
+
+    private var regenerateButton: some View {
+        Button {
+            #if os(iOS)
+            UISelectionFeedbackGenerator().selectionChanged()
+            #endif
+            Task { await viewModel.regenerate(context: modelContext) }
+        } label: {
+            Group {
+                if viewModel.isGenerating {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(.white.opacity(0.85))
+                } else {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                }
+            }
+            .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.dialedScale)
+        .disabled(viewModel.isGenerating)
+        .accessibilityLabel("Regenerate plan")
+    }
+
     // MARK: - Week strip
 
     private var weekStrip: some View {
-        HStack(spacing: 8) {
-            ForEach(viewModel.weekDays, id: \.self) { date in
-                weekDayCell(for: date)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Spacing.xs) {
+                ForEach(viewModel.weekDays, id: \.self) { date in
+                    weekDayCell(for: date)
+                }
             }
+            .padding(.horizontal, Spacing.xxs)
         }
-        .padding(.horizontal, 4)
     }
 
     private func weekDayCell(for date: Date) -> some View {
         let isSelected = Calendar.current.isDate(date, inSameDayAs: viewModel.selectedDate)
         let isToday = Calendar.current.isDateInToday(date)
+        let showTodayDot = isToday && !isSelected
         let dayLetter = Self.weekdayLetter(date)
         let dayNumber = Calendar.current.component(.day, from: date)
 
@@ -79,46 +103,52 @@ struct PlanView: View {
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             #endif
-            Task { await viewModel.select(date: date, context: modelContext) }
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+                Task { await viewModel.select(date: date, context: modelContext) }
+            }
         } label: {
             VStack(spacing: 4) {
                 Text(dayLetter)
                     .font(.system(size: 10, weight: .heavy, design: .rounded))
                     .tracking(1)
-                    .foregroundColor(.white.opacity(isSelected ? 0.9 : 0.45))
+                    .foregroundColor(.white.opacity(isSelected ? 0.9 : 0.55))
 
                 Text("\(dayNumber)")
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundColor(isSelected ? .white : .white.opacity(isToday ? 0.85 : 0.55))
+                    .foregroundColor(isSelected ? .white : .white.opacity(isToday ? 0.85 : 0.6))
 
                 Circle()
-                    .fill(isToday ? AppColors.Pillar.readiness.gradient.last! : .clear)
+                    .fill(showTodayDot ? AppColors.Pillar.readiness.gradient.last! : .clear)
                     .frame(width: 4, height: 4)
             }
-            .frame(maxWidth: .infinity)
+            .frame(minWidth: 44, minHeight: 60)
             .padding(.vertical, 10)
+            .padding(.horizontal, Spacing.xs)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                     .fill(isSelected
                           ? AppColors.Pillar.readiness.gradient.last!.opacity(0.22)
-                          : Color.white.opacity(0.03))
+                          : Color.white.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                             .stroke(isSelected
                                     ? AppColors.Pillar.readiness.gradient.last!.opacity(0.55)
                                     : AppColors.glassStroke,
                                     lineWidth: isSelected ? 1 : 0.5)
                     )
             )
+            .animation(.spring(response: 0.32, dampingFraction: 0.8), value: isSelected)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("\(dayLetter), \(dayNumber)\(isToday ? ", today" : "")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     // MARK: - Anchor row (wake / sleep / recovery)
 
     private var anchorRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             anchorTile(
                 icon: "sun.max.fill",
                 label: "Wake",
@@ -149,31 +179,27 @@ struct PlanView: View {
                 )
 
             Text(value)
-                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
                 .monospacedDigit()
                 .foregroundColor(.white)
+                .contentTransition(.numericText())
 
             Text(label.uppercased())
                 .font(.system(size: 9, weight: .heavy, design: .rounded))
-                .tracking(1.2)
-                .foregroundColor(.white.opacity(0.45))
+                .tracking(1.0)
+                .foregroundColor(.white.opacity(0.55))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(AppColors.glassStroke, lineWidth: 0.5)
-                )
-        )
+        .dialedGlassCard(cornerRadius: Spacing.tertiaryCardRadius)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(label): \(value)")
     }
 
     // MARK: - Timeline
 
     private var timeline: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: Spacing.lg) {
             if viewModel.groupedBlocks.isEmpty {
                 emptyState
             } else {
@@ -185,19 +211,19 @@ struct PlanView: View {
     }
 
     private func periodSection(_ group: PlanViewModel.DayPeriodGroup) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: Spacing.sm) {
+            HStack(spacing: Spacing.xs) {
                 Image(systemName: group.icon)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(.white.opacity(0.6))
                 Text(group.title.uppercased())
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .tracking(1.4)
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(.white.opacity(0.6))
                 Spacer()
                 Text(group.timeRange)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundColor(.white.opacity(0.55))
             }
             .padding(.horizontal, 6)
 
@@ -216,42 +242,53 @@ struct PlanView: View {
         VStack(spacing: 14) {
             Image(systemName: "calendar.badge.plus")
                 .font(.system(size: 32, weight: .light))
-                .foregroundColor(.white.opacity(0.35))
+                .foregroundColor(.white.opacity(0.4))
 
             Text("No plan for this day yet")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(.white.opacity(0.85))
 
             Text("Tap regenerate to build a schedule from your weekly template.")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.white.opacity(0.6))
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, Spacing.lg)
 
             Button {
                 Task { await viewModel.regenerate(context: modelContext) }
             } label: {
-                Text("Generate plan")
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 11)
-                    .background(
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: AppColors.Pillar.readiness.gradient,
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
+                Group {
+                    if viewModel.isGenerating {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.white).controlSize(.small)
+                            Text("Generating…")
+                        }
+                    } else {
+                        Text("Generate plan")
+                    }
+                }
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 11)
+                .background(
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: AppColors.Pillar.readiness.gradient,
+                                startPoint: .leading,
+                                endPoint: .trailing
                             )
-                    )
+                        )
+                )
             }
-            .buttonStyle(.plain)
-            .padding(.top, 4)
+            .buttonStyle(.dialedScale)
+            .disabled(viewModel.isGenerating)
+            .padding(.top, Spacing.xxs)
+            .accessibilityLabel("Generate plan from template")
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
+        .padding(.vertical, Spacing.xxl)
     }
 
     // MARK: - Helpers
@@ -280,7 +317,7 @@ private struct PlanBlockRow: View {
                 if let dur = item.durationLabel {
                     Text(dur)
                         .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.white.opacity(0.5))
                 }
             }
             .frame(width: 56, alignment: .trailing)
@@ -307,10 +344,11 @@ private struct PlanBlockRow: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white.opacity(textOpacity))
                     .strikethrough(item.status == .done || item.status == .skipped, color: .white.opacity(0.5))
+                    .animation(.easeInOut(duration: 0.2), value: item.status)
                 if let subtitle = item.subtitle {
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.55))
+                        .foregroundColor(.white.opacity(0.6))
                         .lineLimit(1)
                 }
                 if let skipNote = item.skipReason {
@@ -329,28 +367,43 @@ private struct PlanBlockRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 14)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: Spacing.tertiaryCardRadius, style: .continuous)
                 .fill(cardFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.tertiaryCardRadius, style: .continuous)
                         .stroke(cardStroke, lineWidth: item.status == .active ? 1.1 : 0.5)
                 )
         )
         .overlay(alignment: .leading) {
             // Subtle pillar-color accent stripe on the left edge.
-            RoundedRectangle(cornerRadius: 2)
+            RoundedRectangle(cornerRadius: 3)
                 .fill(
                     LinearGradient(colors: item.pillar.gradient, startPoint: .top, endPoint: .bottom)
                 )
                 .frame(width: 3)
-                .padding(.vertical, 12)
+                .padding(.vertical, 14)
                 .opacity(item.status == .done || item.status == .skipped ? 0.25 : 0.85)
         }
+        .animation(.easeInOut(duration: 0.2), value: item.status)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabel)
+    }
+
+    private var accessibilityLabel: String {
+        let statusWord: String
+        switch item.status {
+        case .done:     statusWord = "Done"
+        case .skipped:  statusWord = "Skipped"
+        case .active:   statusWord = "In progress"
+        case .due:      statusWord = "Due now"
+        case .upcoming: statusWord = "Upcoming"
+        }
+        return "\(item.title), \(item.timeLabel), \(statusWord)"
     }
 
     private var textOpacity: Double {
         switch item.status {
-        case .done, .skipped: return 0.45
+        case .done, .skipped: return 0.5
         default: return 0.95
         }
     }
@@ -376,40 +429,56 @@ private struct PlanBlockRow: View {
             #endif
             onToggle()
         } label: {
-            switch item.status {
-            case .done:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.Pillar.recovery.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
-            case .skipped:
-                Image(systemName: "slash.circle.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.35))
-            case .active:
-                ZStack {
-                    Circle()
-                        .stroke(item.pillar.gradient.last!.opacity(0.55), lineWidth: 1.5)
-                        .frame(width: 22, height: 22)
-                    Circle()
-                        .fill(item.pillar.gradient.last!)
-                        .frame(width: 8, height: 8)
-                }
-            case .due:
-                Circle()
-                    .stroke(AppColors.warning.opacity(0.8), lineWidth: 1.5)
-                    .frame(width: 22, height: 22)
-            case .upcoming:
-                Circle()
-                    .stroke(.white.opacity(0.25), lineWidth: 1.2)
-                    .frame(width: 22, height: 22)
-            }
+            statusGlyph
+                .frame(width: 44, height: 44)  // touch target
+                .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel(statusControlLabel)
+    }
+
+    @ViewBuilder
+    private var statusGlyph: some View {
+        switch item.status {
+        case .done:
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: AppColors.Pillar.recovery.gradient,
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+        case .skipped:
+            Image(systemName: "slash.circle.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white.opacity(0.4))
+        case .active:
+            ZStack {
+                Circle()
+                    .stroke(item.pillar.gradient.last!.opacity(0.55), lineWidth: 1.5)
+                    .frame(width: 22, height: 22)
+                Circle()
+                    .fill(item.pillar.gradient.last!)
+                    .frame(width: 8, height: 8)
+            }
+        case .due:
+            Circle()
+                .stroke(AppColors.warning.opacity(0.85), lineWidth: 1.5)
+                .frame(width: 22, height: 22)
+        case .upcoming:
+            Circle()
+                .stroke(.white.opacity(0.3), lineWidth: 1.2)
+                .frame(width: 22, height: 22)
+        }
+    }
+
+    private var statusControlLabel: String {
+        switch item.status {
+        case .done:     return "Mark as not done"
+        case .skipped:  return "Un-skip"
+        case .active, .due, .upcoming: return "Mark as done"
+        }
     }
 }
 

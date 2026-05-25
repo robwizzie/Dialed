@@ -20,142 +20,172 @@ struct VoiceCaptureSheet: View {
 
     @StateObject private var recorder = VoiceRecorder()
     @State private var preview: ContextEvent?
+    @State private var pulse: Bool = false
 
     var body: some View {
-        VStack(spacing: 18) {
-            grabber
+        VStack(spacing: Spacing.md + 2) {
+            GrabberHandle()
 
             Text("Voice capture")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .padding(.top, 4)
 
-            // Big circular mic
-            ZStack {
-                Circle()
-                    .fill(LinearGradient(
-                        colors: AppColors.Pillar.recovery.gradient.map { $0.opacity(0.35) },
-                        startPoint: .top, endPoint: .bottom
-                    ))
-                    .frame(width: 140, height: 140)
-
-                Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                    .font(.system(size: 44, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .scaleEffect(recorder.isRecording ? 1.06 : 1.0)
-            .animation(.spring(response: 0.4, dampingFraction: 0.6), value: recorder.isRecording)
-            .onTapGesture { toggleRecording() }
+            // Big circular mic — pulses while listening so the user has
+            // a visible "alive" signal beyond the transcript appearing.
+            micButton
 
             // Transcript
             VStack(alignment: .leading, spacing: 6) {
                 Text(recorder.isRecording ? "Listening…" : "Tap the mic to speak")
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.45))
-                Text(recorder.transcript.isEmpty ? " " : recorder.transcript)
+                    .foregroundColor(.white.opacity(0.55))
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: recorder.isRecording)
+                Text(recorder.transcript)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+                    .padding(Spacing.md)
                     .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                             .fill(.white.opacity(0.05))
                     )
+                    .accessibilityLabel("Transcript")
+                    .accessibilityValue(recorder.transcript.isEmpty ? "Empty" : recorder.transcript)
             }
 
             // Interpreted preview
             if let preview {
                 previewCard(for: preview)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
 
             // Error / permission
             if let error = recorder.errorMessage {
                 Text(error)
-                    .font(.system(size: 12))
-                    .foregroundColor(.red.opacity(0.85))
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(AppColors.danger)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, Spacing.md)
+                    .transition(.opacity)
             }
 
             Spacer()
 
-            saveButton
+            Button("Save") { save() }
+                .buttonStyle(.dialedPrimary(.recovery))
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
+                .accessibilityLabel(saveButtonLabel)
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.lg)
         .background(AppColors.nowBackground.ignoresSafeArea())
         .task { await recorder.prepare() }
         .onChange(of: recorder.transcript) { _, newValue in
-            preview = VoiceParser.parse(newValue)
+            withAnimation(.easeInOut(duration: 0.25)) {
+                preview = VoiceParser.parse(newValue)
+            }
+        }
+        .onChange(of: recorder.isRecording) { _, recording in
+            if recording {
+                // Start the breathing pulse. Toggle drives the
+                // repeatForever animation on the outer halo.
+                withAnimation(
+                    .easeInOut(duration: 1.1).repeatForever(autoreverses: true)
+                ) {
+                    pulse = true
+                }
+            } else {
+                withAnimation(.easeOut(duration: 0.3)) {
+                    pulse = false
+                }
+            }
         }
         .onDisappear { recorder.stop() }
     }
 
-    // MARK: - Subviews
+    // MARK: - Mic
 
-    private var grabber: some View {
-        Capsule()
-            .fill(.white.opacity(0.15))
-            .frame(width: 38, height: 4)
-            .padding(.top, 10)
+    private var micButton: some View {
+        ZStack {
+            // Outer breathing halo — only visible while listening.
+            Circle()
+                .fill(AppColors.Pillar.recovery.gradient.last!)
+                .frame(width: 170, height: 170)
+                .blur(radius: 18)
+                .opacity(pulse ? 0.45 : 0.15)
+                .scaleEffect(pulse ? 1.08 : 0.92)
+                .opacity(recorder.isRecording ? 1 : 0)
+
+            // Main disk
+            Circle()
+                .fill(LinearGradient(
+                    colors: AppColors.Pillar.recovery.gradient.map { $0.opacity(recorder.isRecording ? 0.55 : 0.35) },
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                ))
+                .frame(width: 140, height: 140)
+                .overlay(
+                    Circle().stroke(.white.opacity(0.08), lineWidth: 0.8)
+                )
+
+            Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundColor(.white)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .scaleEffect(recorder.isRecording ? 1.04 : 1.0)
+        .animation(.spring(response: 0.4, dampingFraction: 0.65), value: recorder.isRecording)
+        .onTapGesture { toggleRecording() }
+        .accessibilityLabel(recorder.isRecording ? "Stop recording" : "Start recording")
+        .accessibilityAddTraits(.isButton)
     }
 
     private func previewCard(for event: ContextEvent) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Spacing.sm) {
             Image(systemName: kindIcon(event.kind))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(LinearGradient(
                     colors: kindGradient(event.kind),
                     startPoint: .top, endPoint: .bottom
                 ))
-                .frame(width: 36, height: 36)
+                .frame(width: 40, height: 40)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(kindGradient(event.kind).first!.opacity(0.14))
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(kindGradient(event.kind).first!.opacity(0.16))
                 )
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Interpreted as")
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.45))
+                    .foregroundColor(.white.opacity(0.55))
                 Text(interpretationCopy(for: event))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
             }
             Spacer()
         }
-        .padding(12)
+        .padding(Spacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                 .fill(.white.opacity(0.05))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                         .stroke(.white.opacity(0.08), lineWidth: 0.6)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Interpreted as \(interpretationCopy(for: event))")
     }
 
-    private var saveButton: some View {
-        let canSave = preview != nil && !recorder.transcript.isEmpty
-        return Button {
-            save()
-        } label: {
-            Text("Save")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: AppColors.Pillar.recovery.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSave)
-        .opacity(canSave ? 1 : 0.5)
+    private var canSave: Bool {
+        preview != nil && !recorder.transcript.isEmpty
+    }
+
+    private var saveButtonLabel: String {
+        guard canSave, let event = preview else { return "Save voice capture" }
+        return "Save: \(interpretationCopy(for: event))"
     }
 
     // MARK: - Actions
@@ -346,8 +376,5 @@ final class VoiceRecorder: ObservableObject {
     }
 }
 
-private extension String {
-    func ifEmpty(_ fallback: String) -> String {
-        isEmpty ? fallback : self
-    }
-}
+// ifEmpty(_:) moved to Utilities/DialedStyle.swift — was duplicated here
+// and in TimelineEventRow.

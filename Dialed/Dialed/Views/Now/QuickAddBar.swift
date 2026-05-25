@@ -68,20 +68,22 @@ struct QuickAddBar: View {
                     )
                 Text(label)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.75))
+                    .foregroundColor(.white.opacity(0.78))
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 56)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: Spacing.cardRadius, style: .continuous)
                     .fill(.ultraThinMaterial)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.cardRadius, style: .continuous)
                             .stroke(gradient.first?.opacity(0.18) ?? .clear, lineWidth: 0.6)
                     )
             )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Log \(label.lowercased())")
+        .accessibilityHint("Opens the \(label.lowercased()) capture sheet")
     }
 }
 

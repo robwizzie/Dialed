@@ -17,17 +17,19 @@ struct MoodCaptureSheet: View {
     @State private var note: String = ""
     @FocusState private var noteFocused: Bool
 
+    // SF Symbols only — `face.smiling.inverse` doesn't exist; the
+    // previous set fell back to a placeholder square on real devices.
     private let faces: [(rating: Int, icon: String, label: String)] = [
-        (1, "face.dashed", "Low"),
-        (2, "face.smiling.inverse", "Off"),
-        (3, "face.smiling", "OK"),
+        (1, "cloud.rain.fill",   "Low"),
+        (2, "cloud.fill",        "Off"),
+        (3, "face.smiling",      "OK"),
         (4, "face.smiling.fill", "Good"),
-        (5, "sun.max.fill", "Great")
+        (5, "sun.max.fill",      "Great")
     ]
 
     var body: some View {
         VStack(spacing: 22) {
-            grabber
+            GrabberHandle()
 
             Text("How are you feeling?")
                 .font(.system(size: 22, weight: .bold, design: .rounded))
@@ -50,36 +52,34 @@ struct MoodCaptureSheet: View {
             .foregroundColor(.white)
             .lineLimit(3...6)
             .focused($noteFocused)
-            .padding(14)
+            .padding(Spacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                     .fill(.white.opacity(0.06))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                             .stroke(.white.opacity(0.08), lineWidth: 0.6)
                     )
             )
+            .accessibilityLabel("Optional note")
 
             Spacer()
 
-            saveButton
+            Button("Save check-in") { save() }
+                .buttonStyle(.dialedPrimary(.recovery))
+                .accessibilityLabel("Save mood check-in with rating \(rating) of 5")
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.lg)
         .background(AppColors.nowBackground.ignoresSafeArea())
-    }
-
-    private var grabber: some View {
-        Capsule()
-            .fill(.white.opacity(0.15))
-            .frame(width: 38, height: 4)
-            .padding(.top, 10)
     }
 
     private func faceButton(rating: Int, icon: String, label: String) -> some View {
         let isSelected = self.rating == rating
         return Button {
-            self.rating = rating
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                self.rating = rating
+            }
             #if os(iOS)
             UISelectionFeedbackGenerator().selectionChanged()
             #endif
@@ -92,23 +92,23 @@ struct MoodCaptureSheet: View {
                             ? AnyShapeStyle(LinearGradient(
                                 colors: AppColors.Pillar.recovery.gradient,
                                 startPoint: .top, endPoint: .bottom))
-                            : AnyShapeStyle(Color.white.opacity(0.45))
+                            : AnyShapeStyle(Color.white.opacity(0.55))
                     )
                 Text(label)
                     .font(.system(size: 10, weight: .semibold, design: .rounded))
-                    .foregroundColor(isSelected ? .white : .white.opacity(0.45))
+                    .foregroundColor(isSelected ? .white : .white.opacity(0.55))
             }
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: 44)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                     .fill(isSelected
                           ? AnyShapeStyle(LinearGradient(
                                 colors: AppColors.Pillar.recovery.gradient.map { $0.opacity(0.18) },
                                 startPoint: .top, endPoint: .bottom))
                           : AnyShapeStyle(Color.white.opacity(0.04)))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                             .stroke(isSelected
                                     ? (AppColors.Pillar.recovery.gradient.last ?? .white).opacity(0.45)
                                     : Color.white.opacity(0.06),
@@ -117,27 +117,9 @@ struct MoodCaptureSheet: View {
             )
             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
         }
-        .buttonStyle(.plain)
-    }
-
-    private var saveButton: some View {
-        Button {
-            save()
-        } label: {
-            Text("Save check-in")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: AppColors.Pillar.recovery.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                )
-        }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Rate mood \(label), \(rating) of 5")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
     private func save() {
