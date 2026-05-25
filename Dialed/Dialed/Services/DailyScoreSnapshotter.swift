@@ -45,7 +45,11 @@ enum DailyScoreSnapshotter {
         // We use "21:00 on the snapshot date" as the synthetic "now" so
         // Energy's circadian curve evaluates against a stable end-of-day
         // anchor rather than wherever the user happens to open the app.
-        let anchor = Calendar.current.date(byAdding: .hour, value: 21, to: logicalDay) ?? logicalDay
+        // `bySettingHour` is DST-correct — `byAdding(.hour, 21)` would
+        // shift to 22:00 on spring-forward and 20:00 on fall-back days.
+        let anchor = Calendar.current.date(
+            bySettingHour: 21, minute: 0, second: 0, of: logicalDay
+        ) ?? logicalDay
 
         let inputs = StateEngine.LiveInputs(
             now: anchor,

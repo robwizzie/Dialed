@@ -19,6 +19,12 @@ import SwiftData
 @MainActor
 enum PlanGenerator {
 
+    /// Sentinel prefix on PlanBlock.skippedReason that distinguishes an
+    /// auto-skip (recovery filter dropped it) from a user-initiated skip.
+    /// Without this, the regen logic would silently un-skip blocks the
+    /// user explicitly turned off.
+    static let autoSkipMarker: String = "[auto] "
+
     struct Inputs {
         var date: Date
         var template: WeeklyTemplate
@@ -164,13 +170,20 @@ enum PlanGenerator {
                 block.durationMinutes = r.templateBlock.durationMinutes
             }
 
-            // Apply recovery-filter skip.
+            // Apply recovery-filter skip. Auto-skips are tagged with the
+            // `autoSkipMarker` prefix so we can distinguish them from a
+            // user-initiated skip later — without the marker, the
+            // un-skip branch below would silently revive a block the
+            // user deliberately turned off.
             if !r.included {
                 if block.status == .upcoming {
-                    block.markSkipped(reason: r.skipReason)
+                    block.markSkipped(reason: PlanGenerator.autoSkipMarker + (r.skipReason ?? "low recovery"))
                 }
-            } else if block.status == .skipped, block.skippedReason != nil {
-                // Block was auto-skipped previously but now meets recovery — un-skip.
+            } else if block.status == .skipped,
+                      let reason = block.skippedReason,
+                      reason.hasPrefix(PlanGenerator.autoSkipMarker) {
+                // Block was AUTO-skipped previously but now meets recovery — un-skip.
+                // User skips (no marker prefix) are left alone.
                 block.status = .upcoming
                 block.skippedReason = nil
             }
@@ -191,9 +204,13 @@ enum PlanGenerator {
 
         // Refresh notifications off the new plan state. Also wipes the
         // legacy ChecklistItem cron reminders the first time we run — the
-        // plan is the source of truth now.
-        PlanNotificationScheduler.cancelLegacyChecklistNotifications()
-        Task { await PlanNotificationScheduler.scheduleNotifications(for: plan) }
+        // plan is the source of truth now. Detached so the throwing
+        // generator doesn't have to be async itself; the scheduler awaits
+        // its own internal cancellations so it can't race with itself.
+        Task {
+            await PlanNotificationScheduler.cancelLegacyChecklistNotifications()
+            await PlanNotificationScheduler.scheduleNotifications(for: plan)
+        }
 
         // Persist yesterday's score snapshot — by the time the next day's
         // plan is generated, the prior day's biometric + sleep data has
@@ -201,7 +218,7 @@ enum PlanGenerator {
         // Then run the insight pass on yesterday's events: at this point
         // the night between yesterday and today is also in, so rules that
         // need to see "next night's sleep" have what they need.
-        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) {
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: dayStart) {
             DailyScoreSnapshotter.snapshot(for: yesterday, context: context)
             InsightEngine.runDailyPass(for: yesterday, context: context)
         }

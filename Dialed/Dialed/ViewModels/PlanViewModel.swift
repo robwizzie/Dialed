@@ -24,6 +24,22 @@ final class PlanViewModel: ObservableObject {
     @Published var sleepAnchorLabel: String = "—"
     @Published var recoveryLabel: String = "—"
 
+    /// True while a plan generation is in flight — drives the regenerate
+    /// button's loading state.
+    @Published var isGenerating: Bool = false
+
+    /// Tokens for the NotificationCenter observers installed by
+    /// `observeNotificationActions`. Stored so we can (a) skip re-registering
+    /// when the view's .task fires more than once, and (b) clean up in deinit.
+    private var observerTokens: [NSObjectProtocol] = []
+
+    deinit {
+        let tokens = observerTokens
+        for token in tokens {
+            NotificationCenter.default.removeObserver(token)
+        }
+    }
+
     // MARK: - Display value types
 
     struct BlockItem: Identifiable {
@@ -91,12 +107,15 @@ final class PlanViewModel: ObservableObject {
     // MARK: - Notification action handlers
 
     /// Subscribe to the cross-process notifications AppDelegate posts when
-    /// the user taps an action on a Plan notification. Call from PlanView's
-    /// .task once per lifetime — typically the view's onAppear.
+    /// the user taps an action on a Plan notification. Safe to call more
+    /// than once — guarded so the view's .task can be invoked on every
+    /// re-appear without stacking duplicate observers (which would fire
+    /// markDone/snooze/skip N times per tap after N tab switches).
     func observeNotificationActions(context: ModelContext) {
+        guard observerTokens.isEmpty else { return }
         let center = NotificationCenter.default
 
-        center.addObserver(
+        let done = center.addObserver(
             forName: NSNotification.Name("PlanBlockMarkDone"),
             object: nil,
             queue: .main
@@ -109,7 +128,7 @@ final class PlanViewModel: ObservableObject {
             }
         }
 
-        center.addObserver(
+        let snooze = center.addObserver(
             forName: NSNotification.Name("PlanBlockSnooze"),
             object: nil,
             queue: .main
@@ -122,7 +141,7 @@ final class PlanViewModel: ObservableObject {
             }
         }
 
-        center.addObserver(
+        let skip = center.addObserver(
             forName: NSNotification.Name("PlanBlockSkip"),
             object: nil,
             queue: .main
@@ -134,6 +153,8 @@ final class PlanViewModel: ObservableObject {
                 await self.skipFromNotification(blockID: id, context: context)
             }
         }
+
+        observerTokens = [done, snooze, skip]
     }
 
     private func markDoneFromNotification(blockID: UUID, context: ModelContext) async {
@@ -260,6 +281,8 @@ final class PlanViewModel: ObservableObject {
     }
 
     private func generatePlan(for date: Date, context: ModelContext) async {
+        isGenerating = true
+        defer { isGenerating = false }
         // Find (or seed) the active template.
         let templateDesc = FetchDescriptor<WeeklyTemplate>(
             predicate: #Predicate { $0.isActive == true }
