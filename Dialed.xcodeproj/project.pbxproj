@@ -403,6 +403,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -436,6 +438,8 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

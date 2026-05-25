@@ -38,7 +38,7 @@ final class NowViewModel: ObservableObject {
     func refresh(context: ModelContext) async {
         let now = Date()
         refreshHeader(now: now)
-        refreshAmbient(now: now)
+        refreshAmbient(now: now, dominantPillar: nil)
 
         // 1. Load the baseline, latest sleep, latest biometric.
         let baseline = latestBaseline(context: context)
@@ -85,8 +85,29 @@ final class NowViewModel: ObservableObject {
         self.energy = energyResult
         self.strain = strainResult
 
+        // Re-tint ambient now that we have actual pillar scores. Dominant
+        // pillar wins when it's at least 12 pts above the others' average;
+        // otherwise the time-of-day default rules.
+        refreshAmbient(now: now, dominantPillar: dominantPillar())
+
         // 5. Plan strip — synthesize from ChecklistItems until Phase 3.
         refreshPlanStrip(context: context, now: now)
+    }
+
+    /// Pillar with score most distinct from the others; nil if scores are
+    /// flat enough that nothing dominates.
+    private func dominantPillar() -> AppColors.Pillar? {
+        let candidates: [(pillar: AppColors.Pillar, score: Int)] = [
+            (.recovery, recovery.score),
+            (.readiness, readiness.score),
+            (.energy, energy.score),
+            (.strain, strain.score)
+        ]
+        guard let top = candidates.max(by: { $0.score < $1.score }) else { return nil }
+        let others = candidates.filter { $0.pillar != top.pillar }
+        let avgOthers = Double(others.map { $0.score }.reduce(0, +)) / Double(others.count)
+        guard Double(top.score) - avgOthers >= 12 else { return nil }
+        return top.pillar
     }
 
     // MARK: - Data fetchers
@@ -328,7 +349,17 @@ final class NowViewModel: ObservableObject {
         self.headerDateLine = df.string(from: now)
     }
 
-    private func refreshAmbient(now: Date) {
+    private func refreshAmbient(now: Date, dominantPillar: AppColors.Pillar?) {
+        // When a pillar dominates, let it paint the ambient tint — gives
+        // the home screen a visual mood that matches what the user's body
+        // is actually saying (red glow on a high-strain day, cool blue
+        // glow when recovered, etc.). Falls back to time-of-day when no
+        // pillar is distinct.
+        if let pillar = dominantPillar {
+            ambientLeftTint = pillar.gradient.first!.opacity(0.55)
+            ambientRightTint = pillar.gradient.last!.opacity(0.4)
+            return
+        }
         let hour = Calendar.current.component(.hour, from: now)
         switch hour {
         case 5..<11:
