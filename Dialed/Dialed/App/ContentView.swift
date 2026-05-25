@@ -29,9 +29,9 @@ struct MainTabView: View {
                     Label("Now", systemImage: "bolt.heart.fill")
                 }
 
-            LogView()
+            PlanView()
                 .tabItem {
-                    Label("Log", systemImage: "square.and.pencil")
+                    Label("Plan", systemImage: "calendar.day.timeline.left")
                 }
 
             CalendarView()

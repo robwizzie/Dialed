@@ -30,7 +30,13 @@ enum DialedSchema {
         ContextEvent.self,
         BiometricSnapshot.self,
         SleepSession.self,
-        PersonalBaseline.self
+        PersonalBaseline.self,
+
+        // Dialed 2.0 — adaptive scheduling (Phase 3)
+        WeeklyTemplate.self,
+        TemplateBlock.self,
+        DailyPlan.self,
+        PlanBlock.self
     ]
 
     /// Build a ModelContainer with the full schema. Used by previews and the
