@@ -24,9 +24,9 @@ struct ContentView: View {
 struct MainTabView: View {
     var body: some View {
         TabView {
-            TodayView()
+            NowView()
                 .tabItem {
-                    Label("Today", systemImage: "calendar.circle.fill")
+                    Label("Now", systemImage: "bolt.heart.fill")
                 }
 
             LogView()
@@ -49,7 +49,7 @@ struct MainTabView: View {
                     Label("Settings", systemImage: "gearshape.fill")
                 }
         }
-        .accentColor(AppColors.primary)
+        .tint(AppColors.Pillar.readiness.gradient.last!)
     }
 }
 
