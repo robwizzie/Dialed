@@ -11,6 +11,8 @@
 //    4. Quick-add bar — water / meal / mood / note
 //    5. Timeline entry card — push into the full day timeline
 //    6. "Today's tracking" entry to the legacy screen (water/protein/checklist)
+//    + floating voice-capture mic (FAB, bottom-trailing) for hands-free
+//      ContextEvent capture via the Speech framework.
 //
 //  Visual language: Oura's typographic discipline, Apple Fitness's ring depth,
 //  Luna's dark-glass cards, Whoop's color science for the state pillars.
@@ -25,10 +27,11 @@ struct NowView: View {
 
     // Sheet routing for quick-add destinations.
     @State private var presentedQuickAdd: QuickAddBar.Action?
+    @State private var showVoiceCapture: Bool = false
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            ZStack(alignment: .bottomTrailing) {
                 AppColors.nowBackground.ignoresSafeArea()
                 ambientBackground
 
@@ -50,6 +53,8 @@ struct NowView: View {
                     .padding(.top, 8)
                     .padding(.bottom, 48)
                 }
+
+                voiceFAB
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -77,7 +82,42 @@ struct NowView: View {
                 .presentationDetents([.medium, .large])
                 .presentationBackground(.regularMaterial)
             }
+            .sheet(isPresented: $showVoiceCapture) {
+                VoiceCaptureSheet()
+                    .presentationDetents([.large])
+                    .presentationBackground(.regularMaterial)
+            }
         }
+    }
+
+    // MARK: - Voice capture FAB
+
+    /// Floating mic, anchored to bottom-trailing. Lives outside the
+    /// ScrollView so it stays pinned regardless of scroll position.
+    private var voiceFAB: some View {
+        Button {
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            #endif
+            showVoiceCapture = true
+        } label: {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 56, height: 56)
+                .background(
+                    Circle()
+                        .fill(LinearGradient(
+                            colors: AppColors.Pillar.recovery.gradient,
+                            startPoint: .top, endPoint: .bottom
+                        ))
+                        .shadow(color: AppColors.Pillar.recovery.gradient.first!.opacity(0.35),
+                                radius: 14, x: 0, y: 6)
+                )
+        }
+        .buttonStyle(.plain)
+        .padding(.trailing, 18)
+        .padding(.bottom, 28)
     }
 
     // MARK: - Header
