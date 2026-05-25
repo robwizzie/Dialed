@@ -177,10 +177,70 @@ final class NowViewModel: ObservableObject {
 
     // MARK: - Plan strip synthesis
 
-    /// Builds Now/Next blocks from ChecklistItems for today. Returns the most
-    /// recent block whose time has passed as `nowBlock`, and the next 3 as
-    /// upcoming. Phase 3 swaps this for real PlanBlocks.
+    /// Builds the Now/Next strip. Prefers real PlanBlocks from today's
+    /// DailyPlan; falls back to the legacy ChecklistItem schedule when no
+    /// plan exists yet (e.g. a user who hasn't opened the Plan tab once).
     private func refreshPlanStrip(context: ModelContext, now: Date) {
+        if let plan = todayDailyPlan(context: context),
+           let blocks = plan.blocks, !blocks.isEmpty {
+            refreshFromDailyPlan(blocks: blocks, now: now)
+            return
+        }
+        refreshFromLegacyChecklist(context: context, now: now)
+    }
+
+    private func todayDailyPlan(context: ModelContext) -> DailyPlan? {
+        let dayStart = Calendar.current.startOfDay(for: Date())
+        let desc = FetchDescriptor<DailyPlan>(
+            predicate: #Predicate { $0.date == dayStart }
+        )
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func refreshFromDailyPlan(blocks: [PlanBlock], now: Date) {
+        let sorted = blocks.sorted { $0.startTime < $1.startTime }
+
+        // "Current" block: prefer an active duration block; otherwise the
+        // most recent past block within the last 90 minutes.
+        let activeBlock = sorted.first { $0.liveStatus(now: now) == .active }
+        let lastPast = sorted.last {
+            $0.startTime <= now &&
+            now.timeIntervalSince($0.startTime) < 90 * 60 &&
+            $0.status != .skipped
+        }
+        let currentSource = activeBlock ?? lastPast
+
+        self.nowBlock = currentSource.map { block in
+            PlanBlockPresentation(
+                id: block.id,
+                title: block.title,
+                subtitle: block.blockDescription,
+                time: block.startTime,
+                durationMinutes: block.durationMinutes > 0 ? block.durationMinutes : 30,
+                icon: block.kind.defaultIcon,
+                accent: block.kind.defaultPillar.gradient,
+                isCurrent: true
+            )
+        }
+
+        let upcoming = sorted
+            .filter { $0.startTime > now && $0.status != .skipped && $0.status != .done }
+            .prefix(3)
+
+        self.upcomingBlocks = upcoming.map { block in
+            PlanBlockPresentation(
+                id: block.id,
+                title: block.title,
+                subtitle: block.blockDescription,
+                time: block.startTime,
+                durationMinutes: block.durationMinutes,
+                icon: block.kind.defaultIcon,
+                accent: block.kind.defaultPillar.gradient
+            )
+        }
+    }
+
+    private func refreshFromLegacyChecklist(context: ModelContext, now: Date) {
         let today = Calendar.current.startOfDay(for: now)
         guard let log = todayLog(context: context) else {
             self.nowBlock = nil
