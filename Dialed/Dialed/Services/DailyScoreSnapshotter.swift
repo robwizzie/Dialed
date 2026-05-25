@@ -60,9 +60,12 @@ enum DailyScoreSnapshotter {
         // a fabricated score.
         let recovery = (sleep != nil) ? StateEngine.recovery(inputs) : nil
         let strain = StateEngine.strain(inputs)
+        let adherence = AdherenceTracker.weeklyAdherence(
+            ending: logicalDay, days: 7, context: context
+        ) ?? 1.0
         let readiness = recovery.map {
             StateEngine.readiness(inputs, recoveryScore: $0.score,
-                                  weeklyAdherence: 1.0,
+                                  weeklyAdherence: adherence,
                                   recentStrain: priorDayStrain(before: logicalDay, context: context))
         }
         // Energy proxy: scale 1–5 self-reported avg to 0–100. Skip when
