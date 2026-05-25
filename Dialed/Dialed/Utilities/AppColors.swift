@@ -58,6 +58,75 @@ struct AppColors {
             return "Reset"
         }
     }
+
+    // MARK: - Dialed 2.0 — State pillars
+
+    /// Each of the four "Now" rings has its own color identity, inspired by
+    /// Oura/Whoop palette discipline. Two-stop gradients so the ring stroke
+    /// has depth without going neon.
+    enum Pillar: String, CaseIterable {
+        case recovery
+        case readiness
+        case energy
+        case strain
+
+        var displayName: String {
+            switch self {
+            case .recovery:  return "Recovery"
+            case .readiness: return "Readiness"
+            case .energy:    return "Energy"
+            case .strain:    return "Strain"
+            }
+        }
+
+        var systemIcon: String {
+            switch self {
+            case .recovery:  return "leaf.fill"
+            case .readiness: return "bolt.heart.fill"
+            case .energy:    return "sun.max.fill"
+            case .strain:    return "flame.fill"
+            }
+        }
+
+        var gradient: [Color] {
+            switch self {
+            case .recovery:
+                // Mint → Teal: restored, parasympathetic.
+                return [Color(hex: "5EEAD4"), Color(hex: "0D9488")]
+            case .readiness:
+                // Cyan → Electric blue: cool, primed.
+                return [Color(hex: "7DD3FC"), Color(hex: "2563EB")]
+            case .energy:
+                // Amber → Orange: warm, kinetic.
+                return [Color(hex: "FCD34D"), Color(hex: "F97316")]
+            case .strain:
+                // Pink → Magenta: load/effort.
+                return [Color(hex: "F9A8D4"), Color(hex: "BE185D")]
+            }
+        }
+
+        /// Soft, low-opacity color for the inactive track behind the ring.
+        var trackColor: Color {
+            gradient.last!.opacity(0.12)
+        }
+
+        /// Glow color for the breathing outer halo.
+        var glowColor: Color {
+            gradient.first!
+        }
+    }
+
+    // MARK: - Dialed 2.0 — Surfaces
+
+    /// Slightly warmer near-black used behind the four-ring grid so it doesn't
+    /// disappear into the page background. Oura-influenced.
+    static let nowBackground = Color(hex: "0A0E14")
+
+    /// Subtle elevated card on the Now screen — feels like printed glass.
+    static let nowCard = Color.white.opacity(0.04)
+
+    /// Stroke on glass cards.
+    static let glassStroke = Color.white.opacity(0.08)
 }
 
 // Helper extension for hex colors
