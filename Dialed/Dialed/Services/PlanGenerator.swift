@@ -195,6 +195,13 @@ enum PlanGenerator {
         PlanNotificationScheduler.cancelLegacyChecklistNotifications()
         Task { await PlanNotificationScheduler.scheduleNotifications(for: plan) }
 
+        // Persist yesterday's score snapshot — by the time the next day's
+        // plan is generated, the prior day's biometric + sleep data has
+        // settled, so the snapshot we write now is the final word on it.
+        if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) {
+            DailyScoreSnapshotter.snapshot(for: yesterday, context: context)
+        }
+
         return plan
     }
 

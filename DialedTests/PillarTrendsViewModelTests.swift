@@ -100,6 +100,7 @@ final class PillarTrendsViewModelTests: XCTestCase {
                 BiometricSnapshot.self,
                 PersonalBaseline.self,
                 ContextEvent.self,
+                DailyScoreSnapshot.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         let context = container.mainContext
@@ -122,6 +123,7 @@ final class PillarTrendsViewModelTests: XCTestCase {
                 BiometricSnapshot.self,
                 PersonalBaseline.self,
                 ContextEvent.self,
+                DailyScoreSnapshot.self,
             configurations: ModelConfiguration(isStoredInMemoryOnly: true)
         )
         let vm = PillarTrendsViewModel()

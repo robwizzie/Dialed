@@ -90,6 +90,13 @@ final class NowViewModel: ObservableObject {
         // otherwise the time-of-day default rules.
         refreshAmbient(now: now, dominantPillar: dominantPillar())
 
+        // Persist today's snapshot so Trends loads instantly and tomorrow's
+        // recentStrain calc has something to read. force:false skips the
+        // write if a fresh row exists (computed in the last minute) — guards
+        // against the rapid-fire refreshes that happen when the user pulls
+        // to refresh repeatedly.
+        DailyScoreSnapshotter.snapshot(for: now, context: context, force: false)
+
         // 5. Plan strip — synthesize from ChecklistItems until Phase 3.
         refreshPlanStrip(context: context, now: now)
     }
