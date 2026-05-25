@@ -88,6 +88,86 @@ final class PlanViewModel: ObservableObject {
         await loadOrGenerate(for: selectedDate, context: context)
     }
 
+    // MARK: - Notification action handlers
+
+    /// Subscribe to the cross-process notifications AppDelegate posts when
+    /// the user taps an action on a Plan notification. Call from PlanView's
+    /// .task once per lifetime — typically the view's onAppear.
+    func observeNotificationActions(context: ModelContext) {
+        let center = NotificationCenter.default
+
+        center.addObserver(
+            forName: NSNotification.Name("PlanBlockMarkDone"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self,
+                  let idStr = note.userInfo?["planBlockID"] as? String,
+                  let id = UUID(uuidString: idStr) else { return }
+            Task { @MainActor in
+                await self.markDoneFromNotification(blockID: id, context: context)
+            }
+        }
+
+        center.addObserver(
+            forName: NSNotification.Name("PlanBlockSnooze"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self,
+                  let idStr = note.userInfo?["planBlockID"] as? String,
+                  let id = UUID(uuidString: idStr) else { return }
+            Task { @MainActor in
+                await self.snoozeFromNotification(blockID: id, context: context)
+            }
+        }
+
+        center.addObserver(
+            forName: NSNotification.Name("PlanBlockSkip"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self,
+                  let idStr = note.userInfo?["planBlockID"] as? String,
+                  let id = UUID(uuidString: idStr) else { return }
+            Task { @MainActor in
+                await self.skipFromNotification(blockID: id, context: context)
+            }
+        }
+    }
+
+    private func markDoneFromNotification(blockID: UUID, context: ModelContext) async {
+        guard let block = fetchBlock(id: blockID, context: context),
+              block.status != .done else { return }
+        block.markDone()
+        if let plan = block.plan {
+            PlanNotificationScheduler.cancelNotifications(planID: plan.id, blockID: block.id)
+        }
+        try? context.save()
+        await loadOrGenerate(for: selectedDate, context: context)
+    }
+
+    private func snoozeFromNotification(blockID: UUID, context: ModelContext) async {
+        guard let block = fetchBlock(id: blockID, context: context),
+              let plan = block.plan else { return }
+        await PlanNotificationScheduler.snooze(planID: plan.id, block: block, minutes: 10)
+    }
+
+    private func skipFromNotification(blockID: UUID, context: ModelContext) async {
+        guard let block = fetchBlock(id: blockID, context: context) else { return }
+        block.markSkipped(reason: "Skipped from notification")
+        if let plan = block.plan {
+            PlanNotificationScheduler.cancelNotifications(planID: plan.id, blockID: block.id)
+        }
+        try? context.save()
+        await loadOrGenerate(for: selectedDate, context: context)
+    }
+
+    private func fetchBlock(id: UUID, context: ModelContext) -> PlanBlock? {
+        let desc = FetchDescriptor<PlanBlock>(predicate: #Predicate { $0.id == id })
+        return (try? context.fetch(desc))?.first
+    }
+
     /// Toggle a block's completion state. Round-tripping the status writes
     /// a ContextEvent for the Timeline.
     func toggle(blockID: UUID, context: ModelContext) async {
@@ -109,6 +189,10 @@ final class PlanViewModel: ObservableObject {
             )
             context.insert(event)
             block.producedEventID = event.id
+            // Cancel any pending notifications for this block — it's done.
+            if let planID = block.plan?.id {
+                PlanNotificationScheduler.cancelNotifications(planID: planID, blockID: block.id)
+            }
         case .done:
             block.status = .upcoming
             block.completedAt = nil
@@ -122,10 +206,17 @@ final class PlanViewModel: ObservableObject {
                 }
                 block.producedEventID = nil
             }
+            // Re-schedule when un-done so the alert fires again.
+            if let plan = block.plan {
+                Task { await PlanNotificationScheduler.scheduleNotifications(for: plan) }
+            }
         case .skipped:
             block.status = .upcoming
             block.skippedReason = nil
             block.updatedAt = Date()
+            if let plan = block.plan {
+                Task { await PlanNotificationScheduler.scheduleNotifications(for: plan) }
+            }
         }
 
         try? context.save()
