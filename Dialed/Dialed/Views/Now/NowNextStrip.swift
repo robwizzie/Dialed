@@ -47,6 +47,10 @@ struct NowNextStrip: View {
     let current: PlanBlockPresentation?
     let upcoming: [PlanBlockPresentation]
 
+    /// Drives the breathing pulse on the NOW beacon. Toggle continuously
+    /// from onAppear so the outer ring scales + fades on a 1.4s loop.
+    @State private var beaconPulse: Bool = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             if let current {
@@ -57,15 +61,20 @@ struct NowNextStrip: View {
 
             nextSection
         }
-        .padding(18)
+        .padding(Spacing.md + 2)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: Spacing.cardRadius, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.cardRadius, style: .continuous)
                         .stroke(AppColors.glassStroke, lineWidth: 0.6)
                 )
         )
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+                beaconPulse = true
+            }
+        }
     }
 
     // MARK: - Sections
@@ -73,19 +82,21 @@ struct NowNextStrip: View {
     private func nowSection(_ block: PlanBlockPresentation) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                Circle()
-                    .fill(block.accent.first ?? .blue)
-                    .frame(width: 6, height: 6)
-                    .overlay(
-                        Circle()
-                            .stroke(block.accent.first ?? .blue, lineWidth: 4)
-                            .opacity(0.25)
-                            .scaleEffect(2.2)
-                    )
+                // Breathing "you are here" beacon.
+                ZStack {
+                    Circle()
+                        .stroke(block.accent.first ?? .blue, lineWidth: 4)
+                        .opacity(beaconPulse ? 0.0 : 0.45)
+                        .scaleEffect(beaconPulse ? 2.6 : 1.0)
+                        .frame(width: 6, height: 6)
+                    Circle()
+                        .fill(block.accent.first ?? .blue)
+                        .frame(width: 6, height: 6)
+                }
                 Text("NOW")
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .tracking(1.4)
-                    .foregroundColor(.white.opacity(0.55))
+                    .foregroundColor(.white.opacity(0.6))
                 Spacer()
                 if let dur = block.durationMinutes {
                     Text(remainingLabel(for: block.time, duration: dur))
@@ -130,10 +141,15 @@ struct NowNextStrip: View {
                 .foregroundColor(.white.opacity(0.55))
 
             if upcoming.isEmpty {
-                Text("You're all clear for the rest of the day.")
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.55))
-                    .padding(.vertical, 4)
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(AppColors.Pillar.recovery.gradient.last)
+                    Text("You're all clear for the rest of the day.")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.65))
+                }
+                .padding(.vertical, 4)
             } else {
                 ForEach(upcoming) { block in
                     nextRow(block)

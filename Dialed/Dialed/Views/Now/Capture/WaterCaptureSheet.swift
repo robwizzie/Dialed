@@ -18,7 +18,7 @@ struct WaterCaptureSheet: View {
 
     var body: some View {
         VStack(spacing: 22) {
-            grabber
+            GrabberHandle()
 
             Image(systemName: "drop.fill")
                 .font(.system(size: 32, weight: .semibold))
@@ -33,22 +33,24 @@ struct WaterCaptureSheet: View {
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
 
-            // Big number
+            // Big number — content transition animates the digit changes.
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text("\(Int(ounces))")
                     .font(.system(size: 64, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
+                    .contentTransition(.numericText(value: ounces))
+                    .animation(.snappy(duration: 0.25), value: ounces)
                 Text("oz")
                     .font(.system(size: 20, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(.white.opacity(0.55))
             }
 
             // +/- stepper row
             HStack(spacing: 28) {
-                stepperButton(icon: "minus") {
+                stepperButton(icon: "minus", label: "Decrease by 4 ounces") {
                     ounces = max(0, ounces - 4)
                 }
-                stepperButton(icon: "plus") {
+                stepperButton(icon: "plus", label: "Increase by 4 ounces") {
                     ounces = min(128, ounces + 4)
                 }
             }
@@ -63,21 +65,18 @@ struct WaterCaptureSheet: View {
 
             Spacer()
 
-            saveButton
+            Button("Log \(Int(ounces)) oz") { save() }
+                .buttonStyle(.dialedPrimary(.readiness))
+                .disabled(ounces <= 0)
+                .opacity(ounces <= 0 ? 0.5 : 1)
+                .accessibilityLabel("Save \(Int(ounces)) ounces of water")
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.lg)
         .background(AppColors.nowBackground.ignoresSafeArea())
     }
 
-    private var grabber: some View {
-        Capsule()
-            .fill(.white.opacity(0.15))
-            .frame(width: 38, height: 4)
-            .padding(.top, 10)
-    }
-
-    private func stepperButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func stepperButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button {
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -94,13 +93,16 @@ struct WaterCaptureSheet: View {
                         .overlay(Circle().stroke(.white.opacity(0.12), lineWidth: 0.6))
                 )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel(label)
     }
 
     private func presetPill(value: Double) -> some View {
         let isActive = abs(ounces - value) < 0.5
         return Button {
-            ounces = value
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                ounces = value
+            }
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             #endif
@@ -119,29 +121,8 @@ struct WaterCaptureSheet: View {
                               : AnyShapeStyle(Color.white.opacity(0.05)))
                 )
         }
-        .buttonStyle(.plain)
-    }
-
-    private var saveButton: some View {
-        Button {
-            save()
-        } label: {
-            Text("Log \(Int(ounces)) oz")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: AppColors.Pillar.readiness.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(ounces <= 0)
-        .opacity(ounces <= 0 ? 0.5 : 1)
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Set to \(Int(value)) ounces")
     }
 
     private func save() {

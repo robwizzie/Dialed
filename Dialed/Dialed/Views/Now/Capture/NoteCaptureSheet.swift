@@ -20,24 +20,21 @@ struct NoteCaptureSheet: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            grabber
+            GrabberHandle()
 
-            HStack {
+            HStack(spacing: 12) {
                 Text(isJournal ? "Journal entry" : "Quick note")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.2), value: isJournal)
                 Spacer()
-                Toggle(isOn: $isJournal) {
-                    Text("Journal")
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white.opacity(0.65))
-                }
-                .toggleStyle(.switch)
-                .tint(AppColors.Pillar.recovery.gradient.last ?? .blue)
-                .labelsHidden()
-                Text("Journal")
+                Toggle("Journal", isOn: $isJournal)
+                    .toggleStyle(.switch)
+                    .tint(AppColors.Pillar.recovery.gradient.last ?? .blue)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundColor(.white.opacity(0.65))
+                    .foregroundColor(.white.opacity(0.7))
+                    .fixedSize()
             }
 
             TextField(
@@ -51,65 +48,42 @@ struct NoteCaptureSheet: View {
             .foregroundColor(.white)
             .lineLimit(isJournal ? 8...20 : 3...6)
             .focused($fieldFocused)
-            .padding(16)
+            .padding(Spacing.md)
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                     .fill(.white.opacity(0.06))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        RoundedRectangle(cornerRadius: Spacing.inputRadius, style: .continuous)
                             .stroke(.white.opacity(0.08), lineWidth: 0.6)
                     )
             )
+            .animation(.easeInOut(duration: 0.2), value: isJournal)
+            .accessibilityLabel(isJournal ? "Journal entry text" : "Quick note text")
 
             Spacer()
 
-            saveButton
+            Button("Save") { save() }
+                .buttonStyle(.dialedPrimary(.strain))
+                .disabled(!canSave)
+                .opacity(canSave ? 1 : 0.5)
+                .accessibilityLabel(isJournal ? "Save journal entry" : "Save quick note")
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
+        .padding(.horizontal, Spacing.lg)
+        .padding(.bottom, Spacing.lg)
         .background(AppColors.nowBackground.ignoresSafeArea())
         .onAppear { fieldFocused = true }
-    }
-
-    private var grabber: some View {
-        Capsule()
-            .fill(.white.opacity(0.15))
-            .frame(width: 38, height: 4)
-            .padding(.top, 10)
     }
 
     private var canSave: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private var saveButton: some View {
-        Button {
-            save()
-        } label: {
-            Text("Save")
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: AppColors.Pillar.strain.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        ))
-                )
-        }
-        .buttonStyle(.plain)
-        .disabled(!canSave)
-        .opacity(canSave ? 1 : 0.5)
-    }
-
     private func save() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let event: ContextEvent = isJournal
             ? ContextEvent.journal(trimmed)
-            : ContextEvent(timestamp: Date(), kind: .note, text: trimmed)
+            : ContextEvent(timestamp: Date(), kind: .note, text: trimmed, source: .manual)
         modelContext.insert(event)
         try? modelContext.save()
         #if os(iOS)

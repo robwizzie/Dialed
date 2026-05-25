@@ -10,7 +10,7 @@
 //    3. Now/Next strip — current and upcoming plan blocks
 //    4. Quick-add bar — water / meal / mood / note
 //    5. Timeline entry card — push into the full day timeline
-//    6. "Today's tracking" entry to the legacy screen (water/protein/checklist)
+//    6. Detailed tracking entry to the legacy screen (water/protein/checklist)
 //    + floating voice-capture mic (FAB, bottom-trailing) for hands-free
 //      ContextEvent capture via the Speech framework.
 //
@@ -28,6 +28,8 @@ struct NowView: View {
     // Sheet routing for quick-add destinations.
     @State private var presentedQuickAdd: QuickAddBar.Action?
     @State private var showVoiceCapture: Bool = false
+    @State private var isRefreshing: Bool = false
+    @State private var refreshSpin: Angle = .degrees(0)
 
     var body: some View {
         NavigationStack {
@@ -36,7 +38,7 @@ struct NowView: View {
                 ambientBackground
 
                 ScrollView {
-                    VStack(spacing: 24) {
+                    VStack(spacing: Spacing.sectionSpacing) {
                         headerSection
                         ringsGrid
                         if viewModel.nowBlock != nil || !viewModel.upcomingBlocks.isEmpty {
@@ -49,8 +51,8 @@ struct NowView: View {
                         timelineEntryCard
                         legacyTrackingCard
                     }
-                    .padding(.horizontal, 18)
-                    .padding(.top, 8)
+                    .padding(.horizontal, Spacing.screenPadding)
+                    .padding(.top, Spacing.xs)
                     .padding(.bottom, 48)
                 }
 
@@ -59,13 +61,7 @@ struct NowView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        Task { await viewModel.refresh(context: modelContext) }
-                    } label: {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.75))
-                    }
+                    refreshToolbarButton
                 }
             }
             .task { await viewModel.refresh(context: modelContext) }
@@ -74,19 +70,58 @@ struct NowView: View {
                 Group {
                     switch action {
                     case .water: WaterCaptureSheet()
+                            .presentationDetents([.medium])
                     case .meal:  MealCaptureSheet()
+                            .presentationDetents([.medium, .large])
                     case .mood:  MoodCaptureSheet()
+                            .presentationDetents([.medium])
                     case .note:  NoteCaptureSheet()
+                            .presentationDetents([.medium, .large])
                     }
                 }
-                .presentationDetents([.medium, .large])
                 .presentationBackground(.regularMaterial)
+                .presentationDragIndicator(.hidden)  // we draw our own GrabberHandle
             }
             .sheet(isPresented: $showVoiceCapture) {
                 VoiceCaptureSheet()
                     .presentationDetents([.large])
                     .presentationBackground(.regularMaterial)
+                    .presentationDragIndicator(.hidden)
             }
+        }
+    }
+
+    // MARK: - Toolbar refresh
+
+    private var refreshToolbarButton: some View {
+        Button {
+            #if os(iOS)
+            UISelectionFeedbackGenerator().selectionChanged()
+            #endif
+            performRefresh()
+        } label: {
+            Image(systemName: "arrow.clockwise")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white.opacity(0.85))
+                .rotationEffect(refreshSpin)
+                .frame(width: 44, height: 44)  // 44pt touch target
+        }
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Refresh scores")
+    }
+
+    private func performRefresh() {
+        guard !isRefreshing else { return }
+        isRefreshing = true
+        withAnimation(.linear(duration: 0.8).repeatForever(autoreverses: false)) {
+            refreshSpin = .degrees(refreshSpin.degrees + 360)
+        }
+        Task {
+            await viewModel.refresh(context: modelContext)
+            withAnimation(.easeOut(duration: 0.3)) {
+                refreshSpin = .degrees(0)
+            }
+            isRefreshing = false
         }
     }
 
@@ -94,6 +129,7 @@ struct NowView: View {
 
     /// Floating mic, anchored to bottom-trailing. Lives outside the
     /// ScrollView so it stays pinned regardless of scroll position.
+    /// Padding clears the system tab bar.
     private var voiceFAB: some View {
         Button {
             #if os(iOS)
@@ -109,38 +145,41 @@ struct NowView: View {
                     Circle()
                         .fill(LinearGradient(
                             colors: AppColors.Pillar.recovery.gradient,
-                            startPoint: .top, endPoint: .bottom
+                            startPoint: .topLeading, endPoint: .bottomTrailing
                         ))
-                        .shadow(color: AppColors.Pillar.recovery.gradient.first!.opacity(0.35),
-                                radius: 14, x: 0, y: 6)
+                        .shadow(
+                            color: AppColors.Pillar.recovery.gradient.last!.opacity(0.5),
+                            radius: 18, x: 0, y: 8
+                        )
                 )
         }
-        .buttonStyle(.plain)
-        .padding(.trailing, 18)
-        .padding(.bottom, 28)
+        .buttonStyle(.dialedScale)
+        .padding(.trailing, Spacing.md)
+        .padding(.bottom, 40)
+        .accessibilityLabel("Voice capture")
+        .accessibilityHint("Records a voice note and parses it into a logged entry")
     }
 
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Spacing.xxs) {
             Text(viewModel.greeting)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
 
             Text(viewModel.headerDateLine)
                 .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 4)
     }
 
     // MARK: - Rings grid (2x2)
 
     private var ringsGrid: some View {
-        let cols = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-        return LazyVGrid(columns: cols, spacing: 18) {
+        let cols = [GridItem(.flexible(), spacing: Spacing.sm), GridItem(.flexible(), spacing: Spacing.sm)]
+        return LazyVGrid(columns: cols, spacing: Spacing.md) {
             ring(.recovery, breakdown: viewModel.recovery)
             ring(.readiness, breakdown: viewModel.readiness)
             ring(.energy, breakdown: viewModel.energy)
@@ -158,15 +197,17 @@ struct NowView: View {
             )
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
+        .padding(.vertical, Spacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
+            RoundedRectangle(cornerRadius: Spacing.heroCardRadius, style: .continuous)
                 .fill(AppColors.nowCard)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    RoundedRectangle(cornerRadius: Spacing.heroCardRadius, style: .continuous)
                         .stroke(AppColors.glassStroke, lineWidth: 0.5)
                 )
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(pillar.displayName) \(breakdown.score) of 100, \(breakdown.grade.displayLabel)")
     }
 
     // MARK: - Timeline entry card
@@ -179,44 +220,26 @@ struct NowView: View {
             TimelineView()
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.Pillar.recovery.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(AppColors.Pillar.recovery.gradient.first!.opacity(0.14))
-                    )
+                DialedPillarIcon(icon: "clock.arrow.circlepath", pillar: .recovery)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Today's timeline")
+                    Text("Open day timeline")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                     Text("Everything you've logged today")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.55))
+                        .foregroundColor(.white.opacity(0.6))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.white.opacity(0.45))
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(AppColors.glassStroke, lineWidth: 0.6)
-                    )
-            )
+            .padding(Spacing.cardPadding)
+            .dialedGlassCard(cornerRadius: Spacing.cardRadius)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityHint("Opens the full Timeline view")
     }
 
     // MARK: - Legacy tracking card
@@ -229,44 +252,26 @@ struct NowView: View {
             TodayView()
         } label: {
             HStack(spacing: 14) {
-                Image(systemName: "checklist")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: AppColors.Pillar.energy.gradient,
-                            startPoint: .top, endPoint: .bottom
-                        )
-                    )
-                    .frame(width: 40, height: 40)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(AppColors.Pillar.energy.gradient.first!.opacity(0.14))
-                    )
+                DialedPillarIcon(icon: "checklist", pillar: .energy)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Today's tracking")
+                    Text("Detailed tracking")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
-                    Text("Water, protein, routine")
+                    Text("Water, protein, routine checklist")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.55))
+                        .foregroundColor(.white.opacity(0.6))
                 }
                 Spacer()
                 Image(systemName: "chevron.right")
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(.white.opacity(0.45))
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
-                            .stroke(AppColors.glassStroke, lineWidth: 0.6)
-                    )
-            )
+            .padding(Spacing.cardPadding)
+            .dialedGlassCard(cornerRadius: Spacing.cardRadius)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
+        .accessibilityHint("Opens the legacy water and routine tracker")
     }
 
     // MARK: - Ambient background
@@ -274,26 +279,32 @@ struct NowView: View {
     /// Two soft, color-tinted radial blobs anchored to the top corners. Adds
     /// depth without visual noise. Tints follow the dominant pillar of the
     /// moment so the screen subtly shifts mood through the day.
+    /// Sized off UIScreen rather than the GeometryReader proxy so the blobs
+    /// don't drift during pull-to-refresh.
     private var ambientBackground: some View {
-        GeometryReader { proxy in
-            ZStack {
-                Circle()
-                    .fill(viewModel.ambientLeftTint)
-                    .frame(width: proxy.size.width * 0.9)
-                    .blur(radius: 90)
-                    .offset(x: -proxy.size.width * 0.35, y: -proxy.size.height * 0.25)
-                    .opacity(0.45)
+        #if os(iOS)
+        let screenSize = UIScreen.main.bounds.size
+        #else
+        let screenSize = CGSize(width: 400, height: 800)
+        #endif
+        return ZStack {
+            Circle()
+                .fill(viewModel.ambientLeftTint)
+                .frame(width: screenSize.width * 0.95)
+                .blur(radius: 90)
+                .offset(x: -screenSize.width * 0.35, y: -screenSize.height * 0.28)
+                .opacity(0.5)
 
-                Circle()
-                    .fill(viewModel.ambientRightTint)
-                    .frame(width: proxy.size.width * 0.7)
-                    .blur(radius: 100)
-                    .offset(x: proxy.size.width * 0.35, y: -proxy.size.height * 0.15)
-                    .opacity(0.35)
-            }
+            Circle()
+                .fill(viewModel.ambientRightTint)
+                .frame(width: screenSize.width * 0.75)
+                .blur(radius: 100)
+                .offset(x: screenSize.width * 0.35, y: -screenSize.height * 0.18)
+                .opacity(0.4)
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
+        .animation(.easeInOut(duration: 1.4), value: viewModel.ambientLeftTint)
     }
 }
 
