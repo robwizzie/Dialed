@@ -181,18 +181,21 @@ final class NowViewModel: ObservableObject {
     }
 
     private func weeklyAdherence(context: ModelContext) -> Double {
-        // Use last 7 days of DayLog routine completion as a proxy for
-        // adherence until the real Plan exists.
+        // Read from the real plan via AdherenceTracker. Falls back to the
+        // legacy DayLog checklist for users whose history predates Phase 3
+        // (no PlanBlocks yet) so we don't crater their Readiness on day 1.
+        if let planAdherence = AdherenceTracker.weeklyAdherence(context: context) {
+            return planAdherence
+        }
+        // Legacy fallback
         let calendar = Calendar.current
         guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return 0.7 }
-
         let desc = FetchDescriptor<DayLog>(
             predicate: #Predicate { $0.date >= weekAgo },
             sortBy: [SortDescriptor(\.date)]
         )
         let logs = (try? context.fetch(desc)) ?? []
         guard !logs.isEmpty else { return 0.7 }
-
         let totals = logs.reduce(into: (done: 0, total: 0)) { acc, log in
             for item in (log.checklistItems ?? []) {
                 acc.total += 1
