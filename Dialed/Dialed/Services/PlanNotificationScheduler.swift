@@ -48,8 +48,11 @@ enum PlanNotificationScheduler {
         guard settings.authorizationStatus == .authorized
             || settings.authorizationStatus == .provisional else { return }
 
-        // Cancel anything we previously scheduled for this plan.
-        cancelNotifications(planID: plan.id)
+        // Cancel anything we previously scheduled for this plan. MUST be
+        // awaited — the old fire-and-forget `Task { ... }` version raced
+        // with the subsequent `await scheduleStartAlert` loop and silently
+        // removed the just-added requests when the cancel resolved second.
+        await cancelNotifications(planID: plan.id)
 
         // Future blocks only — past blocks are noise.
         let now = Date()
@@ -79,35 +82,35 @@ enum PlanNotificationScheduler {
         center.removePendingNotificationRequests(withIdentifiers: prefixes)
     }
 
-    /// Cancel every notification we've scheduled for a given plan.
-    static func cancelNotifications(planID: UUID) {
+    /// Cancel every notification we've scheduled for a given plan. Must be
+    /// awaited so callers know the prior IDs are gone before adding new
+    /// ones — otherwise the cancel can resolve after the new add and
+    /// silently remove the requests we just installed.
+    static func cancelNotifications(planID: UUID) async {
         let center = UNUserNotificationCenter.current()
         let planSuffix = planID.uuidString
-        Task {
-            let pending = await center.pendingNotificationRequests()
-            let ids = pending
-                .map { $0.identifier }
-                .filter {
-                    ($0.hasPrefix(mainPrefix) ||
-                     $0.hasPrefix(prePrefix) ||
-                     $0.hasPrefix(snoozePrefix))
-                    && $0.contains(planSuffix)
-                }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
-        }
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending
+            .map { $0.identifier }
+            .filter {
+                ($0.hasPrefix(mainPrefix) ||
+                 $0.hasPrefix(prePrefix) ||
+                 $0.hasPrefix(snoozePrefix))
+                && $0.contains(planSuffix)
+            }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Wipe the entire legacy ChecklistItem notification surface so we don't
-    /// fire duplicates alongside the new plan-based system.
-    static func cancelLegacyChecklistNotifications() {
+    /// fire duplicates alongside the new plan-based system. Async so callers
+    /// can await it before scheduling new plan-based requests.
+    static func cancelLegacyChecklistNotifications() async {
         let center = UNUserNotificationCenter.current()
-        Task {
-            let pending = await center.pendingNotificationRequests()
-            let ids = pending
-                .map { $0.identifier }
-                .filter { $0.hasPrefix("task_reminder_") }
-            center.removePendingNotificationRequests(withIdentifiers: ids)
-        }
+        let pending = await center.pendingNotificationRequests()
+        let ids = pending
+            .map { $0.identifier }
+            .filter { $0.hasPrefix("task_reminder_") }
+        center.removePendingNotificationRequests(withIdentifiers: ids)
     }
 
     /// Reschedule a single block's start alert in `minutes` minutes. Used by

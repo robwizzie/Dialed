@@ -88,7 +88,14 @@ final class PillarTrendsViewModel: ObservableObject {
             to: days.last ?? today,
             context: context
         )
-        let byDate = Dictionary(uniqueKeysWithValues: snapshots.map { ($0.logicalDate, $0) })
+        // uniquingKeysWith — the .unique constraint on logicalDate should
+        // prevent duplicates, but a concurrent-write race window can
+        // briefly produce two in-memory rows for the same day. Pick the
+        // newer one (last writer wins) rather than trapping.
+        let byDate = Dictionary(
+            snapshots.map { ($0.logicalDate, $0) },
+            uniquingKeysWith: { $0.computedAt > $1.computedAt ? $0 : $1 }
+        )
 
         var recovery: [DailyPoint] = []
         var readiness: [DailyPoint] = []

@@ -171,13 +171,29 @@ final class NowViewModel: ObservableObject {
             activeMG = StateEngine.activeCaffeine(doseMG: mg, dosedAt: caf.timestamp, now: now)
         }
 
+        // Anchor "minutes since workout" to when the workout ENDED, not
+        // when it was logged. Workout events store duration in `value`
+        // (minutes), so the actual end is timestamp + value.
+        let workoutEnd: Date? = lastWorkout.map { event in
+            let durationMin = event.value ?? 0
+            return event.timestamp.addingTimeInterval(durationMin * 60)
+        }
+
         return StateEngine.EnergyContext(
             minutesSinceCaffeine: lastCaffeine.map { minutesSince($0.timestamp) },
             activeCaffeineMG: activeMG,
             minutesSinceMeal: lastMeal.map { minutesSince($0.timestamp) },
-            minutesSinceWorkout: lastWorkout.map { minutesSince($0.timestamp) },
-            selfReported: lastEnergyRating.flatMap { $0.value.map(Int.init) }
+            minutesSinceWorkout: workoutEnd.map { minutesSince($0) },
+            selfReported: clampedSelfEnergy(from: lastEnergyRating)
         )
+    }
+
+    /// Voice + manual paths clamp 1–5, but a migrated or buggy event
+    /// could have a `value` outside that range or NaN/Infinity. Guard
+    /// against the `Int(NaN)` trap.
+    private func clampedSelfEnergy(from event: ContextEvent?) -> Int? {
+        guard let value = event?.value, value.isFinite else { return nil }
+        return max(1, min(5, Int(value.rounded())))
     }
 
     private func weeklyAdherence(context: ModelContext) -> Double {

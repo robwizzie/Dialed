@@ -40,7 +40,13 @@ enum InsightEngine {
             sortBy: [SortDescriptor(\.date, order: .reverse)]
         )))?.first
 
-        // Clear stale annotations (this engine is the only writer for now).
+        // Capture which events had an annotation BEFORE we clear, so we
+        // know whether the clear itself produced a meaningful change. The
+        // engine is currently the only writer of aiAnnotation, so any
+        // pre-existing annotation came from a prior pass — clearing it
+        // when no rule rewrites it is the "stale annotation cleanup"
+        // behavior we promise.
+        let hadAnnotation = events.contains { $0.aiAnnotation != nil }
         for event in events { event.aiAnnotation = nil }
 
         let rules: [InsightRule] = [
@@ -62,7 +68,9 @@ enum InsightEngine {
             }
         }
 
-        if written > 0 {
+        // Save when we wrote something OR when we cleared a stale set
+        // (otherwise the cleared-to-nil state lives only in memory).
+        if written > 0 || hadAnnotation {
             try? context.save()
         }
     }

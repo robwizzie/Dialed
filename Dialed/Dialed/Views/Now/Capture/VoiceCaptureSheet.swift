@@ -297,6 +297,15 @@ final class VoiceRecorder: ObservableObject {
             try audioEngine.start()
         } catch {
             errorMessage = "Couldn't start recording."
+            // Tear down everything we set up above so we don't leave the
+            // audio session active or the tap installed for the next try.
+            input.removeTap(onBus: 0)
+            self.request = nil
+            #if os(iOS)
+            try? AVAudioSession.sharedInstance().setActive(
+                false, options: .notifyOthersOnDeactivation
+            )
+            #endif
             return
         }
 
@@ -327,6 +336,13 @@ final class VoiceRecorder: ObservableObject {
         request = nil
         task = nil
         isRecording = false
+        // Release the audio session so music / podcasts / nav don't stay
+        // ducked after the sheet dismisses.
+        #if os(iOS)
+        try? AVAudioSession.sharedInstance().setActive(
+            false, options: .notifyOthersOnDeactivation
+        )
+        #endif
     }
 }
 
