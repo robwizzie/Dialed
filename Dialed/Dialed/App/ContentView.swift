@@ -39,7 +39,7 @@ struct MainTabView: View {
                     Label("Calendar", systemImage: "calendar")
                 }
 
-            TrendsView()
+            PillarTrendsView()
                 .tabItem {
                     Label("Trends", systemImage: "chart.line.uptrend.xyaxis")
                 }
