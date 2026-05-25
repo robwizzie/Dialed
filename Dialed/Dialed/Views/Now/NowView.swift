@@ -9,7 +9,8 @@
 //    2. Four-ring grid (Recovery / Readiness / Energy / Strain)
 //    3. Now/Next strip — current and upcoming plan blocks
 //    4. Quick-add bar — water / meal / mood / note
-//    5. "Today's tracking" entry to the legacy screen (water/protein/checklist)
+//    5. Timeline entry card — push into the full day timeline
+//    6. "Today's tracking" entry to the legacy screen (water/protein/checklist)
 //
 //  Visual language: Oura's typographic discipline, Apple Fitness's ring depth,
 //  Luna's dark-glass cards, Whoop's color science for the state pillars.
@@ -42,6 +43,7 @@ struct NowView: View {
                             )
                         }
                         QuickAddBar(onTap: { presentedQuickAdd = $0 })
+                        timelineEntryCard
                         legacyTrackingCard
                     }
                     .padding(.horizontal, 18)
@@ -64,9 +66,16 @@ struct NowView: View {
             .task { await viewModel.refresh(context: modelContext) }
             .refreshable { await viewModel.refresh(context: modelContext) }
             .sheet(item: $presentedQuickAdd) { action in
-                QuickAddSheet(action: action)
-                    .presentationDetents([.medium, .large])
-                    .presentationBackground(.regularMaterial)
+                Group {
+                    switch action {
+                    case .water: WaterCaptureSheet()
+                    case .meal:  MealCaptureSheet()
+                    case .mood:  MoodCaptureSheet()
+                    case .note:  NoteCaptureSheet()
+                    }
+                }
+                .presentationDetents([.medium, .large])
+                .presentationBackground(.regularMaterial)
             }
         }
     }
@@ -118,6 +127,56 @@ struct NowView: View {
                         .stroke(AppColors.glassStroke, lineWidth: 0.5)
                 )
         )
+    }
+
+    // MARK: - Timeline entry card
+
+    /// Push to the new Timeline view from the home tab. Lives above the
+    /// legacy tracking card because in 2.0 the Timeline is the primary lens
+    /// on a day, not the checklist.
+    private var timelineEntryCard: some View {
+        NavigationLink {
+            TimelineView()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: AppColors.Pillar.recovery.gradient,
+                            startPoint: .top, endPoint: .bottom
+                        )
+                    )
+                    .frame(width: 40, height: 40)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(AppColors.Pillar.recovery.gradient.first!.opacity(0.14))
+                    )
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Today's timeline")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                    Text("Everything you've logged today")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.55))
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(AppColors.glassStroke, lineWidth: 0.6)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Legacy tracking card
@@ -195,68 +254,6 @@ struct NowView: View {
         }
         .ignoresSafeArea()
         .allowsHitTesting(false)
-    }
-}
-
-// MARK: - Quick-add sheet (placeholder body, real capture lands in Phase 4)
-
-private struct QuickAddSheet: View {
-    let action: QuickAddBar.Action
-
-    var body: some View {
-        VStack(spacing: 14) {
-            Capsule()
-                .fill(.white.opacity(0.15))
-                .frame(width: 38, height: 4)
-                .padding(.top, 10)
-
-            Image(systemName: icon)
-                .font(.system(size: 36, weight: .semibold))
-                .foregroundStyle(
-                    LinearGradient(colors: gradient, startPoint: .top, endPoint: .bottom)
-                )
-                .padding(.top, 24)
-
-            Text(title)
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
-
-            Text("Quick capture lands in Phase 4 (Timeline + voice).")
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.6))
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-
-            Spacer()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var icon: String {
-        switch action {
-        case .water: return "drop.fill"
-        case .meal:  return "fork.knife"
-        case .mood:  return "face.smiling.fill"
-        case .note:  return "square.and.pencil"
-        }
-    }
-
-    private var title: String {
-        switch action {
-        case .water: return "Log water"
-        case .meal:  return "Log a meal"
-        case .mood:  return "How are you feeling?"
-        case .note:  return "Add a note"
-        }
-    }
-
-    private var gradient: [Color] {
-        switch action {
-        case .water: return AppColors.Pillar.readiness.gradient
-        case .meal:  return AppColors.Pillar.energy.gradient
-        case .mood:  return AppColors.Pillar.recovery.gradient
-        case .note:  return AppColors.Pillar.strain.gradient
-        }
     }
 }
 
