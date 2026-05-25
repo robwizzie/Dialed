@@ -198,8 +198,12 @@ enum PlanGenerator {
         // Persist yesterday's score snapshot — by the time the next day's
         // plan is generated, the prior day's biometric + sleep data has
         // settled, so the snapshot we write now is the final word on it.
+        // Then run the insight pass on yesterday's events: at this point
+        // the night between yesterday and today is also in, so rules that
+        // need to see "next night's sleep" have what they need.
         if let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: date) {
             DailyScoreSnapshotter.snapshot(for: yesterday, context: context)
+            InsightEngine.runDailyPass(for: yesterday, context: context)
         }
 
         return plan
