@@ -50,7 +50,10 @@ struct PlanView: View {
                     }
                 }
             }
-            .task { await viewModel.refresh(context: modelContext) }
+            .task {
+                viewModel.observeNotificationActions(context: modelContext)
+                await viewModel.refresh(context: modelContext)
+            }
             .refreshable { await viewModel.refresh(context: modelContext) }
         }
     }

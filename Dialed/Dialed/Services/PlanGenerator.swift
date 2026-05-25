@@ -189,6 +189,12 @@ enum PlanGenerator {
             context.delete(orphan)
         }
 
+        // Refresh notifications off the new plan state. Also wipes the
+        // legacy ChecklistItem cron reminders the first time we run — the
+        // plan is the source of truth now.
+        PlanNotificationScheduler.cancelLegacyChecklistNotifications()
+        Task { await PlanNotificationScheduler.scheduleNotifications(for: plan) }
+
         return plan
     }
 
