@@ -45,7 +45,9 @@ enum AdherenceTracker {
         now: Date = Date()
     ) -> Summary {
         let cal = Calendar.current
-        let end = cal.startOfDay(for: endDay)
+        // Anchor on logical end-of-day so adherence counts the right week
+        // when the user opens the app between midnight and 4 AM.
+        let end = cal.logicalStartOfDay(for: endDay)
         guard let start = cal.date(byAdding: .day, value: -(days - 1), to: end) else {
             return Summary(done: 0, skipped: 0, ignored: 0, pending: 0)
         }

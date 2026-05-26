@@ -95,7 +95,13 @@ final class NowViewModel: ObservableObject {
         // write if a fresh row exists (computed in the last minute) — guards
         // against the rapid-fire refreshes that happen when the user pulls
         // to refresh repeatedly.
-        DailyScoreSnapshotter.snapshot(for: now, context: context, force: false)
+        // Pass the logical day so the snapshot lands on the right row when
+        // we're between midnight and the 4 AM cutoff.
+        DailyScoreSnapshotter.snapshot(
+            for: Calendar.current.logicalStartOfDay(for: now),
+            context: context,
+            force: false
+        )
 
         // 5. Plan strip — synthesize from ChecklistItems until Phase 3.
         refreshPlanStrip(context: context, now: now)
@@ -152,7 +158,10 @@ final class NowViewModel: ObservableObject {
     }
 
     private func buildEnergyContext(context: ModelContext, now: Date) -> StateEngine.EnergyContext {
-        let today = Calendar.current.startOfDay(for: now)
+        // logicalStartOfDay applies the 4 AM cutoff, matching how
+        // ContextEvent.logicalDate is stored. Without this, queries between
+        // midnight and 4 AM miss events the user just logged.
+        let today = Calendar.current.logicalStartOfDay(for: now)
         let desc = FetchDescriptor<ContextEvent>(
             predicate: #Predicate { $0.logicalDate == today },
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
@@ -237,7 +246,10 @@ final class NowViewModel: ObservableObject {
     }
 
     private func todayDailyPlan(context: ModelContext) -> DailyPlan? {
-        let dayStart = Calendar.current.startOfDay(for: Date())
+        // Plans are keyed by calendar startOfDay, but at 1 AM the user is
+        // still in yesterday's "app day" — match the lookup to the same
+        // logical day everything else is using.
+        let dayStart = Calendar.current.logicalStartOfDay(for: Date())
         let desc = FetchDescriptor<DailyPlan>(
             predicate: #Predicate { $0.date == dayStart }
         )

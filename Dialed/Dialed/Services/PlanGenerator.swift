@@ -144,10 +144,20 @@ enum PlanGenerator {
         }
 
         let resolved = resolveBlocks(inputs)
-        var existing = (plan.blocks ?? [])
-            .reduce(into: [UUID: PlanBlock]()) { acc, b in
-                if let src = b.sourceTemplateBlockID { acc[src] = b }
+        // Build sourceTemplateBlockID → PlanBlock lookup. Guard against
+        // accidental dups (data corruption): keep the first occurrence
+        // and delete the rest so they can't become orphans.
+        var existing: [UUID: PlanBlock] = [:]
+        for b in plan.blocks ?? [] {
+            guard let src = b.sourceTemplateBlockID else { continue }
+            if existing[src] == nil {
+                existing[src] = b
+            } else {
+                // Duplicate — delete it instead of letting it linger as
+                // an unreachable orphan.
+                context.delete(b)
             }
+        }
 
         for r in resolved {
             let block = existing.removeValue(forKey: r.templateBlock.id)
@@ -201,6 +211,13 @@ enum PlanGenerator {
         for orphan in existing.values where !orphan.userEdited {
             context.delete(orphan)
         }
+
+        // Save BEFORE scheduling notifications so the scheduler can't
+        // produce alerts that reference blocks which never persisted (if
+        // a later save throws / the app dies). Callers used to save
+        // afterward — that left a window where userInfo carried an
+        // in-memory UUID that no longer existed.
+        try context.save()
 
         // Refresh notifications off the new plan state. Also wipes the
         // legacy ChecklistItem cron reminders the first time we run — the

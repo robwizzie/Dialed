@@ -73,7 +73,10 @@ final class PillarTrendsViewModel: ObservableObject {
 
     func load(context: ModelContext) {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
+        // Use the logical "today" so the chart includes whatever the user
+        // logged after midnight but before the 4 AM cutoff under the right
+        // day instead of a phantom blank tomorrow.
+        let today = cal.logicalStartOfDay(for: Date())
         let days = (0..<window.days).compactMap {
             cal.date(byAdding: .day, value: -$0, to: today)
         }.reversed().map { $0 }  // oldest → newest

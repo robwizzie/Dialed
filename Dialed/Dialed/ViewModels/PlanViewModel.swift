@@ -16,7 +16,7 @@ final class PlanViewModel: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var selectedDate: Date = Calendar.current.startOfDay(for: Date())
+    @Published var selectedDate: Date = Calendar.current.logicalStartOfDay(for: Date())
     @Published var weekDays: [Date] = []
     @Published var groupedBlocks: [DayPeriodGroup] = []
 
@@ -331,8 +331,19 @@ final class PlanViewModel: ObservableObject {
             readinessScore: readiness.score
         )
 
-        _ = try? PlanGenerator.generatePlan(inputs: inputs, context: context)
-        try? context.save()
+        do {
+            // PlanGenerator now saves internally before scheduling
+            // notifications, so the trailing context.save() here is
+            // unnecessary.
+            _ = try PlanGenerator.generatePlan(inputs: inputs, context: context)
+        } catch {
+            // Worth knowing about — surfacing failures so today's plan
+            // never silently lands empty.
+            #if DEBUG
+            print("PlanGenerator.generatePlan failed for \(date): \(error)")
+            assertionFailure("Plan generation failed: \(error)")
+            #endif
+        }
     }
 
     private func rebuildDisplay(from plan: DailyPlan) {

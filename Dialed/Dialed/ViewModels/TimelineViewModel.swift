@@ -13,7 +13,10 @@ import SwiftData
 
 @MainActor
 final class TimelineViewModel: ObservableObject {
-    @Published var selectedDate: Date = Calendar.current.startOfDay(for: Date())
+    // Default to the LOGICAL "today" (4 AM cutoff) so events logged after
+    // midnight but before the cutoff appear under the right day on first
+    // launch.
+    @Published var selectedDate: Date = Calendar.current.logicalStartOfDay(for: Date())
     @Published private(set) var events: [ContextEvent] = []
 
     /// 7 days back, today, 1 day forward — gives the user a finger-strip to
@@ -21,7 +24,7 @@ final class TimelineViewModel: ObservableObject {
     /// and pinned regardless of where the strip lands.
     var dayStrip: [Date] {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
+        let today = cal.logicalStartOfDay(for: Date())
         return (-7...1).compactMap { offset in
             cal.date(byAdding: .day, value: offset, to: today)
         }
