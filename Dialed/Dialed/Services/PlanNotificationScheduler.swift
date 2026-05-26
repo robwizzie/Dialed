@@ -114,11 +114,15 @@ enum PlanNotificationScheduler {
     }
 
     /// Reschedule a single block's start alert in `minutes` minutes. Used by
-    /// the Snooze action. Idempotent — overwrites any prior snooze.
+    /// the Snooze action. Idempotent — overwrites any prior snooze AND
+    /// cancels the original main + pre-alert so the user doesn't get
+    /// double-hit when the snooze fires before the original would have.
     static func snooze(planID: UUID, block: PlanBlock, minutes: Int = 10) async {
         let center = UNUserNotificationCenter.current()
-        let identifier = "\(snoozePrefix)\(planID.uuidString)_\(block.id.uuidString)"
-        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        let mainID  = "\(mainPrefix)\(planID.uuidString)_\(block.id.uuidString)"
+        let preID   = "\(prePrefix)\(planID.uuidString)_\(block.id.uuidString)"
+        let snoozeID = "\(snoozePrefix)\(planID.uuidString)_\(block.id.uuidString)"
+        center.removePendingNotificationRequests(withIdentifiers: [mainID, preID, snoozeID])
 
         let content = makeContent(for: block, title: "Snoozed reminder")
         let trigger = UNTimeIntervalNotificationTrigger(
@@ -126,7 +130,7 @@ enum PlanNotificationScheduler {
             repeats: false
         )
         let request = UNNotificationRequest(
-            identifier: identifier, content: content, trigger: trigger
+            identifier: snoozeID, content: content, trigger: trigger
         )
         try? await center.add(request)
     }

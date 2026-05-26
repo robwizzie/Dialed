@@ -95,10 +95,12 @@ enum DailyScoreSnapshotter {
     }
 
     /// Backfill snapshots for the trailing `days` days. Safe to call on
-    /// app launch — skips days that already have a snapshot.
+    /// app launch — skips days that already have a snapshot. Anchors on
+    /// the logical "today" so we don't backfill a future-today row
+    /// between midnight and 4 AM.
     static func backfill(days: Int, context: ModelContext) {
         let cal = Calendar.current
-        let today = cal.startOfDay(for: Date())
+        let today = cal.logicalStartOfDay(for: Date())
         for offset in 0..<days {
             guard let day = cal.date(byAdding: .day, value: -offset, to: today) else { continue }
             if fetch(logicalDate: day, context: context) == nil {
