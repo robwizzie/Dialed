@@ -60,6 +60,36 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             // User tapped "Take Photo" after workout
             handleTakePhoto()
 
+        // Dialed 2.0 — plan block actions. We post to NotificationCenter
+        // so the view model can resolve the block by ID inside its own
+        // ModelContext (the app delegate has none of its own).
+        case "PLAN_DONE":
+            if let blockID = userInfo["planBlockID"] as? String {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("PlanBlockMarkDone"),
+                    object: nil,
+                    userInfo: ["planBlockID": blockID]
+                )
+            }
+
+        case "PLAN_SNOOZE":
+            if let blockID = userInfo["planBlockID"] as? String {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("PlanBlockSnooze"),
+                    object: nil,
+                    userInfo: ["planBlockID": blockID]
+                )
+            }
+
+        case "PLAN_SKIP":
+            if let blockID = userInfo["planBlockID"] as? String {
+                NotificationCenter.default.post(
+                    name: NSNotification.Name("PlanBlockSkip"),
+                    object: nil,
+                    userInfo: ["planBlockID": blockID]
+                )
+            }
+
         case UNNotificationDefaultActionIdentifier:
             // User tapped notification (not an action button)
             handleNotificationTap(notification: response.notification)
@@ -134,6 +164,13 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             // Navigate to History view
             NotificationCenter.default.post(
                 name: NSNotification.Name("NavigateToHistory"),
+                object: nil
+            )
+
+        case PlanNotificationScheduler.categoryID:
+            // Dialed 2.0 — open the Plan tab
+            NotificationCenter.default.post(
+                name: NSNotification.Name("NavigateToPlan"),
                 object: nil
             )
 

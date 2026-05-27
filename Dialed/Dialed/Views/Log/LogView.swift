@@ -33,7 +33,7 @@ struct LogView: View {
     }
     
     init() {
-        let container = try! ModelContainer(for: DayLog.self, FoodEntry.self, WorkoutLog.self, WorkoutExercise.self, WorkoutSet.self, WorkoutPhoto.self, ChecklistItem.self, CustomWorkoutType.self, WorkoutTemplate.self, TemplateExercise.self, TemplateSet.self)
+        let container = try! DialedSchema.makeContainer()
         _viewModel = StateObject(wrappedValue: LogViewModel(modelContext: container.mainContext))
     }
     

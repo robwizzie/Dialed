@@ -1,0 +1,440 @@
+//
+//  NowViewModel.swift
+//  Dialed
+//
+//  Drives the NowView. Reads PersonalBaseline + latest SleepSession +
+//  latest BiometricSnapshot + today's ContextEvents, runs them through
+//  StateEngine, and synthesizes plan blocks from the legacy ChecklistItem
+//  schedule until Phase 3's real planner replaces this.
+//
+
+import Foundation
+import SwiftData
+import SwiftUI
+
+@MainActor
+final class NowViewModel: ObservableObject {
+
+    // MARK: - Published state
+
+    @Published var recovery: StateEngine.ScoreBreakdown = .empty
+    @Published var readiness: StateEngine.ScoreBreakdown = .empty
+    @Published var energy: StateEngine.ScoreBreakdown = .empty
+    @Published var strain: StateEngine.ScoreBreakdown = .empty
+
+    @Published var nowBlock: PlanBlockPresentation?
+    @Published var upcomingBlocks: [PlanBlockPresentation] = []
+
+    @Published var greeting: String = "Hello"
+    @Published var headerDateLine: String = ""
+
+    /// Tint used by NowView's ambient background. Shifts through the day so
+    /// the screen feels alive even without data updates.
+    @Published var ambientLeftTint: Color = AppColors.Pillar.readiness.gradient.first!.opacity(0.55)
+    @Published var ambientRightTint: Color = AppColors.Pillar.recovery.gradient.last!.opacity(0.45)
+
+    // MARK: - Refresh
+
+    func refresh(context: ModelContext) async {
+        let now = Date()
+        refreshHeader(now: now)
+        refreshAmbient(now: now, dominantPillar: nil)
+
+        // 1. Load the baseline, latest sleep, latest biometric.
+        let baseline = latestBaseline(context: context)
+        let lastSleep = latestSleep(context: context)
+        let latestBio = latestBiometric(context: context)
+
+        // 2. Today's load — pull from legacy DayLog so we don't depend on
+        //    Phase 3 plumbing yet.
+        let dayLog = todayLog(context: context)
+        let dayLoad = StateEngine.DayLoadInputs(
+            steps: dayLog?.steps ?? 0,
+            activeCalories: dayLog?.activeEnergyBurned ?? 0,
+            exerciseMinutes: dayLog?.exerciseMinutes ?? 0,
+            workoutDurationMinutes: dayLog?.workoutDurationMinutes ?? 0,
+            workoutIntensity: nil
+        )
+
+        // 3. Energy context — pull caffeine / meal / workout timing from
+        //    today's ContextEvents.
+        let energyCtx = buildEnergyContext(context: context, now: now)
+
+        // 4. Run the engine.
+        let inputs = StateEngine.LiveInputs(
+            now: now,
+            baseline: StateEngine.BaselineInputs.from(baseline),
+            lastSleep: StateEngine.SleepInputs.from(lastSleep),
+            latestBiometric: StateEngine.BiometricInputs.from(latestBio),
+            dayLoad: dayLoad,
+            energyContext: energyCtx
+        )
+
+        let recoveryResult = StateEngine.recovery(inputs)
+        let strainResult = StateEngine.strain(inputs)
+        let readinessResult = StateEngine.readiness(
+            inputs,
+            recoveryScore: recoveryResult.score,
+            weeklyAdherence: weeklyAdherence(context: context),
+            recentStrain: strainResult.score
+        )
+        let energyResult = StateEngine.energy(inputs, recoveryScore: recoveryResult.score)
+
+        self.recovery = recoveryResult
+        self.readiness = readinessResult
+        self.energy = energyResult
+        self.strain = strainResult
+
+        // Re-tint ambient now that we have actual pillar scores. Dominant
+        // pillar wins when it's at least 12 pts above the others' average;
+        // otherwise the time-of-day default rules.
+        refreshAmbient(now: now, dominantPillar: dominantPillar())
+
+        // Persist today's snapshot so Trends loads instantly and tomorrow's
+        // recentStrain calc has something to read. force:false skips the
+        // write if a fresh row exists (computed in the last minute) — guards
+        // against the rapid-fire refreshes that happen when the user pulls
+        // to refresh repeatedly.
+        // Pass the logical day so the snapshot lands on the right row when
+        // we're between midnight and the 4 AM cutoff.
+        DailyScoreSnapshotter.snapshot(
+            for: Calendar.current.logicalStartOfDay(for: now),
+            context: context,
+            force: false
+        )
+
+        // 5. Plan strip — synthesize from ChecklistItems until Phase 3.
+        refreshPlanStrip(context: context, now: now)
+    }
+
+    /// Pillar with score most distinct from the others; nil if scores are
+    /// flat enough that nothing dominates.
+    private func dominantPillar() -> AppColors.Pillar? {
+        let candidates: [(pillar: AppColors.Pillar, score: Int)] = [
+            (.recovery, recovery.score),
+            (.readiness, readiness.score),
+            (.energy, energy.score),
+            (.strain, strain.score)
+        ]
+        guard let top = candidates.max(by: { $0.score < $1.score }) else { return nil }
+        let others = candidates.filter { $0.pillar != top.pillar }
+        let avgOthers = Double(others.map { $0.score }.reduce(0, +)) / Double(others.count)
+        guard Double(top.score) - avgOthers >= 12 else { return nil }
+        return top.pillar
+    }
+
+    // MARK: - Data fetchers
+
+    private func latestBaseline(context: ModelContext) -> PersonalBaseline? {
+        var desc = FetchDescriptor<PersonalBaseline>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        desc.fetchLimit = 1
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func latestSleep(context: ModelContext) -> SleepSession? {
+        var desc = FetchDescriptor<SleepSession>(
+            sortBy: [SortDescriptor(\.endTime, order: .reverse)]
+        )
+        desc.fetchLimit = 1
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func latestBiometric(context: ModelContext) -> BiometricSnapshot? {
+        var desc = FetchDescriptor<BiometricSnapshot>(
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        desc.fetchLimit = 1
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func todayLog(context: ModelContext) -> DayLog? {
+        let today = Calendar.current.startOfDay(for: Date())
+        let desc = FetchDescriptor<DayLog>(
+            predicate: #Predicate { $0.date == today }
+        )
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func buildEnergyContext(context: ModelContext, now: Date) -> StateEngine.EnergyContext {
+        // logicalStartOfDay applies the 4 AM cutoff, matching how
+        // ContextEvent.logicalDate is stored. Without this, queries between
+        // midnight and 4 AM miss events the user just logged.
+        let today = Calendar.current.logicalStartOfDay(for: now)
+        let desc = FetchDescriptor<ContextEvent>(
+            predicate: #Predicate { $0.logicalDate == today },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
+        let events = (try? context.fetch(desc)) ?? []
+
+        let lastCaffeine = events.first { $0.kindRaw == ContextEvent.Kind.caffeine.rawValue }
+        let lastMeal = events.first { $0.kindRaw == ContextEvent.Kind.meal.rawValue }
+        let lastWorkout = events.first { $0.kindRaw == ContextEvent.Kind.workout.rawValue }
+        let lastEnergyRating = events.first { $0.kindRaw == ContextEvent.Kind.energy.rawValue }
+
+        let minutesSince: (Date) -> Int = { Int(now.timeIntervalSince($0) / 60) }
+
+        var activeMG: Double? = nil
+        if let caf = lastCaffeine, let mg = caf.value {
+            activeMG = StateEngine.activeCaffeine(doseMG: mg, dosedAt: caf.timestamp, now: now)
+        }
+
+        // Anchor "minutes since workout" to when the workout ENDED, not
+        // when it was logged. Workout events store duration in `value`
+        // (minutes), so the actual end is timestamp + value.
+        let workoutEnd: Date? = lastWorkout.map { event in
+            let durationMin = event.value ?? 0
+            return event.timestamp.addingTimeInterval(durationMin * 60)
+        }
+
+        return StateEngine.EnergyContext(
+            minutesSinceCaffeine: lastCaffeine.map { minutesSince($0.timestamp) },
+            activeCaffeineMG: activeMG,
+            minutesSinceMeal: lastMeal.map { minutesSince($0.timestamp) },
+            minutesSinceWorkout: workoutEnd.map { minutesSince($0) },
+            selfReported: clampedSelfEnergy(from: lastEnergyRating)
+        )
+    }
+
+    /// Voice + manual paths clamp 1–5, but a migrated or buggy event
+    /// could have a `value` outside that range or NaN/Infinity. Guard
+    /// against the `Int(NaN)` trap.
+    private func clampedSelfEnergy(from event: ContextEvent?) -> Int? {
+        guard let value = event?.value, value.isFinite else { return nil }
+        return max(1, min(5, Int(value.rounded())))
+    }
+
+    private func weeklyAdherence(context: ModelContext) -> Double {
+        // Read from the real plan via AdherenceTracker. Falls back to the
+        // legacy DayLog checklist for users whose history predates Phase 3
+        // (no PlanBlocks yet) so we don't crater their Readiness on day 1.
+        if let planAdherence = AdherenceTracker.weeklyAdherence(context: context) {
+            return planAdherence
+        }
+        // Legacy fallback
+        let calendar = Calendar.current
+        guard let weekAgo = calendar.date(byAdding: .day, value: -7, to: Date()) else { return 0.7 }
+        let desc = FetchDescriptor<DayLog>(
+            predicate: #Predicate { $0.date >= weekAgo },
+            sortBy: [SortDescriptor(\.date)]
+        )
+        let logs = (try? context.fetch(desc)) ?? []
+        guard !logs.isEmpty else { return 0.7 }
+        let totals = logs.reduce(into: (done: 0, total: 0)) { acc, log in
+            for item in (log.checklistItems ?? []) {
+                acc.total += 1
+                if item.checklistStatus == .done { acc.done += 1 }
+            }
+        }
+        guard totals.total > 0 else { return 0.7 }
+        return Double(totals.done) / Double(totals.total)
+    }
+
+    // MARK: - Plan strip synthesis
+
+    /// Builds the Now/Next strip. Prefers real PlanBlocks from today's
+    /// DailyPlan; falls back to the legacy ChecklistItem schedule when no
+    /// plan exists yet (e.g. a user who hasn't opened the Plan tab once).
+    private func refreshPlanStrip(context: ModelContext, now: Date) {
+        if let plan = todayDailyPlan(context: context),
+           let blocks = plan.blocks, !blocks.isEmpty {
+            refreshFromDailyPlan(blocks: blocks, now: now)
+            return
+        }
+        refreshFromLegacyChecklist(context: context, now: now)
+    }
+
+    private func todayDailyPlan(context: ModelContext) -> DailyPlan? {
+        // Plans are keyed by calendar startOfDay, but at 1 AM the user is
+        // still in yesterday's "app day" — match the lookup to the same
+        // logical day everything else is using.
+        let dayStart = Calendar.current.logicalStartOfDay(for: Date())
+        let desc = FetchDescriptor<DailyPlan>(
+            predicate: #Predicate { $0.date == dayStart }
+        )
+        return (try? context.fetch(desc))?.first
+    }
+
+    private func refreshFromDailyPlan(blocks: [PlanBlock], now: Date) {
+        let sorted = blocks.sorted { $0.startTime < $1.startTime }
+
+        // "Current" block: prefer an active duration block; otherwise the
+        // most recent past block within the last 90 minutes.
+        let activeBlock = sorted.first { $0.liveStatus(now: now) == .active }
+        let lastPast = sorted.last {
+            $0.startTime <= now &&
+            now.timeIntervalSince($0.startTime) < 90 * 60 &&
+            $0.status != .skipped
+        }
+        let currentSource = activeBlock ?? lastPast
+
+        self.nowBlock = currentSource.map { block in
+            PlanBlockPresentation(
+                id: block.id,
+                title: block.title,
+                subtitle: block.blockDescription,
+                time: block.startTime,
+                durationMinutes: block.durationMinutes > 0 ? block.durationMinutes : 30,
+                icon: block.kind.defaultIcon,
+                accent: block.kind.defaultPillar.gradient,
+                isCurrent: true
+            )
+        }
+
+        let upcoming = sorted
+            .filter { $0.startTime > now && $0.status != .skipped && $0.status != .done }
+            .prefix(3)
+
+        self.upcomingBlocks = upcoming.map { block in
+            PlanBlockPresentation(
+                id: block.id,
+                title: block.title,
+                subtitle: block.blockDescription,
+                time: block.startTime,
+                durationMinutes: block.durationMinutes,
+                icon: block.kind.defaultIcon,
+                accent: block.kind.defaultPillar.gradient
+            )
+        }
+    }
+
+    private func refreshFromLegacyChecklist(context: ModelContext, now: Date) {
+        let today = Calendar.current.startOfDay(for: now)
+        guard let log = todayLog(context: context) else {
+            self.nowBlock = nil
+            self.upcomingBlocks = []
+            return
+        }
+
+        let items = (log.checklistItems ?? [])
+        let blocks: [PlanBlockPresentation] = items.compactMap { item in
+            guard let time = Calendar.current.date(
+                bySettingHour: item.scheduledHour,
+                minute: item.scheduledMinute,
+                second: 0,
+                of: today
+            ) else { return nil }
+
+            let pillar = pillarForChecklist(type: item.type, title: item.displayTitle)
+            return PlanBlockPresentation(
+                id: item.id,
+                title: item.displayTitle,
+                subtitle: item.displayDescription,
+                time: time,
+                icon: iconForChecklist(type: item.type, title: item.displayTitle),
+                accent: pillar.gradient,
+                isCurrent: false
+            )
+        }
+        .sorted { $0.time < $1.time }
+
+        let past = blocks.filter { $0.time <= now }
+        let future = blocks.filter { $0.time > now }
+
+        self.nowBlock = past.last.map {
+            PlanBlockPresentation(
+                id: $0.id,
+                title: $0.title,
+                subtitle: $0.subtitle,
+                time: $0.time,
+                durationMinutes: 30,
+                icon: $0.icon,
+                accent: $0.accent,
+                isCurrent: true
+            )
+        }
+        self.upcomingBlocks = Array(future.prefix(3))
+    }
+
+    private func pillarForChecklist(type: String, title: String) -> AppColors.Pillar {
+        let t = title.lowercased()
+        if t.contains("workout") || t.contains("creatine") { return .strain }
+        if t.contains("sleep") || t.contains("skincare") || t.contains("wind") { return .recovery }
+        if t.contains("vitamin") || t.contains("supplement") || t.contains("lunch") || t.contains("meal") { return .energy }
+        return .readiness
+    }
+
+    private func iconForChecklist(type: String, title: String) -> String {
+        let t = title.lowercased()
+        if t.contains("workout") { return "figure.strengthtraining.traditional" }
+        if t.contains("creatine") || t.contains("supplement") { return "pills.fill" }
+        if t.contains("vitamin") { return "pill.fill" }
+        if t.contains("am") || t.contains("morning") { return "sun.max.fill" }
+        if t.contains("pm") || t.contains("night") || t.contains("wind") { return "moon.stars.fill" }
+        if t.contains("water") { return "drop.fill" }
+        if t.contains("meal") || t.contains("lunch") || t.contains("dinner") { return "fork.knife" }
+        return "checkmark.circle.fill"
+    }
+
+    // MARK: - Header / ambient
+
+    private func refreshHeader(now: Date) {
+        let hour = Calendar.current.component(.hour, from: now)
+        let greetingWord: String
+        switch hour {
+        case 5..<12:  greetingWord = "Good morning"
+        case 12..<17: greetingWord = "Good afternoon"
+        case 17..<22: greetingWord = "Good evening"
+        default:      greetingWord = "Up late?"
+        }
+        // First name only — pull from settings if present, otherwise neutral.
+        let userName = UserSettings.load().firstName
+        self.greeting = userName.isEmpty ? greetingWord : "\(greetingWord), \(userName)"
+
+        let df = DateFormatter()
+        df.dateFormat = "EEEE • MMM d"
+        self.headerDateLine = df.string(from: now)
+    }
+
+    private func refreshAmbient(now: Date, dominantPillar: AppColors.Pillar?) {
+        // When a pillar dominates, let it paint the ambient tint — gives
+        // the home screen a visual mood that matches what the user's body
+        // is actually saying (red glow on a high-strain day, cool blue
+        // glow when recovered, etc.). Falls back to time-of-day when no
+        // pillar is distinct.
+        if let pillar = dominantPillar {
+            ambientLeftTint = pillar.gradient.first!.opacity(0.55)
+            ambientRightTint = pillar.gradient.last!.opacity(0.4)
+            return
+        }
+        let hour = Calendar.current.component(.hour, from: now)
+        switch hour {
+        case 5..<11:
+            ambientLeftTint = AppColors.Pillar.energy.gradient.first!.opacity(0.55)
+            ambientRightTint = AppColors.Pillar.readiness.gradient.last!.opacity(0.45)
+        case 11..<17:
+            ambientLeftTint = AppColors.Pillar.readiness.gradient.first!.opacity(0.5)
+            ambientRightTint = AppColors.Pillar.energy.gradient.last!.opacity(0.4)
+        case 17..<21:
+            ambientLeftTint = AppColors.Pillar.strain.gradient.first!.opacity(0.4)
+            ambientRightTint = AppColors.Pillar.energy.gradient.last!.opacity(0.35)
+        default:
+            ambientLeftTint = AppColors.Pillar.recovery.gradient.first!.opacity(0.45)
+            ambientRightTint = AppColors.Pillar.readiness.gradient.last!.opacity(0.4)
+        }
+    }
+}
+
+// MARK: - Empty breakdown for first paint
+
+extension StateEngine.ScoreBreakdown {
+    static let empty = StateEngine.ScoreBreakdown(
+        score: 0,
+        grade: .poor,
+        contributions: [],
+        confidence: 0
+    )
+}
+
+// MARK: - UserSettings convenience
+
+private extension UserSettings {
+    /// First name pulled from optional profile fields — falls back to empty
+    /// so the greeting still reads cleanly.
+    var firstName: String {
+        // The legacy UserSettings doesn't have a first name field; we'll
+        // pull it from a UserDefaults string Phase 6 onboarding will set.
+        UserDefaults.standard.string(forKey: "user.firstName") ?? ""
+    }
+}
