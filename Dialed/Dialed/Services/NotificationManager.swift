@@ -83,6 +83,23 @@ class NotificationManager: ObservableObject {
             options: []
         )
 
+        // Dialed 2.0 — PlanBlock actions
+        let planDone = UNNotificationAction(
+            identifier: "PLAN_DONE",
+            title: "Mark done",
+            options: []
+        )
+        let planSnooze = UNNotificationAction(
+            identifier: "PLAN_SNOOZE",
+            title: "Snooze 10m",
+            options: []
+        )
+        let planSkip = UNNotificationAction(
+            identifier: "PLAN_SKIP",
+            title: "Skip",
+            options: [.destructive]
+        )
+
         let taskReminderCategory = UNNotificationCategory(
             identifier: NotificationCategory.taskReminder.rawValue,
             actions: [completeAction, snoozeAction],
@@ -97,9 +114,17 @@ class NotificationManager: ObservableObject {
             options: []
         )
 
+        let planBlockCategory = UNNotificationCategory(
+            identifier: PlanNotificationScheduler.categoryID,
+            actions: [planDone, planSnooze, planSkip],
+            intentIdentifiers: [],
+            options: []
+        )
+
         notificationCenter.setNotificationCategories([
             taskReminderCategory,
-            workoutPhotoCategory
+            workoutPhotoCategory,
+            planBlockCategory
         ])
     }
 

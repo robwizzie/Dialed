@@ -24,19 +24,7 @@ struct DialedApp: App {
         WindowGroup {
             SplashScreenView()
                 .environmentObject(appState)
-                .modelContainer(for: [
-                    DayLog.self,
-                    FoodEntry.self,
-                    WorkoutLog.self,
-                    WorkoutExercise.self,
-                    WorkoutSet.self,
-                    WorkoutPhoto.self,
-                    ChecklistItem.self,
-                    CustomWorkoutType.self,
-                    WorkoutTemplate.self,
-                    TemplateExercise.self,
-                    TemplateSet.self
-                ])
+                .modelContainer(for: DialedSchema.allModels)
         }
     }
 }
