@@ -54,7 +54,9 @@ class TodayViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.reloadSettings()
+            Task { @MainActor [weak self] in
+                self?.reloadSettings()
+            }
         }
     }
 

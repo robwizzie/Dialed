@@ -33,6 +33,11 @@ final class PlanViewModel: ObservableObject {
     /// when the view's .task fires more than once, and (b) clean up in deinit.
     private var observerTokens: [NSObjectProtocol] = []
 
+    /// Held so the @Sendable observer closures don't have to capture the
+    /// non-Sendable ModelContext directly — they hop to the main actor and
+    /// read it off self.
+    private var observedContext: ModelContext?
+
     deinit {
         let tokens = observerTokens
         for token in tokens {
@@ -112,6 +117,7 @@ final class PlanViewModel: ObservableObject {
     /// re-appear without stacking duplicate observers (which would fire
     /// markDone/snooze/skip N times per tap after N tab switches).
     func observeNotificationActions(context: ModelContext) {
+        observedContext = context
         guard observerTokens.isEmpty else { return }
         let center = NotificationCenter.default
 
@@ -120,11 +126,11 @@ final class PlanViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self,
-                  let idStr = note.userInfo?["planBlockID"] as? String,
+            guard let idStr = note.userInfo?["planBlockID"] as? String,
                   let id = UUID(uuidString: idStr) else { return }
-            Task { @MainActor in
-                await self.markDoneFromNotification(blockID: id, context: context)
+            Task { @MainActor [weak self] in
+                guard let self, let ctx = self.observedContext else { return }
+                await self.markDoneFromNotification(blockID: id, context: ctx)
             }
         }
 
@@ -133,11 +139,11 @@ final class PlanViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self,
-                  let idStr = note.userInfo?["planBlockID"] as? String,
+            guard let idStr = note.userInfo?["planBlockID"] as? String,
                   let id = UUID(uuidString: idStr) else { return }
-            Task { @MainActor in
-                await self.snoozeFromNotification(blockID: id, context: context)
+            Task { @MainActor [weak self] in
+                guard let self, let ctx = self.observedContext else { return }
+                await self.snoozeFromNotification(blockID: id, context: ctx)
             }
         }
 
@@ -146,11 +152,11 @@ final class PlanViewModel: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            guard let self,
-                  let idStr = note.userInfo?["planBlockID"] as? String,
+            guard let idStr = note.userInfo?["planBlockID"] as? String,
                   let id = UUID(uuidString: idStr) else { return }
-            Task { @MainActor in
-                await self.skipFromNotification(blockID: id, context: context)
+            Task { @MainActor [weak self] in
+                guard let self, let ctx = self.observedContext else { return }
+                await self.skipFromNotification(blockID: id, context: ctx)
             }
         }
 

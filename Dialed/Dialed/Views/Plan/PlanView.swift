@@ -103,7 +103,7 @@ struct PlanView: View {
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             #endif
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
+            _ = withAnimation(.spring(response: 0.32, dampingFraction: 0.8)) {
                 Task { await viewModel.select(date: date, context: modelContext) }
             }
         } label: {

@@ -231,7 +231,8 @@ final class FitbitAPIClient {
 
         let (data, response) = try await session.data(for: req)
         let http = response as? HTTPURLResponse
-        switch http?.statusCode {
+        let status = http?.statusCode ?? -1
+        switch status {
         case 200..<300:
             do {
                 return try decoder.decode(T.self, from: data)
@@ -253,7 +254,7 @@ final class FitbitAPIClient {
             return try decoder.decode(T.self, from: data2)
         default:
             let body = String(data: data, encoding: .utf8) ?? "<binary>"
-            throw APIError.httpStatus(http?.statusCode ?? -1, body)
+            throw APIError.httpStatus(status, body)
         }
     }
 }

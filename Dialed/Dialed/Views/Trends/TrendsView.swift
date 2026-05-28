@@ -176,7 +176,6 @@ struct TrendsView: View {
             // Chart
             GeometryReader { geometry in
                 let maxScore = 100.0
-                let width = geometry.size.width
                 let height: CGFloat = 150
                 let dataPoints = viewModel.dailyScores
                 
