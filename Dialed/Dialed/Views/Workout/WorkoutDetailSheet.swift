@@ -723,7 +723,7 @@ struct WorkoutDetailSheet: View {
                 modelContext.delete(exercise)
             }
         }
-        
+
         // Delete photos (files and records)
         if let photos = workout.photos {
             for photo in photos {
@@ -731,12 +731,31 @@ struct WorkoutDetailSheet: View {
                 modelContext.delete(photo)
             }
         }
-        
+
+        // Clear the inverse pointers any DayLog has on this workout before
+        // deleting it. DayLog.workoutLog has no declared inverse, so SwiftData
+        // won't unset it for us — and a stale pointer crashes on next access
+        // with "backing data could no longer be found in the store".
+        let workoutDate = workout.dayDate
+        let dayDescriptor = FetchDescriptor<DayLog>(
+            predicate: #Predicate { $0.date == workoutDate }
+        )
+        if let days = try? modelContext.fetch(dayDescriptor) {
+            for day in days {
+                day.workoutLog = nil
+                day.workoutTag = nil
+                day.workoutScore = nil
+                day.workoutDurationMinutes = nil
+                day.workoutCaloriesBurned = nil
+                day.workoutDetectedFromHealth = false
+            }
+        }
+
         // Delete the workout
         modelContext.delete(workout)
-        
+
         try? modelContext.save()
-        
+
         onDelete?()
         dismiss()
     }

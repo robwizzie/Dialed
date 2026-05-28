@@ -288,14 +288,17 @@ final class FitbitAuthService: NSObject, ObservableObject {
 
 extension FitbitAuthService: ASWebAuthenticationPresentationContextProviding {
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        // Find the first foreground active window; fall back to a new ASPresentationAnchor.
-        let scenes = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .filter { $0.activationState == .foregroundActive }
+        // ASWebAuthenticationSession invokes this on the main thread, so it's
+        // safe to assume main-actor isolation for the UIKit calls below.
+        MainActor.assumeIsolated {
+            let scenes = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .filter { $0.activationState == .foregroundActive }
 
-        if let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }) {
-            return window
+            if let window = scenes.flatMap({ $0.windows }).first(where: { $0.isKeyWindow }) {
+                return window
+            }
+            return ASPresentationAnchor()
         }
-        return ASPresentationAnchor()
     }
 }

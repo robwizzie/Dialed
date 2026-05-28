@@ -30,8 +30,8 @@ enum FitbitTokenStore {
     private static let userIDKey = "fitbit.userID"
 
     static func load() -> FitbitTokens? {
-        guard let access = try? KeychainStore.string(forKey: accessTokenKey), let access,
-              let refresh = try? KeychainStore.string(forKey: refreshTokenKey), let refresh else {
+        guard let access = try? KeychainStore.string(forKey: accessTokenKey),
+              let refresh = try? KeychainStore.string(forKey: refreshTokenKey) else {
             return nil
         }
 

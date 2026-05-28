@@ -47,9 +47,12 @@ enum BaselineEngine {
     /// should average to 00:00, not 12:00.
     static func medianBedtimeSeconds(from dates: [Date], calendar: Calendar = .current) -> Int? {
         guard !dates.isEmpty else { return nil }
-        let shifted: [Double] = dates.map {
-            let comps = calendar.dateComponents([.hour, .minute, .second], from: $0)
-            var seconds = Double((comps.hour ?? 0) * 3600 + (comps.minute ?? 0) * 60 + (comps.second ?? 0))
+        let shifted: [Double] = dates.map { date -> Double in
+            let comps = calendar.dateComponents([.hour, .minute, .second], from: date)
+            let hour = comps.hour ?? 0
+            let minute = comps.minute ?? 0
+            let second = comps.second ?? 0
+            var seconds = Double(hour * 3600 + minute * 60 + second)
             // Anything before noon is treated as belonging to the prior evening.
             if seconds < 12 * 3600 { seconds += 24 * 3600 }
             return seconds
@@ -62,9 +65,12 @@ enum BaselineEngine {
     /// people don't generally wake between noon and midnight.
     static func medianWakeTimeSeconds(from dates: [Date], calendar: Calendar = .current) -> Int? {
         guard !dates.isEmpty else { return nil }
-        let secs = dates.map { date -> Double in
+        let secs: [Double] = dates.map { date -> Double in
             let comps = calendar.dateComponents([.hour, .minute, .second], from: date)
-            return Double((comps.hour ?? 0) * 3600 + (comps.minute ?? 0) * 60 + (comps.second ?? 0))
+            let hour = comps.hour ?? 0
+            let minute = comps.minute ?? 0
+            let second = comps.second ?? 0
+            return Double(hour * 3600 + minute * 60 + second)
         }
         return median(secs).map { Int($0) }
     }
@@ -114,8 +120,8 @@ enum BaselineEngine {
         // Default to the dominant HRV kind among observations.
         let kindCounts = biometrics.compactMap { $0.hrvKind }
             .reduce(into: [String: Int]()) { $0[$1, default: 0] += 1 }
-        let dominantKind = kindCounts.max(by: { $0.value < $1.value })?.key
-            .flatMap(BiometricSnapshot.HRVKind.init(rawValue:))
+        let dominantKey: String? = kindCounts.max(by: { $0.value < $1.value })?.key
+        let dominantKind = dominantKey.flatMap(BiometricSnapshot.HRVKind.init(rawValue:))
 
         return Computed(
             restingHRMean: mean(restingHRs),

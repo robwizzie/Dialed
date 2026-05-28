@@ -18,7 +18,9 @@ import SwiftData
 enum LegacyMigrationService {
     /// Bump this when changing migration semantics. The flag stores the last
     /// version we ran; on app launch we re-run if our `currentVersion` is higher.
-    static let currentVersion = 1
+    ///   v1 — initial backfill of DayLog → ContextEvent
+    ///   v2 — heal orphaned DayLog.workoutLog tombstones
+    static let currentVersion = 2
 
     private static let flagKey = "legacyMigration.lastVersion"
 
@@ -35,18 +37,48 @@ enum LegacyMigrationService {
         do {
             let dayLogs = try context.fetch(FetchDescriptor<DayLog>())
             var inserted = 0
+            var healed = 0
             for day in dayLogs {
                 inserted += backfill(day: day, context: context)
+                if healOrphanedWorkout(day: day, context: context) {
+                    healed += 1
+                }
             }
             // Flush before setting the flag — otherwise a crash between insert and
             // autosave would leave us thinking we'd migrated when we hadn't.
             try context.save()
             UserDefaults.standard.set(currentVersion, forKey: flagKey)
-            print("✅ [Migration] Backfilled \(inserted) ContextEvent rows from \(dayLogs.count) DayLogs")
+            print("✅ [Migration] Backfilled \(inserted) ContextEvent rows; healed \(healed) orphaned workout relationships across \(dayLogs.count) DayLogs")
         } catch {
             // Don't trip the flag on failure — we'll try again on next launch.
             print("❌ [Migration] Failed: \(error)")
         }
+    }
+
+    /// Re-resolves `day.workoutLog` from the store by `dayDate`. If the
+    /// existing pointer is a tombstone (row deleted but relationship not
+    /// cleared because WorkoutLog has no declared inverse), this overwrites
+    /// it with the correct value (nil or the real row). Returns true if the
+    /// pointer changed.
+    private static func healOrphanedWorkout(day: DayLog, context: ModelContext) -> Bool {
+        let date = day.date
+        let descriptor = FetchDescriptor<WorkoutLog>(
+            predicate: #Predicate { $0.dayDate == date }
+        )
+        let actual = (try? context.fetch(descriptor))?.first
+        let currentID = day.workoutLog?.persistentModelID
+        let actualID = actual?.persistentModelID
+        guard currentID != actualID else { return false }
+        day.workoutLog = actual
+        if actual == nil {
+            // Cached aggregate fields are also stale — clear them.
+            day.workoutTag = nil
+            day.workoutScore = nil
+            day.workoutDurationMinutes = nil
+            day.workoutCaloriesBurned = nil
+            day.workoutDetectedFromHealth = false
+        }
+        return true
     }
 
     // MARK: - Per-day backfill
@@ -93,8 +125,16 @@ enum LegacyMigrationService {
             }
         }
 
-        // Workout — one event per WorkoutLog.
-        if let workout = day.workoutLog {
+        // Workout — one event per WorkoutLog. Fetch by dayDate rather than
+        // following day.workoutLog: that relationship has no declared inverse,
+        // so deletes done directly on WorkoutLog (e.g. WorkoutDetailSheet's
+        // delete button) leave DayLog.workoutLog as a tombstone that crashes
+        // on first property access.
+        let workoutDate = day.date
+        let workoutDescriptor = FetchDescriptor<WorkoutLog>(
+            predicate: #Predicate { $0.dayDate == workoutDate }
+        )
+        if let workout = (try? context.fetch(workoutDescriptor))?.first {
             let externalID = "legacy-workout-\(workout.id.uuidString)"
             if !existsEvent(externalID: externalID, in: context) {
                 let event = ContextEvent(
