@@ -23,7 +23,7 @@ struct WeighInSheet: View {
     var body: some View {
         VStack(spacing: 22) {
             Capsule()
-                .fill(Color.black.opacity(0.12))
+                .fill(Neka.muted)
                 .frame(width: 38, height: 4)
                 .padding(.top, 10)
 
@@ -62,7 +62,6 @@ struct WeighInSheet: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 24)
         .background(Neka.paper.ignoresSafeArea())
-        .environment(\.colorScheme, .light)
     }
 
     private func step(_ label: String, _ delta: Double) -> some View {
@@ -79,7 +78,7 @@ struct WeighInSheet: View {
                 .frame(height: 50)
                 .background(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Neka.surface)
                         .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
                 )
         }

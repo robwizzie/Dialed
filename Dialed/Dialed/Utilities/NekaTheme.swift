@@ -2,65 +2,100 @@
 //  NekaTheme.swift
 //  Dialed
 //
-//  The light, airy "Neka" visual language used by the Home and Challenge
-//  tabs: warm off-white paper, frosted white cards, pastel gradient tiles,
-//  near-black ink and generous type. Everything is an explicit color (no
-//  `.primary`) so these screens look identical regardless of the system
-//  appearance, and the legacy dark screens keep working beside them.
+//  The airy "Neka" visual language used by the Home and Challenge tabs:
+//  warm paper, frosted cards, pastel gradient tiles, high-contrast ink
+//  and generous type. Every token is a light/dark pair resolved from the
+//  current color scheme, so these screens follow the system appearance
+//  while the legacy dark screens keep working beside them.
 //
 
 import SwiftUI
+import UIKit
+
+extension Color {
+    /// A color that resolves to `light` or `dark` with the color scheme.
+    init(light: Color, dark: Color) {
+        self.init(UIColor { traits in
+            traits.userInterfaceStyle == .dark ? UIColor(dark) : UIColor(light)
+        })
+    }
+}
 
 enum Neka {
 
     // MARK: - Ink & paper
 
-    static let paper = Color(hex: "F3F3F0")
-    static let paperDeep = Color(hex: "E9EAE6")
-    static let card = Color.white.opacity(0.82)
-    static let cardStroke = Color.black.opacity(0.05)
+    static let paper = Color(light: Color(hex: "F3F3F0"), dark: Color(hex: "0E0F11"))
+    static let paperDeep = Color(light: Color(hex: "E9EAE6"), dark: Color(hex: "1A1C20"))
+    /// Raised surface — cards, chips, buttons.
+    static let surface = Color(light: .white, dark: Color(hex: "1E2125"))
+    /// Highlight used for glows and card rims.
+    static let glow = Color(light: .white, dark: Color.white.opacity(0.06))
+    static let card = surface.opacity(0.82)
+    static let cardStroke = Color(light: Color.white.opacity(0.9), dark: Color.white.opacity(0.07))
 
-    static let ink = Color(hex: "121212")
-    static let inkSecondary = Color(hex: "6E6E73")
-    static let inkTertiary = Color(hex: "A1A1A6")
-    static let hairline = Color.black.opacity(0.08)
+    static let ink = Color(light: Color(hex: "121212"), dark: Color(hex: "F4F4F2"))
+    /// Text/icon color on top of an `ink` fill.
+    static let onInk = Color(light: .white, dark: Color(hex: "0E0F11"))
+    static let inkSecondary = Color(light: Color(hex: "6E6E73"), dark: Color(hex: "A0A0A6"))
+    static let inkTertiary = Color(light: Color(hex: "A1A1A6"), dark: Color(hex: "6B6B72"))
+    static let hairline = Color(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.1))
+    /// Neutral track behind bars and rings.
+    static let track = Color(light: Color.black.opacity(0.06), dark: Color.white.opacity(0.09))
+    /// Inactive bars and grabbers.
+    static let muted = Color(light: Color.black.opacity(0.12), dark: Color.white.opacity(0.18))
+    static let shadow = Color(light: Color.black.opacity(0.05), dark: Color.black.opacity(0.4))
 
     // MARK: - Accents
 
     static let green = Color(hex: "4CB868")
-    static let greenSoft = Color(hex: "DDF3E1")
+    static let greenSoft = Color(light: Color(hex: "DDF3E1"), dark: Color(hex: "1C3324"))
     static let orange = Color(hex: "F59A4C")
-    static let orangeSoft = Color(hex: "FFE7D3")
+    static let orangeSoft = Color(light: Color(hex: "FFE7D3"), dark: Color(hex: "3A2718"))
     static let blue = Color(hex: "8BA3F7")
-    static let blueSoft = Color(hex: "E3E9FF")
+    static let blueSoft = Color(light: Color(hex: "E3E9FF"), dark: Color(hex: "1F2640"))
     static let sky = Color(hex: "5DB4F0")
-    static let skySoft = Color(hex: "DDF0FC")
+    static let skySoft = Color(light: Color(hex: "DDF0FC"), dark: Color(hex: "16293A"))
     static let rose = Color(hex: "EE7C8E")
-    static let roseSoft = Color(hex: "FCE3E7")
+    static let roseSoft = Color(light: Color(hex: "FCE3E7"), dark: Color(hex: "3A1C22"))
     static let lavender = Color(hex: "A88BEB")
-    static let lavenderSoft = Color(hex: "EDE5FC")
+    static let lavenderSoft = Color(light: Color(hex: "EDE5FC"), dark: Color(hex: "29203D"))
     static let amber = Color(hex: "F2C14E")
-    static let amberSoft = Color(hex: "FFF4D6")
+    static let amberSoft = Color(light: Color(hex: "FFF4D6"), dark: Color(hex: "3A3018"))
 
     /// The yellow dot used on the hero body callouts.
     static let pulse = Color(hex: "F4D35E")
 
+    /// Apple Intelligence-style iridescent stops for AI surfaces.
+    static let intelligence: [Color] = [
+        Color(hex: "F5A35C"), Color(hex: "EE7C8E"), Color(hex: "B98CF0"),
+        Color(hex: "6FA8F7"), Color(hex: "5FD3C4"), Color(hex: "F5A35C")
+    ]
+
     // MARK: - Tile washes
 
-    /// Pastel washes for the metric tiles. Each is a soft top-left → bottom-
-    /// right gradient that fades into white, like the reference design.
+    /// Pastel washes for the metric tiles: a soft top-left → bottom-right
+    /// gradient that fades into the card color. Deep tinted glass in dark.
     enum Wash {
         case mint, peach, sky, rose, lavender, plain
 
         var colors: [Color] {
             switch self {
-            case .mint:     return [Color(hex: "CFEFD4"), Color(hex: "EEF8E8"), Color.white.opacity(0.9)]
-            case .peach:    return [Color(hex: "FFE1C7"), Color(hex: "FFF1DF"), Color.white.opacity(0.9)]
-            case .sky:      return [Color(hex: "D4ECFB"), Color(hex: "ECF6FD"), Color.white.opacity(0.9)]
-            case .rose:     return [Color(hex: "FBD9DF"), Color(hex: "FDEDEF"), Color.white.opacity(0.9)]
-            case .lavender: return [Color(hex: "E4DAFB"), Color(hex: "F3EEFD"), Color.white.opacity(0.9)]
-            case .plain:    return [Color.white.opacity(0.92), Color.white.opacity(0.8)]
+            case .mint:     return Self.pair("CFEFD4", "EEF8E8", dark: "1D3A27", "17241C")
+            case .peach:    return Self.pair("FFE1C7", "FFF1DF", dark: "3D2A1A", "261E17")
+            case .sky:      return Self.pair("D4ECFB", "ECF6FD", dark: "17324A", "16212C")
+            case .rose:     return Self.pair("FBD9DF", "FDEDEF", dark: "40212A", "28191D")
+            case .lavender: return Self.pair("E4DAFB", "F3EEFD", dark: "2E2445", "1F1A2B")
+            case .plain:    return [Neka.surface.opacity(0.92), Neka.surface.opacity(0.8)]
             }
+        }
+
+        private static func pair(_ l1: String, _ l2: String, dark d1: String, _ d2: String) -> [Color] {
+            [
+                Color(light: Color(hex: l1), dark: Color(hex: d1)),
+                Color(light: Color(hex: l2), dark: Color(hex: d2)),
+                Neka.surface.opacity(0.9)
+            ]
         }
 
         var gradient: LinearGradient {
@@ -95,10 +130,9 @@ extension View {
                 .fill(wash.gradient)
                 .overlay(
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Color.white.opacity(0.9), lineWidth: 1)
+                        .stroke(Neka.cardStroke, lineWidth: 1)
                 )
-                .shadow(color: .black.opacity(0.04), radius: 18, x: 0, y: 8)
-                .shadow(color: .black.opacity(0.03), radius: 2, x: 0, y: 1)
+                .shadow(color: Neka.shadow, radius: 18, x: 0, y: 8)
         )
     }
 
@@ -108,7 +142,7 @@ extension View {
             ZStack {
                 Neka.paper
                 RadialGradient(
-                    colors: [Color.white, Color.white.opacity(0)],
+                    colors: [Neka.glow, Neka.glow.opacity(0)],
                     center: .topLeading, startRadius: 10, endRadius: 420
                 )
                 RadialGradient(
@@ -223,7 +257,7 @@ struct NekaProgressBar: View {
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
-                Capsule().fill(Color.black.opacity(0.06))
+                Capsule().fill(Neka.track)
                 Capsule()
                     .fill(tint)
                     .frame(width: max(height, geo.size.width * min(1, max(0, progress))))
@@ -239,7 +273,7 @@ struct NekaPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundColor(Neka.onInk)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(

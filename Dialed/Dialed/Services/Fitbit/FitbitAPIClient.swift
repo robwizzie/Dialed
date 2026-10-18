@@ -171,6 +171,25 @@ enum FitbitDTO {
         }
     }
 
+    // MARK: Live heart rate — /1/user/-/activities/heart/date/today/1d/1min.json
+    // Intraday data is available to "Personal" Fitbit apps (your own data).
+    struct HeartIntradayResponse: Decodable {
+        let intraday: Intraday?
+
+        enum CodingKeys: String, CodingKey {
+            case intraday = "activities-heart-intraday"
+        }
+
+        struct Intraday: Decodable {
+            let dataset: [Point]
+        }
+
+        struct Point: Decodable {
+            let time: String      // "HH:mm:ss"
+            let value: Double     // bpm
+        }
+    }
+
     // MARK: Steps series — /1/user/-/activities/steps/date/[date]/7d.json
     struct StepsSeriesResponse: Decodable {
         let activitiesSteps: [Point]
@@ -266,6 +285,12 @@ final class FitbitAPIClient {
 
     func water(on date: Date) async throws -> FitbitDTO.WaterLogResponse {
         let path = "/1/user/-/foods/log/water/date/\(Self.dateFormatter.string(from: date)).json"
+        return try await request(path: path)
+    }
+
+    /// Minute-by-minute heart rate for `date` (latest sample is "now").
+    func heartIntraday(on date: Date) async throws -> FitbitDTO.HeartIntradayResponse {
+        let path = "/1/user/-/activities/heart/date/\(Self.dateFormatter.string(from: date))/1d/1min.json"
         return try await request(path: path)
     }
 

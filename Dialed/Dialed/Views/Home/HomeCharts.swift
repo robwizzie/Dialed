@@ -38,7 +38,7 @@ struct NekaSparkline: View {
                     Circle()
                         .fill(color)
                         .frame(width: 6, height: 6)
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .overlay(Circle().stroke(Neka.surface, lineWidth: 1.5))
                         .position(last)
                 }
             }
@@ -98,7 +98,7 @@ private extension Path {
 struct NekaBars: View {
     let values: [Double]
     var color: Color = Neka.ink
-    var muted: Color = Color.black.opacity(0.12)
+    var muted: Color = Neka.muted
     var spacing: CGFloat = 4
     var minFraction: CGFloat = 0.12
 
@@ -150,12 +150,12 @@ struct NekaHalfGauge: View {
                 Path { p in
                     p.addArc(center: center, radius: radius - lineWidth - 4, startAngle: .degrees(180), endAngle: .degrees(360), clockwise: false)
                 }
-                .stroke(Color.black.opacity(0.1), style: StrokeStyle(lineWidth: 1, dash: [1, 4]))
+                .stroke(Neka.hairline, style: StrokeStyle(lineWidth: 1, dash: [1, 4]))
 
                 Circle()
                     .fill(Neka.blue)
                     .frame(width: 10, height: 10)
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
                     .shadow(color: Neka.blue.opacity(0.4), radius: 4)
                     .position(marker)
             }
@@ -178,7 +178,7 @@ struct NekaBottle: View {
             ZStack(alignment: .bottom) {
                 // Fill
                 RoundedRectangle(cornerRadius: w * 0.28, style: .continuous)
-                    .fill(Color.white.opacity(0.7))
+                    .fill(Neka.surface.opacity(0.7))
                     .frame(width: w, height: bodyH)
                 RoundedRectangle(cornerRadius: w * 0.28, style: .continuous)
                     .fill(LinearGradient(
@@ -212,7 +212,7 @@ struct NekaMiniRing: View {
 
     var body: some View {
         ZStack {
-            Circle().stroke(Color.black.opacity(0.06), lineWidth: lineWidth)
+            Circle().stroke(Neka.track, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: max(0.001, min(1, progress)))
                 .stroke(

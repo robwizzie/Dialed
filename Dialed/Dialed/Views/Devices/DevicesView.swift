@@ -74,6 +74,9 @@ struct DevicesView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = DevicesViewModel()
     @ObservedObject private var fitbit = FitbitAuthService.shared
+    @ObservedObject private var diagnostics = DataDiagnostics.shared
+    @AppStorage(FitbitConfig.clientIDDefaultsKey) private var savedClientID = ""
+    @State private var clientIDDraft = ""
 
     var body: some View {
         ScrollView {
@@ -101,6 +104,8 @@ struct DevicesView: View {
                 scaleCard
                 bottleCard
                 healthCard
+                intelligenceCard
+                dataCheckCard
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 32)
@@ -108,7 +113,6 @@ struct DevicesView: View {
         .scrollIndicators(.hidden)
         .nekaPageBackground()
         .navigationBarTitleDisplayMode(.inline)
-        .environment(\.colorScheme, .light)
         .task { await viewModel.refresh(context: modelContext) }
     }
 
@@ -130,7 +134,7 @@ struct DevicesView: View {
                         Task { await viewModel.syncWatch(context: modelContext) }
                     } label: {
                         HStack {
-                            if viewModel.isSyncing { ProgressView().tint(.white) }
+                            if viewModel.isSyncing { ProgressView().tint(Neka.onInk) }
                             Text(viewModel.isSyncing ? "Syncing…" : "Sync now")
                         }
                     }
@@ -143,17 +147,127 @@ struct DevicesView: View {
                         .padding(.horizontal, 12)
                 }
             } else if FitbitConfig.clientID == nil {
-                Text("One-time setup: add your Fitbit app's Client ID to the Dialed target (see SETUP_FITBIT.md), then connect here.")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                clientIDSetup
             } else {
                 Button("Connect Fitbit account") {
                     Task { await viewModel.connectFitbit(context: modelContext) }
                 }
                 .buttonStyle(.nekaPrimary)
+                if !savedClientID.isEmpty {
+                    Button("Change Client ID") { savedClientID = "" }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Neka.inkSecondary)
+                }
             }
         }
+    }
+
+    /// One-time: paste the Client ID of your own "Personal" Fitbit app.
+    private var clientIDSetup: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("One-time setup (2 min): at dev.fitbit.com → Register an app, choose **Personal** and **Client**, set the redirect URL to `dialed://oauth/fitbit-callback`, then paste the OAuth 2.0 Client ID here.")
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Link(destination: URL(string: "https://dev.fitbit.com/apps/new")!) {
+                Label("Open dev.fitbit.com", systemImage: "safari")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+            }
+            HStack(spacing: 8) {
+                TextField("Client ID (e.g. 23ABCD)", text: $clientIDDraft)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .font(.system(size: 15, design: .monospaced))
+                    .foregroundColor(Neka.ink)
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.track))
+                Button("Save") {
+                    savedClientID = clientIDDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Neka.onInk)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.ink))
+                .disabled(clientIDDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+    }
+
+    private var intelligenceCard: some View {
+        let availability = DialedAI.availability
+        return deviceCard(
+            icon: "sparkles",
+            tint: Neka.lavender, fill: Neka.lavenderSoft,
+            title: "Apple Intelligence",
+            subtitle: "Powers your daily brief, Ask Dialed, meal estimates and trash talk — on-device and private.",
+            status: availability == .available ? "Ready" : "Not available",
+            statusOK: availability == .available,
+            detail: nil
+        ) {
+            if availability != .available {
+                Text(availability.explanation)
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+        }
+    }
+
+    /// Per-metric: what Home found on its last refresh and where from.
+    private var dataCheckCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Data check")
+                    .font(Neka.title)
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                if let checked = diagnostics.checkedAt {
+                    Text(checked.formatted(.relative(presentation: .named)))
+                        .font(.system(size: 11))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+            }
+            if let error = diagnostics.fitbitError {
+                Label("Fitbit sync: \(error)", systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.rose)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if diagnostics.rows.isEmpty {
+                Text("Open Home once to run a check.")
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            ForEach(diagnostics.rows) { row in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: row.isFound ? "checkmark.circle.fill" : "circle.dashed")
+                        .font(.system(size: 14))
+                        .foregroundColor(row.isFound ? Neka.green : Neka.inkTertiary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.metric)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text(row.isFound ? (row.source ?? "—") : "Nothing found yet")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text(row.value ?? "--")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        if let date = row.date {
+                            Text(date.formatted(.relative(presentation: .named)))
+                                .font(.system(size: 10))
+                                .foregroundColor(Neka.inkTertiary)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .nekaCard()
     }
 
     private var scaleCard: some View {

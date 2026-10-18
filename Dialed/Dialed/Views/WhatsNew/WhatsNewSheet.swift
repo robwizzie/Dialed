@@ -42,6 +42,12 @@ enum WhatsNew {
             blurb: "Pixel Watch data through Fitbit, weigh-ins from your smart scale, and water from your smart bottle all land on Home automatically."
         ),
         Feature(
+            pillar: .readiness,
+            icon: "wand.and.sparkles",
+            title: "Dialed Intelligence",
+            blurb: "Apple Intelligence, fully on-device: a daily brief written from your real numbers, Ask Dialed chat, \"describe your meal\" calorie estimates, and trash talk for your opponent."
+        ),
+        Feature(
             pillar: .energy,
             icon: "sparkles",
             title: "Coach",
@@ -51,7 +57,7 @@ enum WhatsNew {
             pillar: .readiness,
             icon: "square.grid.2x2.fill",
             title: "Everything at a glance",
-            blurb: "Weight, water, HRV, sleep, resting heart rate, steps, fuel and today's timeline in one bright, phone-first layout."
+            blurb: "Weight, water, HRV, sleep, resting heart rate, steps, fuel and today's timeline in one phone-first layout — in light or dark mode."
         )
     ]
 
