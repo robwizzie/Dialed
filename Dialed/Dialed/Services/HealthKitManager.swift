@@ -66,6 +66,20 @@ class HealthKitManager: ObservableObject {
             types.insert(bodyFatType)
         }
 
+        // Home body callouts + fuel card
+        let extra: [HKQuantityTypeIdentifier] = [
+            .heartRate,
+            .respiratoryRate,
+            .oxygenSaturation,
+            .dietaryEnergyConsumed,
+            .dietaryProtein
+        ]
+        for identifier in extra {
+            if let type = HKObjectType.quantityType(forIdentifier: identifier) {
+                types.insert(type)
+            }
+        }
+
         return types
     }()
 
@@ -721,6 +735,119 @@ class HealthKitManager: ObservableObject {
 
             healthStore.execute(query)
         }
+    }
+
+    // MARK: - Series & latest readings (Home / Challenge)
+
+    struct QuantityReading: Equatable {
+        let date: Date
+        let value: Double
+    }
+
+    /// Every sample of a quantity type in a window, oldest first.
+    func fetchSamples(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date = Date()
+    ) async throws -> [QuantityReading] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [sort]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let readings = (samples as? [HKQuantitySample] ?? []).map {
+                    QuantityReading(date: $0.startDate, value: $0.quantity.doubleValue(for: unit))
+                }
+                continuation.resume(returning: readings)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Most recent sample of a quantity type within the last `days` days.
+    func fetchLatest(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        withinDays days: Int = 2
+    ) async throws -> QuantityReading? {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return nil }
+        let start = Calendar.current.date(byAdding: .day, value: -days, to: Date())
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: false)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: 1,
+                sortDescriptors: [sort]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                let reading = (samples?.first as? HKQuantitySample).map {
+                    QuantityReading(date: $0.startDate, value: $0.quantity.doubleValue(for: unit))
+                }
+                continuation.resume(returning: reading)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Per-day cumulative totals for the last `days` days (today included),
+    /// keyed by start of day. Days with no data are omitted.
+    func fetchDailySums(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        days: Int
+    ) async throws -> [Date: Double] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [:] }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let start = calendar.date(byAdding: .day, value: -(days - 1), to: today),
+              let end = calendar.date(byAdding: .day, value: 1, to: today) else { return [:] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum,
+                anchorDate: start,
+                intervalComponents: DateComponents(day: 1)
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                var totals: [Date: Double] = [:]
+                collection?.enumerateStatistics(from: start, to: end) { stats, _ in
+                    if let sum = stats.sumQuantity()?.doubleValue(for: unit) {
+                        totals[calendar.startOfDay(for: stats.startDate)] = sum
+                    }
+                }
+                continuation.resume(returning: totals)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Body-mass readings in lbs, oldest first.
+    func fetchWeightReadings(since start: Date) async throws -> [QuantityReading] {
+        try await fetchSamples(.bodyMass, unit: .pound(), from: start)
     }
 
     // MARK: - Helper Methods
