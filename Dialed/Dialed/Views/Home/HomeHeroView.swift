@@ -100,7 +100,8 @@ struct HomeHeroView: View {
             }
             .frame(width: w, height: h, alignment: .bottom)
             .offset(x: w * 0.08, y: 30)
-            .overlay(alignment: .center) {
+            // Top-trailing keeps it clear of the four callouts.
+            .overlay(alignment: .topTrailing) {
                 Button(action: onTapPhoto) {
                     Label("Add your photo", systemImage: "camera.fill")
                         .font(.system(size: 13, weight: .semibold))
@@ -110,7 +111,7 @@ struct HomeHeroView: View {
                         .background(Capsule().fill(Neka.ink))
                 }
                 .buttonStyle(.dialedScale)
-                .offset(x: w * 0.08, y: h * 0.12)
+                .padding(16)
             }
         }
     }

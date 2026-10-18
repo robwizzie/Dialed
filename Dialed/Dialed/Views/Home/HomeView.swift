@@ -474,6 +474,8 @@ struct HomeView: View {
                 Text(label)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Neka.ink)
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(.horizontal, 12)
             .frame(height: 46)
