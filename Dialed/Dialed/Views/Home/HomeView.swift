@@ -26,19 +26,24 @@ struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var stateModel = NowViewModel()
     @ObservedObject private var photos = ProfilePhotoStore.shared
+    @StateObject private var briefModel = AIBriefModel()
+    @State private var aiAvailability: AIAvailability = DialedAI.availability
+    @State private var askedForHealthAccess = false
 
     /// Switches the tab bar to the Challenge tab.
     var onOpenChallenge: () -> Void = {}
 
     @State private var sheet: HomeSheet?
+    @State private var path: [HomeDestination] = []
+    @EnvironmentObject private var router: AppRouter
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, weighIn, voice, profile, challengeSetup
+        case water, meal, weighIn, voice, profile, challengeSetup, ask
         var id: String { rawValue }
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 16) {
                     header
@@ -51,6 +56,14 @@ struct HomeView: View {
                     )
                     .onTapGesture {
                         if viewModel.challenge != nil { onOpenChallenge() }
+                    }
+                    if aiAvailability != .unsupportedDevice {
+                        AIBriefCard(
+                            model: briefModel,
+                            availability: aiAvailability,
+                            onRegenerate: { Task { await briefModel.generate(viewModel.snapshot) } },
+                            onAsk: { sheet = .ask }
+                        )
                     }
                     HomeStateStrip(items: stateItems)
                     tiles
@@ -66,30 +79,66 @@ struct HomeView: View {
                     moreLinks
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
-            .overlay(alignment: .bottom) { quickLogBar }
             .toolbar(.hidden, for: .navigationBar)
-            .task { await refreshAll() }
-            .refreshable { await refreshAll() }
+            .task {
+                await requestHealthAccessIfNeeded()
+                await refreshAll()
+            }
+            .refreshable { await refreshAll(force: true) }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await refreshAll() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
+                Task { await refreshAll() }
+            }
+            // Requests from the bottom bar's nested menu.
+            .onChange(of: router.homeSheet) { _, request in
+                guard let request else { return }
+                sheet = request
+                router.homeSheet = nil
+            }
+            .onChange(of: router.homePush) { _, request in
+                guard let request else { return }
+                path = [request]
+                router.homePush = nil
+            }
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .timeline:
+                    TimelineView().environment(\.colorScheme, .dark)
+                case .tracking:
+                    TodayView().environment(\.colorScheme, .dark)
+                case .calendar:
+                    CalendarView().environment(\.colorScheme, .dark)
+                case .devices:
+                    DevicesView()
+                }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll() } }) { sheet in
                 sheetContent(sheet)
             }
         }
-        .environment(\.colorScheme, .light)
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color.white.opacity(0.94), for: .tabBar)
-        .toolbarColorScheme(.light, for: .tabBar)
     }
 
-    private func refreshAll() async {
-        await viewModel.refresh(context: modelContext)
+    private func refreshAll(force: Bool = false) async {
+        await viewModel.refresh(context: modelContext, force: force)
         await stateModel.refresh(context: modelContext)
+        aiAvailability = DialedAI.availability
+        await briefModel.refreshIfStale(viewModel.snapshot)
+    }
+
+    /// New data types (heart rate, SpO₂, breathing, food) need a fresh
+    /// Apple Health prompt; ask once, on first Home load after updating.
+    private func requestHealthAccessIfNeeded() async {
+        guard !askedForHealthAccess else { return }
+        askedForHealthAccess = true
+        if await HealthKitManager.shared.needsAuthorizationPrompt() {
+            try? await HealthKitManager.shared.requestAuthorization()
+        }
     }
 
     // MARK: - Header
@@ -128,7 +177,7 @@ struct HomeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Neka.ink)
                         .frame(width: 42, height: 42)
-                        .background(Circle().fill(Color.white.opacity(0.9)))
+                        .background(Circle().fill(Neka.surface.opacity(0.9)))
                         .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
                 }
                 .accessibilityLabel("Devices")
@@ -156,13 +205,13 @@ struct HomeView: View {
             }
             .frame(width: 46, height: 46)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
 
             Circle()
                 .fill(FitbitTokenStore.isConnected ? Neka.green : Neka.inkTertiary)
                 .frame(width: 11, height: 11)
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
         }
     }
 
@@ -235,7 +284,7 @@ struct HomeView: View {
         if let lost = viewModel.progress?.lostLbs {
             let amount = String(format: "%.1f", abs(lost))
             pill = lost >= 0
-                ? (text: "−\(amount) lb", tint: Neka.green, fill: Color.white.opacity(0.85))
+                ? (text: "−\(amount) lb", tint: Neka.green, fill: Neka.surface.opacity(0.85))
                 : (text: "+\(amount) lb", tint: Neka.rose, fill: Neka.roseSoft)
         }
         var footer = "Connect your scale"
@@ -427,62 +476,6 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Quick log
-
-    private var quickLogBar: some View {
-        HStack(spacing: 6) {
-            quickButton(icon: "drop.fill", label: "Water", tint: Neka.sky) { sheet = .water }
-            quickButton(icon: "scalemass.fill", label: "Weigh in", tint: Neka.green) { sheet = .weighIn }
-            quickButton(icon: "fork.knife", label: "Meal", tint: Neka.orange) { sheet = .meal }
-            Button {
-                #if os(iOS)
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                #endif
-                sheet = .voice
-            } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(Neka.ink))
-            }
-            .buttonStyle(.dialedScale)
-            .accessibilityLabel("Voice log")
-        }
-        .padding(6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.white.opacity(0.6)))
-                .overlay(Capsule().stroke(Color.white, lineWidth: 1))
-                .shadow(color: .black.opacity(0.1), radius: 18, y: 8)
-        )
-        .padding(.bottom, 10)
-    }
-
-    private func quickButton(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            action()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(tint)
-                Text(label)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 46)
-            .background(Capsule().fill(Color.white.opacity(0.9)))
-        }
-        .buttonStyle(.dialedScale)
-        .accessibilityLabel("Log \(label.lowercased())")
-    }
-
     // MARK: - Sheets
 
     @ViewBuilder
@@ -494,10 +487,11 @@ struct HomeView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.hidden)
         case .meal:
-            MealCaptureSheet()
-                .environment(\.colorScheme, .dark)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)
+            AIMealSheet()
+                .presentationDetents([.large])
+        case .ask:
+            AskDialedSheet(snapshot: viewModel.snapshot)
+                .presentationDetents([.large])
         case .voice:
             VoiceCaptureSheet()
                 .environment(\.colorScheme, .dark)
@@ -524,5 +518,6 @@ struct LazyDestination<Content: View>: View {
 
 #Preview {
     HomeView()
+        .environmentObject(AppRouter())
         .modelContainer(for: DialedSchema.allModels, inMemory: true)
 }

@@ -100,13 +100,21 @@ final class HomeViewModel: ObservableObject {
     @Published var lastWaterReading: Date?
     @Published var isRefreshing = false
 
+    /// Today in one value — fed to Apple Intelligence and the fallbacks.
+    @Published var snapshot = HealthSnapshot()
+
     private let health = HealthKitManager.shared
     private var fitbitConnected: Bool { FitbitTokenStore.isConnected }
     private static let backfillKey = "home.fitbitBackfilled.v1"
+    private static let lastFitbitSyncKey = "home.lastFitbitSync"
+    /// Fitbit allows 150 calls/hour; a full day sync is ~6. Automatic
+    /// refreshes (tab appear, sheet dismiss) reuse a recent sync.
+    private static let fitbitSyncInterval: TimeInterval = 10 * 60
 
     // MARK: - Refresh
 
-    func refresh(context: ModelContext) async {
+    /// `force` = the user pulled to refresh, so always re-sync the watch.
+    func refresh(context: ModelContext, force: Bool = false) async {
         guard !isRefreshing else { return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -119,7 +127,10 @@ final class HomeViewModel: ObservableObject {
 
         // 1. Pull the watch's overnight data into SwiftData first so the
         //    sleep / HRV / vitals reads below see it.
-        if fitbitConnected {
+        var fitbitSyncError: String?
+        let lastSync = UserDefaults.standard.object(forKey: Self.lastFitbitSyncKey) as? Date
+        let syncDue = force || lastSync.map { now.timeIntervalSince($0) > Self.fitbitSyncInterval } ?? true
+        if fitbitConnected && syncDue {
             let sync = FitbitSyncService(modelContext: context)
             if !UserDefaults.standard.bool(forKey: Self.backfillKey) {
                 await sync.backfill(days: 14)
@@ -131,7 +142,13 @@ final class HomeViewModel: ObservableObject {
                 }
             }
             try? context.save()
-            if sync.lastError == nil { lastWatchSync = sync.lastSyncedAt }
+            fitbitSyncError = sync.lastError
+            if sync.lastError == nil {
+                lastWatchSync = sync.lastSyncedAt
+                UserDefaults.standard.set(now, forKey: Self.lastFitbitSyncKey)
+            }
+        } else if fitbitConnected {
+            lastWatchSync = lastSync
         }
 
         // 2. Challenge window drives how far back we read weights.
@@ -157,11 +174,23 @@ final class HomeViewModel: ObservableObject {
         async let hkBreathing = try? health.fetchLatest(.respiratoryRate, unit: .count().unitDivided(by: .minute()), withinDays: 3)
         async let hkSpO2 = try? health.fetchLatest(.oxygenSaturation, unit: .percent(), withinDays: 3)
 
-        // 4. Fitbit direct reads (bottle + steps).
+        if fitbitConnected, let error = fitbitSyncError {
+            DataDiagnostics.shared.fitbitError = error
+        } else {
+            DataDiagnostics.shared.fitbitError = nil
+        }
+
+        // 4. Fitbit direct reads (live heart rate, bottle, steps).
         var fitbitWaterOz: Double?
         var fitbitSteps: [Date: Double] = [:]
+        var fitbitLiveHR: (date: Date, bpm: Double)?
         if fitbitConnected {
             let api = FitbitAPIClient.shared
+            if let resp = try? await api.heartIntraday(on: today),
+               let last = resp.intraday?.dataset.last,
+               let date = FitbitAPIClient.parseDay(FitbitAPIClient.iso(today), time: last.time) {
+                fitbitLiveHR = (date, last.value)
+            }
             if let resp = try? await api.water(on: today), let ml = resp.summary?.water {
                 fitbitWaterOz = ml / 29.5735
             }
@@ -262,20 +291,23 @@ final class HomeViewModel: ObservableObject {
         sleepSeries = sleepByDay.keys.sorted().suffix(7).map { sleepByDay[$0]! }
         sleepHours = sleepByDay[today] ?? sleepSeries.last
 
-        // ---- Vitals
-        let latestSnapshot = snapshots.last
-        restingHR = latestSnapshot?.restingHeartRate ?? hkRestingLatest?.value ?? todayLog?.sleepRestingHR
-        if let live = hkHeartLatest, now.timeIntervalSince(live.date) < 2 * 3600 {
+        // ---- Vitals: newest non-empty value per field — today's watch row
+        //      can exist before every metric has been computed.
+        restingHR = latestValue(snapshots) { $0.restingHeartRate } ?? hkRestingLatest?.value ?? todayLog?.sleepRestingHR
+        if let live = fitbitLiveHR, now.timeIntervalSince(live.date) < 30 * 60 {
+            heartRate = live.bpm
+            heartRateIsLive = true
+        } else if let live = hkHeartLatest, now.timeIntervalSince(live.date) < 2 * 3600 {
             heartRate = live.value
             heartRateIsLive = true
         } else {
             heartRate = restingHR
             heartRateIsLive = false
         }
-        breathingRate = latestSnapshot?.breathingRate
+        breathingRate = latestValue(snapshots) { $0.breathingRate }
             ?? sleeps.last?.avgBreathingRate
             ?? hkBreathingLatest?.value
-        spO2 = latestSnapshot?.spO2
+        spO2 = latestValue(snapshots) { $0.spO2 }
             ?? sleeps.last?.avgSpO2
             ?? hkSpO2Latest.map { $0.value * 100 }
 
@@ -296,6 +328,112 @@ final class HomeViewModel: ObservableObject {
             hrvToday: hrv,
             hrvBaseline: hrvBaseline
         ))
+
+        snapshot = buildSnapshot(now: now, challenge: challenge)
+
+        // ---- Data check (Devices screen): what each tile found, and where.
+        let hkWaterToday = hkWaterByDay[today] ?? 0
+        let hkStepsToday = hkStepsByDay[today] ?? 0
+        let fitbitStepsToday = fitbitSteps[today] ?? 0
+        let usedFitbitVitals = latestValue(snapshots) { $0.spO2 ?? $0.breathingRate ?? $0.restingHeartRate } != nil
+        var waterSources: [String] = []
+        if hkWaterToday > 0 { waterSources.append("Apple Health") }
+        if (fitbitWaterOz ?? 0) > 0 { waterSources.append("Fitbit") }
+        if capturedWater > 0 { waterSources.append("Logged in Dialed") }
+        let waterSource: String? = waterSources.isEmpty ? nil : waterSources.joined(separator: " + ")
+        let rows: [DataSourceStatus] = [
+            DataSourceStatus(metric: "Weight",
+                  value: latestWeight.map { String(format: "%.1f lb", $0.pounds) },
+                  source: latestWeight?.source.displayName,
+                  date: latestWeight?.date),
+            DataSourceStatus(metric: "Water",
+                  value: waterOz > 0 ? "\(Int(waterOz)) oz" : nil,
+                  source: waterSource,
+                  date: waterOz > 0 ? now : nil),
+            DataSourceStatus(metric: "Steps",
+                  value: steps > 0 ? steps.formatted() : nil,
+                  source: fitbitStepsToday >= hkStepsToday && fitbitStepsToday > 0 ? "Pixel Watch (Fitbit)" : (hkStepsToday > 0 ? "Apple Health" : nil),
+                  date: steps > 0 ? now : nil),
+            DataSourceStatus(metric: "Live heart rate",
+                  value: heartRateIsLive ? heartRate.map { "\(Int($0)) bpm" } : nil,
+                  source: fitbitLiveHR != nil && heartRateIsLive ? "Pixel Watch (Fitbit)" : (heartRateIsLive ? "Apple Health" : nil),
+                  date: fitbitLiveHR?.date ?? hkHeartLatest?.date),
+            DataSourceStatus(metric: "Resting heart rate",
+                  value: restingHR.map { "\(Int($0)) bpm" },
+                  source: usedFitbitVitals ? "Pixel Watch (Fitbit)" : (restingHR != nil ? "Apple Health" : nil),
+                  date: snapshots.last?.timestamp ?? hkRestingLatest?.date),
+            DataSourceStatus(metric: "Sleep",
+                  value: sleepHours.map { String(format: "%.1f h", $0) },
+                  source: sleeps.isEmpty ? (sleepHours != nil ? "Apple Health" : nil) : "Pixel Watch (Fitbit)",
+                  date: sleeps.last?.endTime),
+            DataSourceStatus(metric: "HRV",
+                  value: hrv.map { "\(Int($0)) ms" },
+                  source: fitbitHRV.isEmpty ? (hrv != nil ? "Apple Health (SDNN)" : nil) : "Pixel Watch (RMSSD)",
+                  date: nil),
+            DataSourceStatus(metric: "Blood oxygen",
+                  value: spO2.map { "\(Int($0))%" },
+                  source: spO2 == nil ? nil : (usedFitbitVitals ? "Pixel Watch (Fitbit)" : "Apple Health"),
+                  date: nil),
+            DataSourceStatus(metric: "Food",
+                  value: caloriesIn > 0 ? "\(Int(caloriesIn)) kcal · \(Int(proteinGrams)) g protein" : nil,
+                  source: hkEnergyToday >= loggedCalories && hkEnergyToday > 0 ? "Apple Health" : (loggedCalories > 0 ? "Logged in Dialed" : nil),
+                  date: nil)
+        ]
+        DataDiagnostics.shared.update(rows: rows)
+    }
+
+    private func buildSnapshot(now: Date, challenge: WeightChallenge?) -> HealthSnapshot {
+        var s = HealthSnapshot()
+        s.now = now
+        s.firstName = firstName
+        if let challenge, let p = progress {
+            s.friendName = challenge.friendDisplayName
+            s.challengeDay = p.dayNumber
+            s.challengeDays = p.totalDays
+            s.daysLeft = p.daysLeft
+            s.scoring = challenge.scoring
+            if p.startWeight != nil && p.currentWeight != nil {
+                s.lostLbs = p.lostLbs
+                s.lostPercent = p.lostPercent
+                s.paceDelta = p.paceDelta
+            }
+            s.friendLostLbs = p.friend?.lostLbs
+            s.friendLostPercent = p.friend?.lostPercent
+            s.leader = p.leader
+            s.margin = p.margin
+            s.goalLossLbs = p.goalLossLbs
+            s.projectedLossAtEnd = p.projectedLossAtEnd
+            s.requiredDailyDeficit = p.requiredDailyDeficit
+            s.weighedInToday = p.weighedInToday
+        } else if let latest = latestWeight {
+            s.weighedInToday = Calendar.current.isDateInToday(latest.date)
+        }
+        s.weight = latestWeight?.pounds
+        s.sleepHours = sleepHours
+        s.hrv = hrv
+        s.hrvBaseline = hrvBaseline
+        s.restingHR = restingHR
+        s.waterOz = waterOz
+        s.waterTargetOz = waterTargetOz
+        s.steps = steps
+        s.stepGoal = stepGoal
+        s.proteinGrams = proteinGrams
+        s.proteinTarget = proteinTarget
+        s.caloriesIn = caloriesIn
+        s.calorieTarget = calorieTarget
+        s.nextUp = timeline
+            .filter { $0.status == .upcoming || $0.status == .active }
+            .prefix(3)
+            .map { "\($0.start.formatted(date: .omitted, time: .shortened)) \($0.title)" }
+        return s
+    }
+
+    /// Newest non-nil value of a field across the watch's daily rows.
+    private func latestValue(_ snapshots: [BiometricSnapshot], _ value: (BiometricSnapshot) -> Double?) -> Double? {
+        for s in snapshots.reversed() {
+            if let v = value(s) { return v }
+        }
+        return nil
     }
 
     /// Rough cutting target: ~15 kcal/lb maintenance minus 500.

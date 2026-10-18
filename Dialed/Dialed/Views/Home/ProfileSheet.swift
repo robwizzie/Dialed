@@ -73,7 +73,6 @@ struct ProfileSheet: View {
                 }
             }
         }
-        .environment(\.colorScheme, .light)
     }
 
     // MARK: - Pieces
@@ -132,7 +131,7 @@ struct ProfileSheet: View {
                 .padding(14)
                 .background(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(Color.white)
+                        .fill(Neka.surface)
                 )
                 .onSubmit(saveName)
         }
