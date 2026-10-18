@@ -33,6 +33,7 @@ struct ChallengeView: View {
     @StateObject private var viewModel = ChallengeViewModel()
 
     @State private var sheet: Sheet?
+    @EnvironmentObject private var router: AppRouter
 
     enum Sheet: String, Identifiable {
         case setup, edit, friend, weighIn
@@ -78,6 +79,14 @@ struct ChallengeView: View {
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await viewModel.refresh(context: modelContext) }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
+                Task { await viewModel.refresh(context: modelContext) }
+            }
+            .onChange(of: router.challengeSheet) { _, request in
+                guard let request else { return }
+                sheet = request
+                router.challengeSheet = nil
+            }
             .sheet(item: $sheet, onDismiss: { Task { await viewModel.refresh(context: modelContext) } }) { sheet in
                 switch sheet {
                 case .setup:
@@ -93,8 +102,6 @@ struct ChallengeView: View {
                 }
             }
         }
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Neka.paper.opacity(0.94), for: .tabBar)
     }
 
     // MARK: - Header

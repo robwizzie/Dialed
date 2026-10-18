@@ -34,6 +34,8 @@ struct HomeView: View {
     var onOpenChallenge: () -> Void = {}
 
     @State private var sheet: HomeSheet?
+    @State private var path: [HomeDestination] = []
+    @EnvironmentObject private var router: AppRouter
 
     enum HomeSheet: String, Identifiable {
         case water, meal, weighIn, voice, profile, challengeSetup, ask
@@ -41,7 +43,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 16) {
                     header
@@ -77,11 +79,10 @@ struct HomeView: View {
                     moreLinks
                 }
                 .padding(.horizontal, 16)
-                .padding(.bottom, 96)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
-            .overlay(alignment: .bottom) { quickLogBar }
             .toolbar(.hidden, for: .navigationBar)
             .task {
                 await requestHealthAccessIfNeeded()
@@ -91,12 +92,36 @@ struct HomeView: View {
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await refreshAll() }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
+                Task { await refreshAll() }
+            }
+            // Requests from the bottom bar's nested menu.
+            .onChange(of: router.homeSheet) { _, request in
+                guard let request else { return }
+                sheet = request
+                router.homeSheet = nil
+            }
+            .onChange(of: router.homePush) { _, request in
+                guard let request else { return }
+                path = [request]
+                router.homePush = nil
+            }
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .timeline:
+                    TimelineView().environment(\.colorScheme, .dark)
+                case .tracking:
+                    TodayView().environment(\.colorScheme, .dark)
+                case .calendar:
+                    CalendarView().environment(\.colorScheme, .dark)
+                case .devices:
+                    DevicesView()
+                }
+            }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll() } }) { sheet in
                 sheetContent(sheet)
             }
         }
-        .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Neka.paper.opacity(0.94), for: .tabBar)
     }
 
     private func refreshAll(force: Bool = false) async {
@@ -451,64 +476,6 @@ struct HomeView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Quick log
-
-    private var quickLogBar: some View {
-        HStack(spacing: 6) {
-            quickButton(icon: "drop.fill", label: "Water", tint: Neka.sky) { sheet = .water }
-            quickButton(icon: "scalemass.fill", label: "Weigh in", tint: Neka.green) { sheet = .weighIn }
-            quickButton(icon: "fork.knife", label: "Meal", tint: Neka.orange) { sheet = .meal }
-            Button {
-                #if os(iOS)
-                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                #endif
-                sheet = .voice
-            } label: {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(Neka.onInk)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(Neka.ink))
-            }
-            .buttonStyle(.dialedScale)
-            .accessibilityLabel("Voice log")
-        }
-        .padding(6)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Neka.surface.opacity(0.6)))
-                .overlay(Capsule().stroke(Neka.surface, lineWidth: 1))
-                .shadow(color: .black.opacity(0.1), radius: 18, y: 8)
-        )
-        .padding(.bottom, 10)
-    }
-
-    private func quickButton(icon: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button {
-            #if os(iOS)
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            #endif
-            action()
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(tint)
-                Text(label)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-            .padding(.horizontal, 12)
-            .frame(height: 46)
-            .background(Capsule().fill(Neka.surface.opacity(0.9)))
-        }
-        .buttonStyle(.dialedScale)
-        .accessibilityLabel("Log \(label.lowercased())")
-    }
-
     // MARK: - Sheets
 
     @ViewBuilder
@@ -551,5 +518,6 @@ struct LazyDestination<Content: View>: View {
 
 #Preview {
     HomeView()
+        .environmentObject(AppRouter())
         .modelContainer(for: DialedSchema.allModels, inMemory: true)
 }

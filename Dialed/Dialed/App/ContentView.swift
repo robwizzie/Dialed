@@ -54,54 +54,84 @@ enum AppTab: Int, Hashable {
 }
 
 struct MainTabView: View {
-    // Index-driven so notification deep-links can switch tabs.
-    @State private var selectedTab: AppTab = .home
+    // Shared with the bottom bar's nested menus and the tabs they drive.
+    @StateObject private var router = AppRouter()
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            HomeView(onOpenChallenge: { selectedTab = .challenge })
-                .tabItem {
-                    Label("Home", systemImage: "house.fill")
-                }
-                .tag(AppTab.home)
+        ZStack(alignment: .bottom) {
+            TabView(selection: $router.tab) {
+                HomeView(onOpenChallenge: { router.select(.challenge) })
+                    .tabContent()
+                    .tag(AppTab.home)
 
-            ChallengeView()
-                .tabItem {
-                    Label("Challenge", systemImage: "flag.2.crossed.fill")
-                }
-                .tag(AppTab.challenge)
+                ChallengeView()
+                    .tabContent()
+                    .tag(AppTab.challenge)
 
-            PlanView()
-                .tabItem {
-                    Label("Plan", systemImage: "calendar.day.timeline.left")
-                }
-                .tag(AppTab.plan)
+                PlanView()
+                    .tabContent()
+                    .tag(AppTab.plan)
 
-            PillarTrendsView()
-                .tabItem {
-                    Label("Trends", systemImage: "chart.line.uptrend.xyaxis")
-                }
-                .tag(AppTab.trends)
+                PillarTrendsView()
+                    .tabContent()
+                    .tag(AppTab.trends)
 
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: "gearshape.fill")
-                }
-                .tag(AppTab.settings)
+                SettingsView()
+                    .tabContent()
+                    .tag(AppTab.settings)
+            }
+
+            NestedNavBar(router: router)
+                .ignoresSafeArea(.keyboard)
         }
-        // Mid-tone green reads on both the light (Home, Challenge) and
-        // dark (Plan, Trends, Settings) tab bars.
+        .environmentObject(router)
         .tint(Neka.green)
+        .sheet(item: $router.quickLog, onDismiss: {
+            NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+        }) { item in
+            quickLogSheet(item)
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToToday"))) { _ in
-            selectedTab = .home
+            router.select(.home)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPlan"))) { _ in
-            selectedTab = .plan
+            router.select(.plan)
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHistory"))) { _ in
-            // The score calendar now lives under Home.
-            selectedTab = .home
+            router.openHome(.calendar)
         }
+    }
+
+    @ViewBuilder
+    private func quickLogSheet(_ item: QuickLog) -> some View {
+        switch item {
+        case .water:
+            WaterCaptureSheet()
+                .environment(\.colorScheme, .dark)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.hidden)
+        case .weighIn:
+            WeighInSheet(lastWeight: nil)
+                .presentationDetents([.medium])
+        case .meal:
+            AIMealSheet()
+                .presentationDetents([.large])
+        case .voice:
+            VoiceCaptureSheet()
+                .environment(\.colorScheme, .dark)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.hidden)
+        }
+    }
+}
+
+private extension View {
+    /// Hide the system tab bar (the custom bar replaces it) and keep
+    /// scrolling content clear of the floating bar.
+    func tabContent() -> some View {
+        self
+            .toolbar(.hidden, for: .tabBar)
+            .safeAreaPadding(.bottom, NestedNavBar.height)
     }
 }
 
