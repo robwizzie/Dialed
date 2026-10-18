@@ -44,7 +44,7 @@ enum Neka {
     static let track = Color(light: Color.black.opacity(0.06), dark: Color.white.opacity(0.09))
     /// Inactive bars and grabbers.
     static let muted = Color(light: Color.black.opacity(0.12), dark: Color.white.opacity(0.18))
-    static let shadow = Color(light: Color.black.opacity(0.05), dark: Color.black.opacity(0.4))
+    static let shadow = Color(light: Color.black.opacity(0.05), dark: Color.black.opacity(0.25))
 
     // MARK: - Accents
 
@@ -132,7 +132,7 @@ extension View {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(Neka.cardStroke, lineWidth: 1)
                 )
-                .shadow(color: Neka.shadow, radius: 18, x: 0, y: 8)
+                .shadow(color: Neka.shadow, radius: 8, x: 0, y: 4)
         )
     }
 

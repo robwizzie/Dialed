@@ -14,13 +14,13 @@ import Foundation
 struct WeightReading: Equatable, Identifiable {
     enum Source: String, Equatable {
         case healthKit
-        case fitbit
+        case googleHealth
         case manual
 
         var displayName: String {
             switch self {
             case .healthKit: return "Apple Health"
-            case .fitbit:    return "Fitbit"
+            case .googleHealth: return "Google Health"
             case .manual:    return "Manual"
             }
         }
@@ -292,7 +292,7 @@ enum WeightChallengeEngine {
 
     /// Merge readings from several sources. Two readings within ten minutes
     /// of each other within 0.5 lb are the same weigh-in reported twice (a
-    /// scale that writes to both Fitbit and Apple Health) — keep one.
+    /// scale that writes to both Google Health and Apple Health) — keep one.
     static func merge(_ groups: [[WeightReading]]) -> [WeightReading] {
         let all = groups.flatMap { $0 }.sorted { $0.date < $1.date }
         var out: [WeightReading] = []

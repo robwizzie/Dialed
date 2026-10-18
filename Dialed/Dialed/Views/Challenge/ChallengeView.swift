@@ -59,20 +59,10 @@ struct ChallengeView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
-                .padding(.bottom, 100)
+                .padding(.bottom, 24)
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
-            .overlay(alignment: .bottom) {
-                if viewModel.challenge != nil {
-                    Button { sheet = .weighIn } label: {
-                        Label("Weigh in", systemImage: "scalemass.fill")
-                    }
-                    .buttonStyle(.nekaPrimary)
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                }
-            }
             .toolbar(.hidden, for: .navigationBar)
             .task { await viewModel.refresh(context: modelContext) }
             .refreshable { await viewModel.refresh(context: modelContext) }
@@ -125,6 +115,15 @@ struct ChallengeView: View {
             }
             Spacer()
             if viewModel.challenge != nil {
+                Button { sheet = .weighIn } label: {
+                    Label("Weigh in", systemImage: "scalemass.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.onInk)
+                        .padding(.horizontal, 14)
+                        .frame(height: 42)
+                        .background(Capsule().fill(Neka.ink))
+                }
+                .buttonStyle(.dialedScale)
                 Button { sheet = .edit } label: {
                     Image(systemName: "slider.horizontal.3")
                         .font(.system(size: 15, weight: .semibold))

@@ -856,6 +856,20 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// Names of the apps that wrote samples of a type since `start`
+    /// (e.g. ["WaterH"] for dietary water). Empty when none or no access.
+    func sourceNames(_ identifier: HKQuantityTypeIdentifier, since start: Date) async -> [String] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
+        return await withCheckedContinuation { continuation in
+            let query = HKSourceQuery(sampleType: type, samplePredicate: predicate) { _, sources, _ in
+                let names = (sources ?? []).map(\.name).sorted()
+                continuation.resume(returning: names)
+            }
+            healthStore.execute(query)
+        }
+    }
+
     /// Body-mass readings in lbs, oldest first.
     func fetchWeightReadings(since start: Date) async throws -> [QuantityReading] {
         try await fetchSamples(.bodyMass, unit: .pound(), from: start)
