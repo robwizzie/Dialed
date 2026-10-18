@@ -95,6 +95,7 @@ final class BiometricSnapshot {
 extension BiometricSnapshot {
     enum Source: String, Codable {
         case fitbit
+        case googleHealth
         case healthkit
         case manual
     }

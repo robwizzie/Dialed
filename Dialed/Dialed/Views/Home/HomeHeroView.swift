@@ -55,16 +55,16 @@ struct HomeHeroView: View {
                 colors: [Neka.surface.opacity(0.95), Neka.paperDeep.opacity(0.6)],
                 startPoint: .top, endPoint: .bottom
             )
-            Circle()
-                .fill(Neka.greenSoft.opacity(0.8))
-                .frame(width: w * 0.9)
-                .blur(radius: 70)
-                .offset(x: w * 0.25, y: -h * 0.15)
-            Circle()
-                .fill(Neka.orangeSoft.opacity(0.7))
-                .frame(width: w * 0.6)
-                .blur(radius: 70)
-                .offset(x: -w * 0.3, y: h * 0.3)
+            // Radial gradients instead of blurred circles: same soft glow,
+            // no per-frame Gaussian blur.
+            RadialGradient(
+                colors: [Neka.greenSoft, Neka.greenSoft.opacity(0)],
+                center: UnitPoint(x: 0.78, y: 0.25), startRadius: 0, endRadius: w * 0.6
+            )
+            RadialGradient(
+                colors: [Neka.orangeSoft.opacity(0.9), Neka.orangeSoft.opacity(0)],
+                center: UnitPoint(x: 0.15, y: 0.8), startRadius: 0, endRadius: w * 0.5
+            )
         }
         .frame(width: w, height: h)
     }
@@ -76,7 +76,6 @@ struct HomeHeroView: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: w * 0.86 * photoScale, height: h * 0.95 * photoScale, alignment: .bottom)
-                .saturation(0.92)
                 .mask { fadeMask }
                 .frame(width: w, height: h, alignment: .bottom)
                 .offset(x: w * 0.08, y: photoOffsetY)
@@ -256,26 +255,18 @@ struct HomeHeroView: View {
     }
 }
 
-/// Yellow dot inside a frosted halo that breathes gently.
+/// Yellow dot inside a frosted halo. Static on purpose: four looping
+/// animations here kept the whole hero redrawing every frame.
 private struct PulseDot: View {
-    @State private var breathe = false
-
     var body: some View {
         ZStack {
             Circle()
                 .fill(Neka.surface.opacity(0.45))
-                .frame(width: 28, height: 28)
+                .frame(width: 26, height: 26)
                 .overlay(Circle().stroke(Neka.surface.opacity(0.9), lineWidth: 1))
-                .scaleEffect(breathe ? 1.12 : 0.92)
             Circle()
                 .fill(Neka.pulse)
                 .frame(width: 9, height: 9)
-                .shadow(color: Neka.pulse.opacity(0.8), radius: 4)
-        }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
-                breathe = true
-            }
         }
     }
 }

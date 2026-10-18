@@ -172,6 +172,7 @@ extension ContextEvent {
         case voice
         case healthkit
         case fitbit
+        case googleHealth
         case weatherkit
         case eventkit
         case ai

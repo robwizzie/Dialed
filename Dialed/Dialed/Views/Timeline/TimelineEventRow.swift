@@ -233,6 +233,7 @@ struct TimelineEventRow: View {
         case .voice: return "VOICE"
         case .healthkit: return "HEALTH"
         case .fitbit: return "FITBIT"
+        case .googleHealth: return "GOOGLE"
         case .weatherkit: return "WEATHER"
         case .eventkit: return "CALENDAR"
         case .ai: return "AI"
