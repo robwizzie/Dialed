@@ -46,36 +46,36 @@ struct ContentView: View {
 /// notification action wants the user routed somewhere; the cases below
 /// keep that wiring out of magic Int territory.
 enum AppTab: Int, Hashable {
-    case now = 0
-    case plan = 1
-    case calendar = 2
+    case home = 0
+    case challenge = 1
+    case plan = 2
     case trends = 3
     case settings = 4
 }
 
 struct MainTabView: View {
     // Index-driven so notification deep-links can switch tabs.
-    @State private var selectedTab: AppTab = .now
+    @State private var selectedTab: AppTab = .home
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            NowView()
+            HomeView(onOpenChallenge: { selectedTab = .challenge })
                 .tabItem {
-                    Label("Now", systemImage: "bolt.heart.fill")
+                    Label("Home", systemImage: "house.fill")
                 }
-                .tag(AppTab.now)
+                .tag(AppTab.home)
+
+            ChallengeView()
+                .tabItem {
+                    Label("Challenge", systemImage: "flag.2.crossed.fill")
+                }
+                .tag(AppTab.challenge)
 
             PlanView()
                 .tabItem {
                     Label("Plan", systemImage: "calendar.day.timeline.left")
                 }
                 .tag(AppTab.plan)
-
-            CalendarView()
-                .tabItem {
-                    Label("Calendar", systemImage: "calendar")
-                }
-                .tag(AppTab.calendar)
 
             PillarTrendsView()
                 .tabItem {
@@ -89,17 +89,18 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.settings)
         }
-        // Use the first stop of the readiness gradient — distinctly
-        // Dialed against the system blue, more legible on dark.
-        .tint(AppColors.Pillar.readiness.gradient.first!)
+        // Mid-tone green reads on both the light (Home, Challenge) and
+        // dark (Plan, Trends, Settings) tab bars.
+        .tint(Neka.green)
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToToday"))) { _ in
-            selectedTab = .now
+            selectedTab = .home
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToPlan"))) { _ in
             selectedTab = .plan
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHistory"))) { _ in
-            selectedTab = .calendar
+            // The score calendar now lives under Home.
+            selectedTab = .home
         }
     }
 }

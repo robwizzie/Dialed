@@ -24,6 +24,15 @@ struct SettingsView: View {
                             subtitle: "\(Int(settings.currentWeight))lbs → \(Int(settings.goalWeight))lbs"
                         )
                     }
+
+                    NavigationLink(destination: DevicesView()) {
+                        SettingsRow(
+                            icon: "dot.radiowaves.left.and.right",
+                            iconGradient: [.green, .mint],
+                            title: "Devices",
+                            subtitle: "Pixel Watch, smart scale, water bottle"
+                        )
+                    }
                 } header: {
                     Text("Personal")
                 }

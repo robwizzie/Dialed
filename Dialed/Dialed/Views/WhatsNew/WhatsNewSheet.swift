@@ -15,49 +15,43 @@ import SwiftUI
 /// Single source of truth for "what version's content is in this sheet."
 enum WhatsNew {
     /// Bump on every release that should re-present the sheet.
-    static let currentVersion: Int = 2
+    static let currentVersion: Int = 3
 
-    static let title = "Dialed 2.0"
-    static let subtitle = "Your health, finally seen at a glance."
+    static let title = "Dialed 3.0"
+    static let subtitle = "A brand-new Home, built around you."
 
     /// Features rendered as a vertical card stack. Order matters —
     /// the biggest behavior shift goes first.
     static let features: [Feature] = [
         Feature(
-            pillar: .recovery,
-            icon: "circle.hexagongrid.fill",
-            title: "Four-pillar scores",
-            blurb: "Recovery, Readiness, Energy, and Strain — adaptive scores driven by *your* baseline, not a population average."
-        ),
-        Feature(
             pillar: .readiness,
-            icon: "calendar.day.timeline.left",
-            title: "Adaptive plan",
-            blurb: "Your day reshapes itself based on how you slept. Low recovery? Workouts auto-skip and wind-down moves earlier."
-        ),
-        Feature(
-            pillar: .recovery,
-            icon: "clock.arrow.circlepath",
-            title: "Timeline",
-            blurb: "Everything you log — meals, caffeine, mood, workouts — appears in one scrubbable day view with smart annotations."
-        ),
-        Feature(
-            pillar: .energy,
-            icon: "mic.fill",
-            title: "Voice capture",
-            blurb: "Tap the floating mic, say \"16 oz water\" or \"push day 45 minutes,\" and it lands on the Timeline."
+            icon: "person.crop.rectangle.fill",
+            title: "You, on your dashboard",
+            blurb: "Add a photo and Dialed lifts you off the background, then pins your live heart rate, breathing, blood oxygen and weight right onto it."
         ),
         Feature(
             pillar: .strain,
-            icon: "bell.badge.fill",
-            title: "Smart notifications",
-            blurb: "Time-aware nudges with mark-done, snooze, and skip actions. They cancel themselves when your plan changes."
+            icon: "flag.2.crossed.fill",
+            title: "Weight-loss challenge",
+            blurb: "Go head-to-head with a friend. Dialed tracks who's ahead, your pace vs. goal, where your trend lands on the final day, and the deficit it takes to win."
         ),
         Feature(
             pillar: .recovery,
+            icon: "dot.radiowaves.left.and.right",
+            title: "Watch, scale and bottle",
+            blurb: "Pixel Watch data through Fitbit, weigh-ins from your smart scale, and water from your smart bottle all land on Home automatically."
+        ),
+        Feature(
+            pillar: .energy,
             icon: "sparkles",
-            title: "Insights that explain",
-            blurb: "When late caffeine costs you sleep efficiency, you'll see why — right on the event that caused it."
+            title: "Coach",
+            blurb: "A short, ranked list of what to do next: drink to catch up, take a walk, close your protein, or step on the scale."
+        ),
+        Feature(
+            pillar: .readiness,
+            icon: "square.grid.2x2.fill",
+            title: "Everything at a glance",
+            blurb: "Weight, water, HRV, sleep, resting heart rate, steps, fuel and today's timeline in one bright, phone-first layout."
         )
     ]
 
