@@ -55,6 +55,8 @@ enum FitbitConfig {
         "respiratory_rate",
         "oxygen_saturation",
         "temperature",
+        "weight",       // smart-scale weigh-ins (Aria / anything synced to Fitbit)
+        "nutrition",    // water logged in the Fitbit app
         "profile"
     ]
 
