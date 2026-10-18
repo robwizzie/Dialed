@@ -121,7 +121,9 @@ final class GoogleHealthAuth: NSObject, ObservableObject {
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = false
             self.session = session
-            session.start()
+            if !session.start() {
+                continuation.resume(throwing: AuthError.tokenExchangeFailed("couldn't open the Google sign-in sheet"))
+            }
         }
 
         let items = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)?.queryItems ?? []

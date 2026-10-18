@@ -44,7 +44,7 @@ final class GoogleHealthAPI {
             if let pageToken { items.append(URLQueryItem(name: "pageToken", value: pageToken)) }
             // Strict encoding: filter values contain quotes, spaces, >= and colons.
             components.percentEncodedQueryItems = items.map {
-                URLQueryItem(name: $0.name, value: $0.value.map(Self.strictEncode))
+                URLQueryItem(name: $0.name, value: $0.value.map { Self.strictEncode($0) })
             }
             var request = URLRequest(url: components.url!)
             request.httpMethod = "GET"
@@ -73,7 +73,7 @@ final class GoogleHealthAPI {
         return response.rollupDataPoints ?? []
     }
 
-    private static func strictEncode(_ value: String) -> String {
+    nonisolated private static func strictEncode(_ value: String) -> String {
         var allowed = CharacterSet.alphanumerics
         allowed.insert(charactersIn: "-._~")
         return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
