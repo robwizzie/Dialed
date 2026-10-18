@@ -146,6 +146,44 @@ enum FitbitDTO {
             let caloriesOut: Int?
         }
     }
+
+    // Requests carry no Accept-Language header, so Fitbit answers in METRIC:
+    // weight in kg, water in ml. Convert at the call site.
+
+    // MARK: Weight — /1/user/-/body/log/weight/date/[start]/[end].json
+    struct WeightLogResponse: Decodable {
+        let weight: [Entry]
+
+        struct Entry: Decodable {
+            let date: String      // "YYYY-MM-DD"
+            let time: String?     // "HH:mm:ss"
+            let weight: Double    // kg
+            let fat: Double?
+            let source: String?
+        }
+    }
+
+    // MARK: Water — /1/user/-/foods/log/water/date/[date].json
+    struct WaterLogResponse: Decodable {
+        let summary: Summary?
+        struct Summary: Decodable {
+            let water: Double?    // ml
+        }
+    }
+
+    // MARK: Steps series — /1/user/-/activities/steps/date/[date]/7d.json
+    struct StepsSeriesResponse: Decodable {
+        let activitiesSteps: [Point]
+
+        enum CodingKeys: String, CodingKey {
+            case activitiesSteps = "activities-steps"
+        }
+
+        struct Point: Decodable {
+            let dateTime: String  // "YYYY-MM-DD"
+            let value: String     // numeric string
+        }
+    }
 }
 
 @MainActor
@@ -218,6 +256,36 @@ final class FitbitAPIClient {
     func activitySummary(on date: Date) async throws -> FitbitDTO.ActivitySummaryResponse {
         let path = "/1/user/-/activities/date/\(Self.dateFormatter.string(from: date)).json"
         return try await request(path: path)
+    }
+
+    /// Weight logs between two dates (Fitbit caps the range at 31 days).
+    func weightLogs(from start: Date, to end: Date) async throws -> FitbitDTO.WeightLogResponse {
+        let path = "/1/user/-/body/log/weight/date/\(Self.dateFormatter.string(from: start))/\(Self.dateFormatter.string(from: end)).json"
+        return try await request(path: path)
+    }
+
+    func water(on date: Date) async throws -> FitbitDTO.WaterLogResponse {
+        let path = "/1/user/-/foods/log/water/date/\(Self.dateFormatter.string(from: date)).json"
+        return try await request(path: path)
+    }
+
+    /// Daily step totals for the 7 days ending on `date`.
+    func stepsSeries(endingOn date: Date) async throws -> FitbitDTO.StepsSeriesResponse {
+        let path = "/1/user/-/activities/steps/date/\(Self.dateFormatter.string(from: date))/7d.json"
+        return try await request(path: path)
+    }
+
+    /// Parse Fitbit's "YYYY-MM-DD" (+ optional "HH:mm:ss") in local time.
+    static func parseDay(_ day: String, time: String? = nil) -> Date? {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone.current
+        if let time {
+            f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            return f.date(from: "\(day) \(time)")
+        }
+        f.dateFormat = "yyyy-MM-dd"
+        return f.date(from: day)
     }
 
     // MARK: - Core request

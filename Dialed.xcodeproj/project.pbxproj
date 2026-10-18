@@ -401,7 +401,7 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
@@ -436,7 +436,7 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed needs access to your health data to automatically track sleep quality from RingConn, detect workouts from Apple Watch, monitor water intake from your smart water bottle, and provide accurate daily scores based on your actual metrics.";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";

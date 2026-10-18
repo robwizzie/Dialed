@@ -2,6 +2,13 @@
 
 An automated daily fitness dashboard that pulls health data from Apple Health (RingConn, Apple Watch, smart water bottles) and outputs a single daily score with streaks and trends.
 
+## Dialed 3.0 — Home + Weight-Loss Challenge
+
+- **Home (light "Neka" design)**: greeting, your photo with the background removed on-device (Vision) and live vitals pinned to it (heart, breathing, blood O₂, weight), challenge scoreboard, body-state rings, Weight / Water / HRV / Sleep / Resting HR / Activity tiles, Fuel (protein + calorie budget), today's timeline, and a rules-based Coach. Floating quick-log bar for water, weigh-in, meal and voice.
+- **Challenge tab**: head-to-head vs. a friend (scored by % of body weight or total lbs), weight vs. goal-pace chart, trend projection to the final day, weekly rate, and the daily deficit needed to hit your goal. Log your friend's weigh-ins by hand.
+- **Devices**: Pixel Watch through the Fitbit Web API (connect from Home → Devices or Settings → Devices; needs `FitbitClientID`, see `SETUP_FITBIT.md`), smart scale via Apple Health body mass or the Fitbit weight log, smart water bottle via Apple Health dietary water or the Fitbit water log. Manual weigh-ins are stored as `WeightEntry`.
+- Logic lives in `WeightChallengeEngine` and `CoachEngine` (pure, unit-tested).
+
 ## Features (Automation-First Design)
 
 ### Fully Automated ✅

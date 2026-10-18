@@ -37,7 +37,10 @@ enum DialedSchema {
         WeeklyTemplate.self,
         TemplateBlock.self,
         DailyPlan.self,
-        PlanBlock.self
+        PlanBlock.self,
+
+        // Weight-loss challenge — manual weigh-ins
+        WeightEntry.self
     ]
 
     /// Build a ModelContainer with the full schema. Used by previews and the
