@@ -314,7 +314,7 @@ struct HomeTimelineCard: View {
                     .foregroundColor(Neka.ink)
                 Spacer()
                 NavigationLink {
-                    TimelineView()
+                    LazyDestination { TimelineView() }
                         .environment(\.colorScheme, .dark)
                 } label: {
                     Image(systemName: "arrow.up.right")

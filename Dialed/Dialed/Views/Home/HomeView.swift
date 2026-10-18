@@ -228,24 +228,36 @@ struct HomeView: View {
     }
 
     private var weightTile: some View {
-        let trend = viewModel.progress?.series.suffix(30).map(\.trend)
+        let trend: [Double] = viewModel.progress?.series.suffix(30).map(\.trend)
             ?? WeightChallengeEngine.dailySeries(viewModel.weightReadings).suffix(30).map(\.trend)
-        let lost = viewModel.progress?.lostLbs
+        let value: String = viewModel.latestWeight.map { String(format: "%.1f", $0.pounds) } ?? "--"
+        var pill: (text: String, tint: Color, fill: Color)? = nil
+        if let lost = viewModel.progress?.lostLbs {
+            let amount = String(format: "%.1f", abs(lost))
+            pill = lost >= 0
+                ? (text: "−\(amount) lb", tint: Neka.green, fill: Color.white.opacity(0.85))
+                : (text: "+\(amount) lb", tint: Neka.rose, fill: Neka.roseSoft)
+        }
+        var footer = "Connect your scale"
+        if let start = viewModel.progress?.startWeight {
+            footer = "Start \(String(format: "%.1f", start))"
+        }
+        var footerTrailing: String? = nil
+        if let goal = viewModel.progress?.goalLossLbs {
+            footerTrailing = "Goal −\(String(format: "%.0f", goal))"
+        }
+
         return HomeMetricTile(
             title: "Weight",
-            value: viewModel.latestWeight.map { String(format: "%.1f", $0.pounds) } ?? "--",
+            value: value,
             unit: "lb",
             wash: .mint,
             showsArrow: true,
-            pill: lost.map { l in
-                (text: l >= 0 ? "−\(String(format: "%.1f", l)) lb" : "+\(String(format: "%.1f", -l)) lb",
-                 tint: l >= 0 ? Neka.green : Neka.rose,
-                 fill: l >= 0 ? Color.white.opacity(0.85) : Neka.roseSoft)
-            },
-            footer: viewModel.progress?.startWeight.map { "Start \(String(format: "%.1f", $0))" } ?? "Connect your scale",
-            footerTrailing: viewModel.progress.map { "Goal −\(String(format: "%.0f", $0.goalLossLbs))" }
+            pill: pill,
+            footer: footer,
+            footerTrailing: footerTrailing
         ) {
-            NekaSparkline(values: Array(trend), color: Neka.green, fill: true)
+            NekaSparkline(values: trend, color: Neka.green, fill: true)
                 .frame(height: 38)
         }
     }
@@ -387,8 +399,10 @@ struct HomeView: View {
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink {
-            // Legacy screens are designed dark.
-            destination()
+            // Legacy screens are designed dark. Lazy so TodayView /
+            // CalendarView (whose inits open a ModelContainer) are only
+            // built when tapped, not on every Home redraw.
+            LazyDestination(build: destination)
                 .environment(\.colorScheme, .dark)
         } label: {
             HStack(spacing: 14) {
@@ -500,6 +514,12 @@ struct HomeView: View {
                 .presentationDetents([.large])
         }
     }
+}
+
+/// Defers building a NavigationLink destination until it's shown.
+struct LazyDestination<Content: View>: View {
+    let build: () -> Content
+    var body: some View { build() }
 }
 
 #Preview {
