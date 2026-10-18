@@ -19,16 +19,23 @@
 import Foundation
 
 enum FitbitConfig {
-    /// Client ID read from Info.plist (key: `FitbitClientID`).
-    /// Returns nil when the app hasn't been configured yet, which lets the
-    /// connect flow show a helpful error instead of crashing.
+    /// UserDefaults key for a Client ID pasted in Devices → Pixel Watch.
+    static let clientIDDefaultsKey = "fitbit.clientID"
+
+    /// Client ID from Info.plist (key: `FitbitClientID`), or the one pasted
+    /// into the Devices screen. Returns nil when neither is set, which lets
+    /// the connect flow show a helpful error instead of crashing.
+    /// No URL-scheme registration is needed: ASWebAuthenticationSession
+    /// intercepts the `dialed://` callback itself.
     static var clientID: String? {
-        guard let id = Bundle.main.object(forInfoDictionaryKey: "FitbitClientID") as? String,
-              !id.isEmpty,
-              id != "REPLACE_WITH_YOUR_FITBIT_CLIENT_ID" else {
-            return nil
+        if let id = Bundle.main.object(forInfoDictionaryKey: "FitbitClientID") as? String,
+           !id.isEmpty,
+           id != "REPLACE_WITH_YOUR_FITBIT_CLIENT_ID" {
+            return id
         }
-        return id
+        let saved = UserDefaults.standard.string(forKey: clientIDDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (saved?.isEmpty ?? true) ? nil : saved
     }
 
     /// Custom URL scheme + path Fitbit will redirect back to after authorization.

@@ -26,6 +26,9 @@ struct HomeView: View {
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var stateModel = NowViewModel()
     @ObservedObject private var photos = ProfilePhotoStore.shared
+    @StateObject private var briefModel = AIBriefModel()
+    @State private var aiAvailability: AIAvailability = DialedAI.availability
+    @State private var askedForHealthAccess = false
 
     /// Switches the tab bar to the Challenge tab.
     var onOpenChallenge: () -> Void = {}
@@ -33,7 +36,7 @@ struct HomeView: View {
     @State private var sheet: HomeSheet?
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, weighIn, voice, profile, challengeSetup
+        case water, meal, weighIn, voice, profile, challengeSetup, ask
         var id: String { rawValue }
     }
 
@@ -51,6 +54,14 @@ struct HomeView: View {
                     )
                     .onTapGesture {
                         if viewModel.challenge != nil { onOpenChallenge() }
+                    }
+                    if aiAvailability != .unsupportedDevice {
+                        AIBriefCard(
+                            model: briefModel,
+                            availability: aiAvailability,
+                            onRegenerate: { Task { await briefModel.generate(viewModel.snapshot) } },
+                            onAsk: { sheet = .ask }
+                        )
                     }
                     HomeStateStrip(items: stateItems)
                     tiles
@@ -72,8 +83,11 @@ struct HomeView: View {
             .nekaPageBackground()
             .overlay(alignment: .bottom) { quickLogBar }
             .toolbar(.hidden, for: .navigationBar)
-            .task { await refreshAll() }
-            .refreshable { await refreshAll() }
+            .task {
+                await requestHealthAccessIfNeeded()
+                await refreshAll()
+            }
+            .refreshable { await refreshAll(force: true) }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await refreshAll() }
             }
@@ -81,15 +95,25 @@ struct HomeView: View {
                 sheetContent(sheet)
             }
         }
-        .environment(\.colorScheme, .light)
         .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color.white.opacity(0.94), for: .tabBar)
-        .toolbarColorScheme(.light, for: .tabBar)
+        .toolbarBackground(Neka.paper.opacity(0.94), for: .tabBar)
     }
 
-    private func refreshAll() async {
-        await viewModel.refresh(context: modelContext)
+    private func refreshAll(force: Bool = false) async {
+        await viewModel.refresh(context: modelContext, force: force)
         await stateModel.refresh(context: modelContext)
+        aiAvailability = DialedAI.availability
+        await briefModel.refreshIfStale(viewModel.snapshot)
+    }
+
+    /// New data types (heart rate, SpO₂, breathing, food) need a fresh
+    /// Apple Health prompt; ask once, on first Home load after updating.
+    private func requestHealthAccessIfNeeded() async {
+        guard !askedForHealthAccess else { return }
+        askedForHealthAccess = true
+        if await HealthKitManager.shared.needsAuthorizationPrompt() {
+            try? await HealthKitManager.shared.requestAuthorization()
+        }
     }
 
     // MARK: - Header
@@ -128,7 +152,7 @@ struct HomeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Neka.ink)
                         .frame(width: 42, height: 42)
-                        .background(Circle().fill(Color.white.opacity(0.9)))
+                        .background(Circle().fill(Neka.surface.opacity(0.9)))
                         .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
                 }
                 .accessibilityLabel("Devices")
@@ -156,13 +180,13 @@ struct HomeView: View {
             }
             .frame(width: 46, height: 46)
             .clipShape(Circle())
-            .overlay(Circle().stroke(Color.white, lineWidth: 2))
+            .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
             .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
 
             Circle()
                 .fill(FitbitTokenStore.isConnected ? Neka.green : Neka.inkTertiary)
                 .frame(width: 11, height: 11)
-                .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
         }
     }
 
@@ -235,7 +259,7 @@ struct HomeView: View {
         if let lost = viewModel.progress?.lostLbs {
             let amount = String(format: "%.1f", abs(lost))
             pill = lost >= 0
-                ? (text: "−\(amount) lb", tint: Neka.green, fill: Color.white.opacity(0.85))
+                ? (text: "−\(amount) lb", tint: Neka.green, fill: Neka.surface.opacity(0.85))
                 : (text: "+\(amount) lb", tint: Neka.rose, fill: Neka.roseSoft)
         }
         var footer = "Connect your scale"
@@ -442,7 +466,7 @@ struct HomeView: View {
             } label: {
                 Image(systemName: "mic.fill")
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Neka.onInk)
                     .frame(width: 46, height: 46)
                     .background(Circle().fill(Neka.ink))
             }
@@ -453,8 +477,8 @@ struct HomeView: View {
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.white.opacity(0.6)))
-                .overlay(Capsule().stroke(Color.white, lineWidth: 1))
+                .overlay(Capsule().fill(Neka.surface.opacity(0.6)))
+                .overlay(Capsule().stroke(Neka.surface, lineWidth: 1))
                 .shadow(color: .black.opacity(0.1), radius: 18, y: 8)
         )
         .padding(.bottom, 10)
@@ -479,7 +503,7 @@ struct HomeView: View {
             }
             .padding(.horizontal, 12)
             .frame(height: 46)
-            .background(Capsule().fill(Color.white.opacity(0.9)))
+            .background(Capsule().fill(Neka.surface.opacity(0.9)))
         }
         .buttonStyle(.dialedScale)
         .accessibilityLabel("Log \(label.lowercased())")
@@ -496,10 +520,11 @@ struct HomeView: View {
                 .presentationDetents([.medium])
                 .presentationDragIndicator(.hidden)
         case .meal:
-            MealCaptureSheet()
-                .environment(\.colorScheme, .dark)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.hidden)
+            AIMealSheet()
+                .presentationDetents([.large])
+        case .ask:
+            AskDialedSheet(snapshot: viewModel.snapshot)
+                .presentationDetents([.large])
         case .voice:
             VoiceCaptureSheet()
                 .environment(\.colorScheme, .dark)
