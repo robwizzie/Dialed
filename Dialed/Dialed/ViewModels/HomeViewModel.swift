@@ -336,6 +336,11 @@ final class HomeViewModel: ObservableObject {
         let hkStepsToday = hkStepsByDay[today] ?? 0
         let fitbitStepsToday = fitbitSteps[today] ?? 0
         let usedFitbitVitals = latestValue(snapshots) { $0.spO2 ?? $0.breathingRate ?? $0.restingHeartRate } != nil
+        var waterSources: [String] = []
+        if hkWaterToday > 0 { waterSources.append("Apple Health") }
+        if (fitbitWaterOz ?? 0) > 0 { waterSources.append("Fitbit") }
+        if capturedWater > 0 { waterSources.append("Logged in Dialed") }
+        let waterSource: String? = waterSources.isEmpty ? nil : waterSources.joined(separator: " + ")
         let rows: [DataSourceStatus] = [
             DataSourceStatus(metric: "Weight",
                   value: latestWeight.map { String(format: "%.1f lb", $0.pounds) },
@@ -343,10 +348,7 @@ final class HomeViewModel: ObservableObject {
                   date: latestWeight?.date),
             DataSourceStatus(metric: "Water",
                   value: waterOz > 0 ? "\(Int(waterOz)) oz" : nil,
-                  source: [hkWaterToday > 0 ? "Apple Health" : nil,
-                           (fitbitWaterOz ?? 0) > 0 ? "Fitbit" : nil,
-                           capturedWater > 0 ? "Logged in Dialed" : nil]
-                    .compactMap { $0 }.joined(separator: " + ").ifEmpty("—"),
+                  source: waterSource,
                   date: waterOz > 0 ? now : nil),
             DataSourceStatus(metric: "Steps",
                   value: steps > 0 ? steps.formatted() : nil,
