@@ -47,6 +47,8 @@ struct ChallengeView: View {
                     if let c = viewModel.challenge, let p = viewModel.progress {
                         scoreboard(c, p)
                         headToHead(c, p)
+                        TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
+                            .id("\(c.scoring.rawValue)-\(p.leader)-\(Int(p.margin * 10))")
                         chartCard(c, p)
                         paceCard(c, p)
                         weighInsCard(p)
@@ -91,10 +93,8 @@ struct ChallengeView: View {
                 }
             }
         }
-        .environment(\.colorScheme, .light)
         .toolbarBackground(.visible, for: .tabBar)
-        .toolbarBackground(Color.white.opacity(0.94), for: .tabBar)
-        .toolbarColorScheme(.light, for: .tabBar)
+        .toolbarBackground(Neka.paper.opacity(0.94), for: .tabBar)
     }
 
     // MARK: - Header
@@ -123,7 +123,7 @@ struct ChallengeView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Neka.ink)
                         .frame(width: 42, height: 42)
-                        .background(Circle().fill(Color.white.opacity(0.9)))
+                        .background(Circle().fill(Neka.surface.opacity(0.9)))
                 }
                 .accessibilityLabel("Edit challenge")
             }
@@ -134,7 +134,7 @@ struct ChallengeView: View {
 
     private var emptyState: some View {
         VStack(spacing: 18) {
-            NekaIconBadge(systemName: "flag.2.crossed.fill", tint: Neka.orange, fill: Color.white, size: 72)
+            NekaIconBadge(systemName: "flag.2.crossed.fill", tint: Neka.orange, fill: Neka.surface, size: 72)
             Text("Set up your challenge")
                 .font(.system(size: 22, weight: .bold))
                 .foregroundColor(Neka.ink)
@@ -235,7 +235,7 @@ struct ChallengeView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Neka.ink)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.black.opacity(0.04)))
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
             }
             .buttonStyle(.dialedScale)
         }
@@ -282,7 +282,7 @@ struct ChallengeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(isLeader ? tint.opacity(0.12) : Color.black.opacity(0.03))
+                .fill(isLeader ? tint.opacity(0.12) : Neka.track)
         )
     }
 
@@ -295,6 +295,29 @@ struct ChallengeView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Neka.ink)
         }
+    }
+
+    // MARK: - Trash talk
+
+    private func trashTalkSnapshot(_ c: WeightChallenge, _ p: WeightChallengeEngine.Progress) -> HealthSnapshot {
+        var s = HealthSnapshot()
+        s.firstName = UserDefaults.standard.string(forKey: "user.firstName") ?? ""
+        s.friendName = c.friendDisplayName
+        s.challengeDay = p.dayNumber
+        s.challengeDays = p.totalDays
+        s.daysLeft = p.daysLeft
+        s.scoring = c.scoring
+        if p.startWeight != nil && p.currentWeight != nil {
+            s.lostLbs = p.lostLbs
+            s.lostPercent = p.lostPercent
+        }
+        s.friendLostLbs = p.friend?.lostLbs
+        s.friendLostPercent = p.friend?.lostPercent
+        s.leader = p.leader
+        s.margin = p.margin
+        s.goalLossLbs = p.goalLossLbs
+        s.weighedInToday = p.weighedInToday
+        return s
     }
 
     // MARK: - Chart
@@ -484,7 +507,7 @@ struct FriendWeighInSheet: View {
     var body: some View {
         VStack(spacing: 20) {
             Capsule()
-                .fill(Color.black.opacity(0.12))
+                .fill(Neka.muted)
                 .frame(width: 38, height: 4)
                 .padding(.top, 10)
 
@@ -518,7 +541,6 @@ struct FriendWeighInSheet: View {
         .padding(.horizontal, 24)
         .padding(.bottom, 24)
         .background(Neka.paper.ignoresSafeArea())
-        .environment(\.colorScheme, .light)
         .onAppear {
             let last = challenge?.friendWeighIns.max(by: { $0.date < $1.date })?.pounds
             pounds = last ?? challenge?.friendStartWeight ?? 0

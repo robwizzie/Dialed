@@ -112,7 +112,6 @@ struct ChallengeSetupSheet: View {
             }
         }
         .tint(Neka.ink)
-        .environment(\.colorScheme, .light)
     }
 
     private var lengthInDays: Int {

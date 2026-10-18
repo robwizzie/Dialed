@@ -52,7 +52,7 @@ struct HomeHeroView: View {
     private func backdrop(w: CGFloat, h: CGFloat) -> some View {
         ZStack {
             LinearGradient(
-                colors: [Color.white.opacity(0.95), Neka.paperDeep.opacity(0.6)],
+                colors: [Neka.surface.opacity(0.95), Neka.paperDeep.opacity(0.6)],
                 startPoint: .top, endPoint: .bottom
             )
             Circle()
@@ -85,7 +85,7 @@ struct HomeHeroView: View {
                         ProgressView()
                             .tint(Neka.ink)
                             .padding(14)
-                            .background(Circle().fill(.white.opacity(0.9)))
+                            .background(Circle().fill(Neka.surface.opacity(0.9)))
                     }
                 }
                 .accessibilityLabel("Your photo. Tap to change.")
@@ -105,7 +105,7 @@ struct HomeHeroView: View {
                 Button(action: onTapPhoto) {
                     Label("Add your photo", systemImage: "camera.fill")
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Neka.onInk)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
                         .background(Capsule().fill(Neka.ink))
@@ -263,9 +263,9 @@ private struct PulseDot: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(Color.white.opacity(0.45))
+                .fill(Neka.surface.opacity(0.45))
                 .frame(width: 28, height: 28)
-                .overlay(Circle().stroke(Color.white.opacity(0.9), lineWidth: 1))
+                .overlay(Circle().stroke(Neka.surface.opacity(0.9), lineWidth: 1))
                 .scaleEffect(breathe ? 1.12 : 0.92)
             Circle()
                 .fill(Neka.pulse)

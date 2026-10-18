@@ -1,0 +1,287 @@
+//
+//  DialedAI.swift
+//  Dialed
+//
+//  Apple Intelligence, on-device, via the Foundation Models framework
+//  (iOS 26+). Nothing leaves the phone. Powers:
+//
+//    • Daily brief — a short, personal read on today for the Home screen
+//    • Ask Dialed — chat about your own numbers ("am I on pace?")
+//    • Meal estimate — "chipotle bowl, double chicken" → calories + protein
+//    • Trash talk — a message to send your challenge opponent
+//
+//  The app still targets iOS 17, so everything here is gated with
+//  `canImport` + `#available`. Callers use the plain types below and get
+//  nil (or a fallback) when the model isn't available.
+//
+
+import Foundation
+#if canImport(Combine)
+import Combine
+#endif
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+// MARK: - Plain result types (no framework dependency)
+
+struct AIBrief: Codable, Equatable {
+    var headline: String
+    var message: String
+    var actions: [String]
+}
+
+struct AIMealEstimate: Equatable {
+    var name: String
+    var calories: Int
+    var proteinGrams: Int
+    var assumption: String
+}
+
+enum AIAvailability: Equatable {
+    case available
+    case unsupportedDevice
+    case notEnabled
+    case notReady
+
+    var explanation: String {
+        switch self {
+        case .available:
+            return "Apple Intelligence is on."
+        case .unsupportedDevice:
+            return "Needs Apple Intelligence: iPhone 15 Pro or newer on iOS 26."
+        case .notEnabled:
+            return "Turn on Apple Intelligence in Settings to use this."
+        case .notReady:
+            return "Apple Intelligence is still downloading. Try again soon."
+        }
+    }
+}
+
+// MARK: - Facade
+
+@MainActor
+enum DialedAI {
+
+    static var availability: AIAvailability {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            switch SystemLanguageModel.default.availability {
+            case .available:
+                return .available
+            case .unavailable(let reason):
+                switch reason {
+                case .deviceNotEligible:           return .unsupportedDevice
+                case .appleIntelligenceNotEnabled: return .notEnabled
+                case .modelNotReady:               return .notReady
+                @unknown default:                  return .unsupportedDevice
+                }
+            }
+        }
+        #endif
+        return .unsupportedDevice
+    }
+
+    static var isAvailable: Bool { availability == .available }
+
+    /// Shared rules for every prompt: grounded, brief, safe.
+    static let coachRules = """
+    You are Dialed, a warm, witty personal health coach inside a fitness app. \
+    The user is in a one-month weight-loss challenge against a friend. \
+    Only use the numbers you are given — never invent data. Be specific and brief. \
+    Never recommend eating under 1,500 calories a day, losing more than 2 lb a week, \
+    skipping meals, or anything unsafe. You are not a doctor; for medical questions, \
+    suggest talking to one.
+    """
+
+    // MARK: Daily brief
+
+    static func brief(for snapshot: HealthSnapshot) async -> AIBrief? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: coachRules)
+            let prompt = """
+            Write today's brief for the user from these numbers. \
+            Mention the challenge standing if there is one, and what matters most for the rest of today.
+
+            \(snapshot.promptText)
+            """
+            do {
+                let response = try await session.respond(to: prompt, generating: GeneratedBrief.self)
+                let b = response.content
+                return AIBrief(
+                    headline: b.headline,
+                    message: b.message,
+                    actions: Array(b.actions.prefix(3))
+                )
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
+    // MARK: Meal estimate
+
+    static func estimateMeal(_ description: String) async -> AIMealEstimate? {
+        let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You estimate nutrition for meals people describe in plain language. \
+            Assume typical US restaurant or home portions unless sizes are given. \
+            Be realistic, not optimistic — people underestimate calories.
+            """)
+            do {
+                let response = try await session.respond(
+                    to: "Estimate this meal: \(text)",
+                    generating: GeneratedMeal.self
+                )
+                let m = response.content
+                return AIMealEstimate(
+                    name: m.name,
+                    calories: max(0, min(4_000, m.calories)),
+                    proteinGrams: max(0, min(300, m.proteinGrams)),
+                    assumption: m.assumption
+                )
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
+    // MARK: Trash talk
+
+    static func trashTalk(_ snapshot: HealthSnapshot, tone: TrashTalkTone) async -> String? {
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You write short, funny text messages between two friends in a weight-loss \
+            challenge. Keep it playful — never mean about bodies, weight or looks; \
+            roast effort, snacks and excuses instead. One or two sentences, at most one emoji, \
+            no hashtags, no quotation marks.
+            """)
+            let style: String
+            switch tone {
+            case .friendly: style = "friendly and teasing"
+            case .savage:   style = "savage but good-natured"
+            case .hype:     style = "hyped-up and motivating for both of you"
+            }
+            let prompt = """
+            Write a \(style) text from the user to \(snapshot.friendName ?? "their friend") about the challenge.
+
+            \(snapshot.promptText)
+            """
+            do {
+                let response = try await session.respond(to: prompt, options: GenerationOptions(temperature: 1.0))
+                return response.content.trimmingCharacters(in: CharacterSet(charactersIn: "\"“” \n"))
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+}
+
+// MARK: - Ask Dialed chat
+
+@MainActor
+final class DialedAIChat: ObservableObject {
+    struct Message: Identifiable, Equatable {
+        enum Role { case user, assistant }
+        let id = UUID()
+        let role: Role
+        let text: String
+    }
+
+    @Published private(set) var messages: [Message] = []
+    @Published private(set) var isThinking = false
+
+    /// Holds a LanguageModelSession on iOS 26 (typed loosely so this class
+    /// stays available on iOS 17). The session keeps the conversation.
+    private var session: AnyObject?
+    private var snapshot: HealthSnapshot
+
+    init(snapshot: HealthSnapshot) {
+        self.snapshot = snapshot
+    }
+
+    func update(snapshot: HealthSnapshot) {
+        self.snapshot = snapshot
+        session = nil   // next question starts fresh with the new numbers
+    }
+
+    func send(_ raw: String) async {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, !isThinking else { return }
+        messages.append(Message(role: .user, text: text))
+        isThinking = true
+        defer { isThinking = false }
+
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), DialedAI.isAvailable {
+            let s: LanguageModelSession
+            if let existing = session as? LanguageModelSession {
+                s = existing
+            } else {
+                s = LanguageModelSession(instructions: """
+                \(DialedAI.coachRules) \
+                Answer in at most four short sentences or a short list. \
+                Here is the user's data for today:
+
+                \(snapshot.promptText)
+                """)
+                session = s
+            }
+            do {
+                let response = try await s.respond(to: text)
+                messages.append(Message(role: .assistant, text: response.content))
+            } catch {
+                // Most likely the context window filled up — start over.
+                session = nil
+                messages.append(Message(role: .assistant, text: "I lost my train of thought — ask me that again?"))
+            }
+            return
+        }
+        #endif
+        messages.append(Message(role: .assistant, text: DialedAI.availability.explanation))
+    }
+}
+
+// MARK: - Generable schemas (iOS 26)
+
+#if canImport(FoundationModels)
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedBrief {
+    @Guide(description: "A punchy headline of 3 to 6 words about today")
+    var headline: String
+
+    @Guide(description: "Two short sentences of encouraging, specific coaching grounded in the numbers")
+    var message: String
+
+    @Guide(description: "Three short, concrete actions for the rest of today, each under 8 words")
+    var actions: [String]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedMeal {
+    @Guide(description: "Short, tidy name for the meal")
+    var name: String
+
+    @Guide(description: "Estimated total calories as a whole number")
+    var calories: Int
+
+    @Guide(description: "Estimated grams of protein as a whole number")
+    var proteinGrams: Int
+
+    @Guide(description: "One short sentence naming the biggest portion assumption")
+    var assumption: String
+}
+#endif

@@ -73,7 +73,7 @@ struct HomeChallengeCard: View {
     private var setupCard: some View {
         Button(action: onSetUp) {
             HStack(spacing: 14) {
-                NekaIconBadge(systemName: "flag.2.crossed.fill", tint: Neka.orange, fill: Color.white.opacity(0.8), size: 46)
+                NekaIconBadge(systemName: "flag.2.crossed.fill", tint: Neka.orange, fill: Neka.surface.opacity(0.8), size: 46)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Start your weight-loss challenge")
                         .font(Neka.title)
@@ -108,7 +108,7 @@ struct HomeChallengeCard: View {
                 Spacer()
                 NekaPill(
                     text: p.daysLeft > 0 ? "Day \(p.dayNumber) of \(p.totalDays)" : "Final",
-                    tint: Neka.ink, fill: Color.white.opacity(0.85)
+                    tint: Neka.ink, fill: Neka.surface.opacity(0.85)
                 )
             }
 
@@ -250,7 +250,7 @@ struct HomeFuelCard: View {
                         .foregroundColor(Neka.ink)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Capsule().fill(Color.black.opacity(0.05)))
+                        .background(Capsule().fill(Neka.track))
                 }
                 .buttonStyle(.dialedScale)
             }
@@ -321,7 +321,7 @@ struct HomeTimelineCard: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Neka.ink)
                         .frame(width: 32, height: 32)
-                        .background(Circle().fill(Color.black.opacity(0.05)))
+                        .background(Circle().fill(Neka.track))
                 }
                 .accessibilityLabel("Open full timeline")
             }
@@ -368,7 +368,7 @@ struct HomeTimelineCard: View {
 
             ZStack(alignment: .topLeading) {
                 Capsule()
-                    .fill(Color.black.opacity(0.06))
+                    .fill(Neka.track)
                     .frame(width: w, height: 14)
                     .offset(y: trackY - 7)
 
@@ -397,7 +397,7 @@ struct HomeTimelineCard: View {
                     .position(x: nowX, y: trackY + 4)
                 Text(now, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(Neka.onInk)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Neka.ink))

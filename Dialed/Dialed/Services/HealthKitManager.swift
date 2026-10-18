@@ -131,6 +131,17 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// True when iOS still has an unanswered permission prompt for any
+    /// type we read — e.g. after an update added heart rate / SpO₂ / food.
+    func needsAuthorizationPrompt() async -> Bool {
+        guard HKHealthStore.isHealthDataAvailable() else { return false }
+        return await withCheckedContinuation { continuation in
+            healthStore.getRequestStatusForAuthorization(toShare: [], read: typesToRead) { status, _ in
+                continuation.resume(returning: status == .shouldRequest)
+            }
+        }
+    }
+
     nonisolated func checkAuthorizationStatus() -> Bool {
         print("🔍 [HealthKit] NOTE: For privacy, HealthKit hides READ authorization status")
         print("🔍 [HealthKit] Status API may show DENIED even when access is granted")
