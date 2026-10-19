@@ -6,8 +6,9 @@
 //  (Design/AppIcon/make_icon.py):
 //
 //    • a full 270° scale ring in all four app colours, lit like a glass tube
-//    • a frosted glass knob that picks up the colours round it, with one
-//      pointer dot
+//    • a graduated scale inside the ring, lit up to the value
+//    • a frosted, knurled glass knob that picks up the colours round it,
+//      with a pointer line
 //    • a glass lens riding the ring at the value, tinted by the colour
 //      under it
 //
@@ -87,6 +88,7 @@ struct DialedMark: View, Animatable {
                 ringShape(radius: Self.ringRadius, width: Self.ringWidth, k: k)
                 ringLighting(k: k)
 
+                scale(k: k, value: v)
                 knob(k: k, angle: angle)
 
                 lens(k: k, value: v)
@@ -135,6 +137,29 @@ struct DialedMark: View, Animatable {
         }
     }
 
+    // MARK: - Scale
+
+    /// Graduations printed between the knob and the ring, lit in the
+    /// ring's colours up to the value.
+    private func scale(k: CGFloat, value v: Double) -> some View {
+        Canvas { ctx, size in
+            let c = CGPoint(x: size.width / 2, y: size.height / 2)
+            let n = 27
+            for i in 0...n {
+                let f = Double(i) / Double(n)
+                let a = (Self.start + Self.sweep * f) * .pi / 180
+                let major = i % 3 == 0
+                let r0 = (major ? 220.0 : 229.0) * k, r1 = 250.0 * k
+                var p = Path()
+                p.move(to: CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0))
+                p.addLine(to: CGPoint(x: c.x + cos(a) * r1, y: c.y + sin(a) * r1))
+                let lit = f <= v + 1e-6
+                let color = lit ? Self.color(at: f) : (dark ? Color.white : .black).opacity(dark ? 0.22 : 0.16)
+                ctx.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: (major ? 11 : 7) * k, lineCap: .round))
+            }
+        }
+    }
+
     // MARK: - Knob
 
     private func knob(k: CGFloat, angle: Double) -> some View {
@@ -153,14 +178,28 @@ struct DialedMark: View, Animatable {
                 .stroke(Self.specular(strength: dark ? 0.55 : 1), lineWidth: 7 * k)
                 .padding(4 * k)
 
-            // Pointer dot, turning with the value.
-            Circle()
-                .fill(dark ? Color.white : Neka.ink)
-                .frame(width: 48 * k, height: 48 * k)
-                .shadow(color: .black.opacity(0.18), radius: 8 * k, y: 4 * k)
-                .offset(x: 140 * k)
-                .rotationEffect(.degrees(angle))
-        }
+            // Knurled grip round the edge.
+            Canvas { ctx, size in
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                let r0 = (Self.knobRadius - 24) * k, r1 = (Self.knobRadius - 6) * k
+                for i in 0..<72 {
+                    let a = Double(i) / 72 * 2 * .pi
+                    var p = Path()
+                    p.move(to: CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0))
+                    p.addLine(to: CGPoint(x: c.x + cos(a) * r1, y: c.y + sin(a) * r1))
+                    ctx.stroke(p, with: .color((dark ? Color.white : .black).opacity(dark ? 0.10 : 0.07)),
+                               style: StrokeStyle(lineWidth: 6 * k, lineCap: .round))
+                }
+            }
+
+            // Pointer: a recessed line from the centre out, turning with the value.
+            ZStack {
+                Capsule().fill(.white.opacity(dark ? 0.44 : 0.8)).offset(y: 3 * k)
+                Capsule().fill(dark ? Color.white : Neka.ink)
+            }
+            .frame(width: 130 * k, height: 26 * k)
+            .offset(x: 116 * k)
+            .rotationEffect(.degrees(angle))
         .frame(width: d, height: d)
         .clipShape(Circle())
         .liquidGlass(tint: nil)
