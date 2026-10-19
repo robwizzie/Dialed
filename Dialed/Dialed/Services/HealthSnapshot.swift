@@ -91,7 +91,7 @@ struct HealthSnapshot: Equatable {
         if let w = weight { lines.append("- Weight: \(Self.n(w)) lb\(weighedInToday ? " (weighed in today)" : " (not weighed in today)")") }
         if waterTargetOz > 0 { lines.append("- Water: \(Int(waterOz)) of \(Int(waterTargetOz)) oz") }
         lines.append("- Steps: \(steps) of \(stepGoal)")
-        if let miles { lines.append("- Daily mile (walk or run): \(String(format: "%.2f", miles)) of 1 mi") }
+        if let miles { lines.append("- Daily mile (walk or run): \(String(format: "%.2f", miles)) of \(MileADay.format(MileADay.goal))") }
         if proteinTarget > 0 { lines.append("- Protein: \(Int(proteinGrams)) of \(Int(proteinTarget)) g") }
         if calorieTarget > 0 { lines.append("- Calories eaten: \(Int(caloriesIn)) of \(Int(calorieTarget)) budget") }
         if let s = sleepHours { lines.append("- Last night's sleep: \(Self.n(s)) h") }

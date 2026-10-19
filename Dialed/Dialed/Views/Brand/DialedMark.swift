@@ -12,7 +12,8 @@
 //    • a glass lens riding the ring at the value, tinted by the colour
 //      under it
 //
-//  On iOS 26 the knob and lens are real Liquid Glass. `value` animates:
+//  The glass is drawn (the same as the icon) rather than live system
+//  glass, so it stays calm on the splash. `value` animates:
 //  the lens slides along the ring and the pointer turns with it.
 //
 
@@ -248,7 +249,6 @@ struct DialedMark: View, Animatable {
                 .rotationEffect(.degrees(angle))
         }
         .clipShape(Circle())
-        .liquidGlass(tint: nil)
     }
 
     // MARK: - Lens
@@ -273,7 +273,6 @@ struct DialedMark: View, Animatable {
                 .offset(x: -16 * k, y: -21 * k)
         }
         .frame(width: d, height: d)
-        .liquidGlass(tint: tint)
         .shadow(color: .black.opacity(dark ? 0.45 : 0.2), radius: 8 * k, y: 14 * k)
     }
 
@@ -288,19 +287,6 @@ struct DialedMark: View, Animatable {
     }
 }
 
-private extension View {
-    /// Real Liquid Glass on iOS 26, the drawn glass before that.
-    @ViewBuilder
-    func liquidGlass(tint: Color?) -> some View {
-        if #available(iOS 26.0, *) {
-            let glass: Glass = tint.map { Glass.regular.tint($0.opacity(0.5)) } ?? Glass.regular
-            self.glassEffect(glass, in: Circle())
-        } else {
-            self
-        }
-    }
-}
-
 /// Mark + "Dialed." wordmark, for headers.
 struct DialedLockup: View {
     var markSize: CGFloat = 34
@@ -310,7 +296,7 @@ struct DialedLockup: View {
         HStack(spacing: markSize * 0.3) {
             DialedMark()
                 .frame(width: markSize, height: markSize)
-                .motionTilt(14)
+                .motionTilt(6)
             (Text("Dialed").foregroundColor(Neka.ink) + Text(".").foregroundColor(Neka.green))
                 .font(Neka.display(textSize, weight: .bold))
                 .tracking(-textSize * 0.03)
