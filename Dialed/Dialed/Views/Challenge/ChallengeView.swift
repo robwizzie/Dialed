@@ -33,10 +33,11 @@ struct ChallengeView: View {
     @StateObject private var viewModel = ChallengeViewModel()
 
     @State private var sheet: Sheet?
+    @ObservedObject private var liveSync = ChallengeSync.shared
     @EnvironmentObject private var router: AppRouter
 
     enum Sheet: String, Identifiable {
-        case setup, edit, friend, weighIn
+        case setup, edit, friend, weighIn, live
         var id: String { rawValue }
     }
 
@@ -48,6 +49,7 @@ struct ChallengeView: View {
                     if let c = viewModel.challenge, let p = viewModel.progress {
                         scoreboard(c, p)
                         headToHead(c, p)
+                        LiveChallengeCard(sync: liveSync, friendName: c.friendDisplayName) { sheet = .live }
                         TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
                             .id("\(c.scoring.rawValue)-\(p.leader)-\(Int(p.margin * 10))")
                         chartCard(c, p)
@@ -65,8 +67,14 @@ struct ChallengeView: View {
             .nekaPageBackground()
             .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
-            .task { await viewModel.refresh(context: modelContext) }
-            .refreshable { await viewModel.refresh(context: modelContext) }
+            .task {
+                await viewModel.refresh(context: modelContext)
+                await liveSync.sync(readings: viewModel.readings)
+            }
+            .refreshable {
+                await viewModel.refresh(context: modelContext)
+                await liveSync.sync(readings: viewModel.readings, force: true)
+            }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await viewModel.refresh(context: modelContext) }
             }
@@ -90,6 +98,10 @@ struct ChallengeView: View {
                 case .weighIn:
                     WeighInSheet(lastWeight: viewModel.readings.last?.pounds)
                         .presentationDetents([.medium])
+                case .live:
+                    if let c = viewModel.challenge {
+                        LiveChallengeSheet(challenge: c, ownerStart: viewModel.progress?.startWeight, readings: viewModel.readings)
+                    }
                 }
             }
         }

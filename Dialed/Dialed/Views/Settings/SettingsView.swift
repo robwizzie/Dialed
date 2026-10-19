@@ -4,8 +4,7 @@
 //
 //  Settings in the Neka style: a profile card on top, then grouped cards
 //  for your plan, connections, the challenge and the app. Detail screens
-//  that are still designed dark are pinned to dark so their text stays
-//  readable whichever appearance the phone is in.
+//  use Neka tokens too, so they follow the system appearance.
 //
 
 import SwiftUI
@@ -41,16 +40,16 @@ struct SettingsView: View {
                     group("Your plan") {
                         row("target", "Daily targets",
                             "\(Int(settings.proteinTargetGrams)) g protein · \(Int(settings.waterTargetOz)) oz water",
-                            tint: Neka.green, fill: Neka.greenSoft) { legacy(TargetsSettingsView()) }
+                            tint: Neka.green, fill: Neka.greenSoft) { TargetsSettingsView() }
                         divider
                         row("checklist", "Daily routine", "Your recurring tasks and times",
-                            tint: Neka.orange, fill: Neka.orangeSoft) { legacy(ManageDailyRoutineView()) }
+                            tint: Neka.orange, fill: Neka.orangeSoft) { ManageDailyRoutineView() }
                         divider
                         row("chart.bar.fill", "What to track", TrackingPreferences.load().trackingSummary,
-                            tint: Neka.sky, fill: Neka.skySoft) { legacy(TrackingSettingsView()) }
+                            tint: Neka.sky, fill: Neka.skySoft) { TrackingSettingsView() }
                         divider
                         row("figure.strengthtraining.traditional", "Workout types", "Categories for logged workouts",
-                            tint: Neka.rose, fill: Neka.roseSoft) { legacy(WorkoutTypeSettingsView()) }
+                            tint: Neka.rose, fill: Neka.roseSoft) { WorkoutTypeSettingsView() }
                     }
 
                     group("Connections") {
@@ -60,11 +59,11 @@ struct SettingsView: View {
                         divider
                         row("heart.text.square.fill", "Apple Health",
                             healthKitConnected ? "Connected" : "Not connected",
-                            tint: Neka.rose, fill: Neka.roseSoft) { legacy(HealthKitSettingsView()) }
+                            tint: Neka.rose, fill: Neka.roseSoft) { HealthKitSettingsView() }
                         divider
                         row("bell.fill", "Notifications",
                             settings.notificationsEnabled ? "On" : "Off",
-                            tint: Neka.lavender, fill: Neka.lavenderSoft) { legacy(NotificationsSettingsView()) }
+                            tint: Neka.lavender, fill: Neka.lavenderSoft) { NotificationsSettingsView() }
                     }
 
                     group("Challenge") {
@@ -163,7 +162,7 @@ struct SettingsView: View {
 
             divider
 
-            NavigationLink { legacy(ProfileSettingsView()) } label: {
+            NavigationLink { ProfileSettingsView() } label: {
                 HStack(spacing: 0) {
                     stat("Current", "\(Int(settings.currentWeight)) lb")
                     stat("Goal", "\(Int(settings.goalWeight)) lb")
@@ -259,11 +258,6 @@ struct SettingsView: View {
             label(icon, title, subtitle, tint: tint, fill: fill)
         }
         .buttonStyle(.plain)
-    }
-
-    /// Detail screens still built on the dark palette.
-    private func legacy<V: View>(_ view: V) -> some View {
-        view.environment(\.colorScheme, .dark)
     }
 }
 
