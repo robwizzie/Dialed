@@ -37,23 +37,16 @@ struct HealthKitSettingsView: View {
 
                     if isAuthorized {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(AppColors.success)
+                            .foregroundColor(Neka.green)
                     } else {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(AppColors.warning)
+                            .foregroundColor(Neka.orange)
                     }
                 }
             } header: {
                 Text("Status")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
 
             // Data Access Section
             Section {
@@ -89,14 +82,7 @@ struct HealthKitSettingsView: View {
             } footer: {
                 Text("Dialed reads health data to automatically track your fitness metrics. Your data stays on your device.")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
 
             // Actions Section
             Section {
@@ -110,7 +96,7 @@ struct HealthKitSettingsView: View {
                                 Image(systemName: "heart.text.square")
                                     .foregroundStyle(
                                         LinearGradient(
-                                            colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                                            colors: [Neka.rose, Neka.rose.opacity(0.7)],
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
@@ -134,7 +120,7 @@ struct HealthKitSettingsView: View {
                     if showError {
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundColor(AppColors.danger)
+                            .foregroundColor(Neka.rose)
                     }
                 } else {
                     Button(action: {
@@ -146,7 +132,7 @@ struct HealthKitSettingsView: View {
                             Image(systemName: "heart.text.square")
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                                        colors: [Neka.rose, Neka.rose.opacity(0.7)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -162,21 +148,14 @@ struct HealthKitSettingsView: View {
             } header: {
                 Text("Actions")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
 
             // Privacy Section
             Section {
                 VStack(alignment: .leading, spacing: Spacing.md) {
                     HStack(spacing: Spacing.sm) {
                         Image(systemName: "lock.shield.fill")
-                            .foregroundColor(AppColors.success)
+                            .foregroundColor(Neka.green)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Privacy First")
                                 .font(.caption.bold())
@@ -228,17 +207,10 @@ struct HealthKitSettingsView: View {
             } header: {
                 Text("Benefits")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
         }
         .scrollContentBackground(.hidden)
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("Apple Health")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -349,7 +321,7 @@ struct DataAccessRow: View {
                 .foregroundStyle(
                     isEnabled ?
                     LinearGradient(
-                        colors: [AppColors.primary, AppColors.primary.opacity(0.7)],
+                        colors: [Neka.rose, Neka.rose.opacity(0.7)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ) :
@@ -375,7 +347,7 @@ struct DataAccessRow: View {
 
             if isEnabled {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(AppColors.success)
+                    .foregroundColor(Neka.green)
             } else {
                 Image(systemName: "circle")
                     .foregroundStyle(.secondary.opacity(0.3))
