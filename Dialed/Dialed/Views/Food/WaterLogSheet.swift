@@ -122,15 +122,11 @@ struct WaterLogSheet: View {
     }
 
     private func log(_ oz: Double) {
-        let event = ContextEvent.water(oz)
-        modelContext.insert(event)
-        try? modelContext.save()
-        HealthWriteBack.sync(event)
+        QuickLogService.logWater(oz, context: modelContext)
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         #endif
         withAnimation { reload() }
-        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
     }
 
     private func reload() {

@@ -126,11 +126,7 @@ struct WaterCaptureSheet: View {
     }
 
     private func save() {
-        let event = ContextEvent.water(ounces)
-        modelContext.insert(event)
-        try? modelContext.save()
-        HealthWriteBack.sync(event)
-        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+        QuickLogService.logWater(ounces, context: modelContext)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
