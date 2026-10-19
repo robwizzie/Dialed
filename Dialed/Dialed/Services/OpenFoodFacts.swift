@@ -86,11 +86,6 @@ extension FoodFactsProduct {
         }
     }
 
-    /// The portion to start the picker on.
-    var defaultPortion: FoodFactsPortion {
-        if supportsServings { return .servings(1) }
-        return .grams(servingGrams ?? 100)
-    }
 }
 
 enum OpenFoodFacts {

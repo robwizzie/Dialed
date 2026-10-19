@@ -671,11 +671,6 @@ class TrendsViewModel: ObservableObject {
         }
     }
     
-    struct DailyData {
-        let date: Date
-        let score: Int
-    }
-    
     init(modelContext: ModelContext) {
         self.modelContext = modelContext
     }
