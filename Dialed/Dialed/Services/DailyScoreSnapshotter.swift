@@ -34,7 +34,11 @@ enum DailyScoreSnapshotter {
             return existing
         }
 
-        let baseline = (try? context.fetch(FetchDescriptor<PersonalBaseline>()))?.first
+        var baselineDesc = FetchDescriptor<PersonalBaseline>(
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        baselineDesc.fetchLimit = 1
+        let baseline = (try? context.fetch(baselineDesc))?.first
         let baselineInputs = StateEngine.BaselineInputs.from(baseline)
 
         let sleep = latestSleep(for: logicalDay, context: context)

@@ -206,6 +206,57 @@ enum BaselineEngine {
         return baseline
     }
 
+    // MARK: - Scheduling
+
+    /// Decide whether the baseline for the current logical day is stale.
+    /// Recompute when there's no row for today yet, or when sleep/biometric
+    /// data has landed since the row was computed (e.g. the morning sync
+    /// arrives after the first app open). Nil `latestDataAt` means there's
+    /// no history at all — nothing to compute from.
+    static func needsRecompute(existingComputedAt: Date?, latestDataAt: Date?) -> Bool {
+        guard let latestDataAt else { return false }
+        guard let existingComputedAt else { return true }
+        return latestDataAt > existingComputedAt
+    }
+
+    /// Cheap guard around `recomputeBaseline`, safe to call on every
+    /// refresh: at most one recompute per logical day, plus one each time
+    /// new sleep/biometric rows arrive. Returns the row when it recomputed.
+    @MainActor
+    @discardableResult
+    static func recomputeIfNeeded(
+        now: Date = Date(),
+        windowDays: Int = 28,
+        context: ModelContext
+    ) -> PersonalBaseline? {
+        // Key by the logical day (4 AM cutoff) so the 28-day window lines up
+        // with how SleepSession / BiometricSnapshot.logicalDate are stored.
+        let dayStart = Calendar.current.logicalStartOfDay(for: now)
+
+        var existingDesc = FetchDescriptor<PersonalBaseline>(
+            predicate: #Predicate { $0.date == dayStart && $0.windowDays == windowDays }
+        )
+        existingDesc.fetchLimit = 1
+        let existing = (try? context.fetch(existingDesc))?.first
+
+        var sleepDesc = FetchDescriptor<SleepSession>(
+            sortBy: [SortDescriptor(\.updatedAt, order: .reverse)]
+        )
+        sleepDesc.fetchLimit = 1
+        var bioDesc = FetchDescriptor<BiometricSnapshot>(
+            sortBy: [SortDescriptor(\.createdAt, order: .reverse)]
+        )
+        bioDesc.fetchLimit = 1
+        let latestSleepAt = (try? context.fetch(sleepDesc))?.first?.updatedAt
+        let latestBioAt = (try? context.fetch(bioDesc))?.first?.createdAt
+        let latestDataAt = [latestSleepAt, latestBioAt].compactMap { $0 }.max()
+
+        guard needsRecompute(existingComputedAt: existing?.computedAt, latestDataAt: latestDataAt) else {
+            return nil
+        }
+        return try? recomputeBaseline(for: dayStart, windowDays: windowDays, context: context)
+    }
+
     enum BaselineError: Error {
         case invalidWindow
     }

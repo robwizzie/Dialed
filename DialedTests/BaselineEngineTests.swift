@@ -2,12 +2,12 @@
 //  BaselineEngineTests.swift
 //  DialedTests
 //
-//  Pure-math tests for the rolling baseline engine. No SwiftData here —
-//  the orchestration path is exercised separately via integration tests
-//  once the sync flow is wired up.
+//  Pure-math tests for the rolling baseline engine, plus the once-per-day
+//  recompute guard that NowViewModel calls on every refresh.
 //
 
 import XCTest
+import SwiftData
 @testable import Dialed
 
 final class BaselineEngineTests: XCTestCase {
@@ -131,6 +131,83 @@ final class BaselineEngineTests: XCTestCase {
         XCTAssertEqual(computed.deepMean!, 80, accuracy: 1e-6)
         XCTAssertEqual(computed.efficiencyMean!, 0.85, accuracy: 1e-6)
         XCTAssertEqual(computed.sampleDays, 5)
+    }
+
+    // MARK: - needsRecompute
+
+    func testNeedsRecompute_noDataNeverComputes() {
+        XCTAssertFalse(BaselineEngine.needsRecompute(existingComputedAt: nil, latestDataAt: nil))
+        XCTAssertFalse(BaselineEngine.needsRecompute(existingComputedAt: Date(), latestDataAt: nil))
+    }
+
+    func testNeedsRecompute_missingRowComputes() {
+        XCTAssertTrue(BaselineEngine.needsRecompute(existingComputedAt: nil, latestDataAt: Date()))
+    }
+
+    func testNeedsRecompute_onlyWhenDataIsNewerThanRow() {
+        let computedAt = Date()
+        XCTAssertFalse(BaselineEngine.needsRecompute(
+            existingComputedAt: computedAt,
+            latestDataAt: computedAt.addingTimeInterval(-60)
+        ))
+        XCTAssertTrue(BaselineEngine.needsRecompute(
+            existingComputedAt: computedAt,
+            latestDataAt: computedAt.addingTimeInterval(60)
+        ))
+    }
+
+    // MARK: - recomputeIfNeeded (SwiftData)
+
+    @MainActor
+    func testRecomputeIfNeeded_writesOnceThenOnlyOnNewData() throws {
+        let container = try ModelContainer(
+            for: SleepSession.self, BiometricSnapshot.self, PersonalBaseline.self,
+            configurations: ModelConfiguration(isStoredInMemoryOnly: true)
+        )
+        let context = container.mainContext
+        let cal = Calendar.current
+        let now = cal.date(bySettingHour: 12, minute: 0, second: 0, of: Date())!
+
+        // No history → nothing written.
+        XCTAssertNil(BaselineEngine.recomputeIfNeeded(now: now, context: context))
+
+        for daysAgo in 1...5 {
+            let wake = cal.date(byAdding: .day, value: -daysAgo, to: now)!
+            let s = SleepSession(
+                startTime: wake.addingTimeInterval(-8 * 3600),
+                endTime: wake,
+                inBedMinutes: 480,
+                asleepMinutes: 420 + daysAgo * 10,
+                source: .fitbit
+            )
+            context.insert(s)
+            context.insert(BiometricSnapshot(
+                timestamp: wake,
+                source: .fitbit,
+                restingHeartRate: 55 + Double(daysAgo),
+                hrv: 40 + Double(daysAgo),
+                hrvKind: .rmssd
+            ))
+        }
+
+        let first = try XCTUnwrap(BaselineEngine.recomputeIfNeeded(now: now, context: context))
+        XCTAssertEqual(first.date, cal.logicalStartOfDay(for: now))
+        XCTAssertEqual(first.sampleDays, 5)
+        XCTAssertEqual(first.restingHeartRateMean!, 58, accuracy: 1e-6)
+
+        // Pull-to-refresh with no new data → skipped.
+        XCTAssertNil(BaselineEngine.recomputeIfNeeded(now: now, context: context))
+
+        // New biometric lands after the compute → recomputed in place.
+        let fresh = BiometricSnapshot(timestamp: now, source: .fitbit, restingHeartRate: 70)
+        fresh.createdAt = first.computedAt.addingTimeInterval(1)
+        context.insert(fresh)
+        let second = try XCTUnwrap(BaselineEngine.recomputeIfNeeded(now: now, context: context))
+        XCTAssertEqual(second.id, first.id)
+        XCTAssertEqual(second.sampleDays, 6)
+
+        let rows = try context.fetch(FetchDescriptor<PersonalBaseline>())
+        XCTAssertEqual(rows.count, 1)
     }
 
     // MARK: - Helpers
