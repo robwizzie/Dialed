@@ -264,7 +264,8 @@ struct ChallengeView: View {
                     .padding(14)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
                 }
-                .buttonStyle(.dialedSca            }
+                .buttonStyle(.dialedScale)
+            }
         }
         .padding(16)
         .nekaCard()
