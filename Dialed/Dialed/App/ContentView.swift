@@ -68,7 +68,10 @@ struct MainTabView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
+        // A VStack, not an overlay: the bar takes real space, so every tab
+        // (and every pushed screen) ends at its top edge. Nothing can scroll
+        // underneath it, whatever each screen does with its safe area.
+        VStack(spacing: 0) {
             TabView(selection: $router.tab) {
                 HomeView(onOpenChallenge: { router.select(.challenge) })
                     .tabContent()
@@ -145,15 +148,9 @@ struct MainTabView: View {
 }
 
 private extension View {
-    /// Hide the system tab bar (the custom bar replaces it) and reserve
-    /// room at the bottom so lists, scroll views and bottom buttons on
-    /// every screen — including pushed ones — sit above the floating bar.
+    /// Hide the system tab bar; the custom bar below the TabView replaces it.
     func tabContent() -> some View {
-        self
-            .toolbar(.hidden, for: .tabBar)
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                Color.clear.frame(height: NestedNavBar.height)
-            }
+        self.toolbar(.hidden, for: .tabBar)
     }
 }
 

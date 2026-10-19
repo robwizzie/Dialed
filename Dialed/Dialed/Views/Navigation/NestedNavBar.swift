@@ -18,8 +18,7 @@ struct NestedNavBar: View {
     @ObservedObject private var photos = ProfilePhotoStore.shared
     @Namespace private var pillSpace
 
-    /// Height of the docked bar; tabs reserve exactly this much at the
-    /// bottom so nothing ever scrolls underneath it.
+    /// Height of the docked bar (above the home indicator).
     static let height: CGFloat = 70
 
     private let tabs: [AppTab] = [.home, .challenge, .plan, .trends, .settings]
@@ -58,15 +57,13 @@ struct NestedNavBar: View {
         .padding(.top, 8)
         .padding(.bottom, 6)
         .frame(height: Self.height)
-        // Docked, not floating: an opaque strip in the page color runs from
-        // the bar to the bottom edge, with a short fade above it, so page
-        // content never shows through or sits behind the bar.
-        .background(alignment: .top) {
+        // Docked: an opaque strip in the page color runs from the bar's top
+        // edge down through the home indicator. No fade above it — that hid
+        // the last bit of every page.
+        .background {
             pageColor
                 .overlay(alignment: .top) {
-                    LinearGradient(colors: [pageColor.opacity(0), pageColor], startPoint: .top, endPoint: .bottom)
-                        .frame(height: 24)
-                        .offset(y: -24)
+                    Rectangle().fill(Neka.hairline).frame(height: 0.5)
                 }
                 .ignoresSafeArea(edges: .bottom)
                 .allowsHitTesting(false)
