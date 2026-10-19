@@ -2,12 +2,13 @@
 //  MileADay.swift
 //  Dialed (app + widgets)
 //
-//  The daily mile: walked or run, every day. Distance comes from Apple
-//  Health's walking + running distance; when that's missing (e.g. the
-//  steps only came from the Pixel Watch) it's estimated from steps using
-//  your own stride — learned from days where Health has both, or set by
-//  hand in Settings → Mile a day. The daily goal is adjustable there too.
-//  Pure Foundation, tested.
+//  The daily mile: walked or run, every day. A day counts from whichever
+//  is bigger: Apple Health's walking + running distance, or the on-foot
+//  workouts you logged (walks, runs, hikes — several add up). With
+//  neither (e.g. steps only from the Pixel Watch) it's estimated from
+//  steps using your own stride — learned from days Health has both, or
+//  set by hand in Settings → Mile a day, where the goal and how far back
+//  your history is counted live too. Pure Foundation, tested.
 //
 
 import Foundation
@@ -21,6 +22,8 @@ struct MileSettings: Codable, Equatable {
     var manualStepsPerMile: Double?
     /// Learned from your Apple Health history (steps ÷ distance).
     var learnedStepsPerMile: Double?
+    /// Count history from this day (nil → the challenge start, or 90 days).
+    var historyStart: Date?
 
     static let defaultStepsPerMile = 2_100.0
     static let didChange = Notification.Name("MileSettings.didChange")
@@ -57,6 +60,18 @@ enum MileADay {
     }
 
     static func isDone(_ miles: Double, goal: Double = MileADay.goal) -> Bool { miles >= goal - 0.005 }
+
+    /// One day's miles and where they came from: the bigger of measured
+    /// distance and on-foot workouts, else the step estimate.
+    static func resolve(distance: Double?, workoutMiles: Double, steps: Int,
+                        stepsPerMile: Double) -> (miles: Double, source: MileDay.Source) {
+        let d = distance ?? 0
+        if max(d, workoutMiles) > 0.01 {
+            return workoutMiles > d ? (workoutMiles, .workout) : (d, .distance)
+        }
+        let est = miles(distance: nil, steps: steps, stepsPerMile: stepsPerMile)
+        return est > 0 ? (est, .steps) : (0, .none)
+    }
 
     /// Your steps per mile from days Apple Health has both a real walk's
     /// distance and its steps: the median, so one odd day doesn't skew it.
@@ -111,5 +126,93 @@ enum MileADay {
         }
         if left <= 0.25 { return "\(String(format: "%.2f", left)) mi to go — a lap of the block." }
         return "\(String(format: "%.2f", left)) mi to go — about \(minutes) min of walking."
+    }
+}
+
+// MARK: - History
+
+/// One day of the daily mile.
+struct MileDay: Codable, Equatable {
+    enum Source: String, Codable { case distance, workout, steps, none }
+
+    var date: Date
+    var miles: Double
+    /// Miles from walking / running / hiking workouts that day.
+    var workoutMiles: Double = 0
+    var workouts: Int = 0
+    var ran: Bool = false
+    var source: Source = .none
+}
+
+/// Every day since `start`, worked out by the app and kept in the App
+/// Group so the widgets and the history calendar read the same thing.
+struct MileHistory: Codable, Equatable {
+    var start: Date
+    var days: [MileDay]
+    var updatedAt: Date
+
+    private static let key = "mile.history.v1"
+    private static var store: UserDefaults {
+        UserDefaults(suiteName: WidgetBridge.appGroupID) ?? .standard
+    }
+
+    static func load() -> MileHistory? {
+        guard let data = store.data(forKey: key) else { return nil }
+        return try? JSONDecoder().decode(MileHistory.self, from: data)
+    }
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        Self.store.set(data, forKey: Self.key)
+    }
+
+    var milesByDay: [Date: Double] {
+        Dictionary(days.map { ($0.date, $0.miles) }, uniquingKeysWith: max)
+    }
+
+    func day(_ date: Date, calendar: Calendar = .current) -> MileDay? {
+        let d = calendar.startOfDay(for: date)
+        return days.last { $0.date == d }
+    }
+
+    /// The last `count` days ending today, oldest first; missing days are 0.
+    func last(_ count: Int, today: Date, calendar: Calendar = .current) -> [MileDay] {
+        let end = calendar.startOfDay(for: today)
+        return (0..<count).reversed().compactMap { back in
+            guard let d = calendar.date(byAdding: .day, value: -back, to: end) else { return nil }
+            return day(d, calendar: calendar) ?? MileDay(date: d, miles: 0)
+        }
+    }
+
+    /// Replace days by date, keeping the list sorted.
+    mutating func merge(_ fresh: [MileDay]) {
+        var byDate = Dictionary(days.map { ($0.date, $0) }, uniquingKeysWith: { $1 })
+        for d in fresh { byDate[d.date] = d }
+        days = byDate.values.filter { $0.date >= start }.sorted { $0.date < $1.date }
+    }
+
+    func doneCount(goal: Double = MileADay.goal) -> Int {
+        days.filter { MileADay.isDone($0.miles, goal: goal) }.count
+    }
+
+    func currentStreak(today: Date, goal: Double = MileADay.goal, calendar: Calendar = .current) -> Int {
+        MileADay.streak(milesByDay: milesByDay, today: today, goal: goal, calendar: calendar)
+    }
+
+    func longestStreak(goal: Double = MileADay.goal, calendar: Calendar = .current) -> Int {
+        var best = 0, run = 0
+        var lastDone: Date?
+        for d in days {
+            if MileADay.isDone(d.miles, goal: goal) {
+                let next = lastDone.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) }
+                run = next == d.date ? run + 1 : 1
+                lastDone = d.date
+            } else {
+                run = 0
+                lastDone = nil
+            }
+            best = max(best, run)
+        }
+        return best
     }
 }

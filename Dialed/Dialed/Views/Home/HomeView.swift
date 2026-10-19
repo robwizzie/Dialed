@@ -71,6 +71,7 @@ struct HomeView: View {
                         ran: viewModel.ranToday,
                         goal: viewModel.mileGoal
                     )
+                    .onTapGesture { path.append(.mileHistory) }
                     HomeChallengeCard(
                         challenge: viewModel.challenge,
                         progress: viewModel.progress,
@@ -173,6 +174,8 @@ struct HomeView: View {
                     StrengthProgressView()
                 case .progressPhotos:
                     ProgressPhotosView()
+                case .mileHistory:
+                    MileHistoryView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in

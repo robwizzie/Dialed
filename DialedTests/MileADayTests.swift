@@ -58,4 +58,28 @@ final class MileADayTests: XCTestCase {
         XCTAssertEqual(DialedScore.compute(waterOz: 120, waterTargetOz: 120, protein: 190, proteinTarget: 190,
                                            calories: 2_000, calorieTarget: 2_200), 100)
     }
+
+    func testWorkoutsCountTowardTheDay() {
+        // Two logged walks (0.6 + 0.5 mi) beat a phone distance of 0.7.
+        let r = MileADay.resolve(distance: 0.7, workoutMiles: 1.1, steps: 900, stepsPerMile: 2_100)
+        XCTAssertEqual(r.miles, 1.1, accuracy: 1e-9)
+        XCTAssertEqual(r.source, .workout)
+        XCTAssertEqual(MileADay.resolve(distance: 1.3, workoutMiles: 1.1, steps: 0, stepsPerMile: 2_100).source, .distance)
+        XCTAssertEqual(MileADay.resolve(distance: nil, workoutMiles: 0, steps: 4_200, stepsPerMile: 2_100).source, .steps)
+    }
+
+    func testHistoryStreaksAndMerge() {
+        var h = MileHistory(start: day(1), days: [], updatedAt: Date())
+        h.merge((1...10).map { MileDay(date: day($0), miles: [3, 4, 8].contains($0) ? 0.2 : 1.2) })
+        XCTAssertEqual(h.doneCount(goal: 1), 7)
+        XCTAssertEqual(h.longestStreak(goal: 1, calendar: calendar), 3)
+        XCTAssertEqual(h.currentStreak(today: day(10), goal: 1, calendar: calendar), 2)
+        // A late-synced workout fixes day 8.
+        h.merge([MileDay(date: day(8), miles: 2, workouts: 1)])
+        XCTAssertEqual(h.longestStreak(goal: 1, calendar: calendar), 6)
+        let week = h.last(7, today: day(12), calendar: calendar)
+        XCTAssertEqual(week.count, 7)
+        XCTAssertEqual(week.first?.date, day(6))
+        XCTAssertEqual(week.last?.miles, 0)
+    }
 }
