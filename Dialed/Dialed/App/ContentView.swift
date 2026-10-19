@@ -23,6 +23,8 @@ struct ContentView: View {
         // complete and the persisted seen-version trails current. The
         // sheet itself calls AppState.markWhatsNewSeen on dismiss.
         .onAppear { showWhatsNewIfNeeded() }
+        // Widget taps → logs, fresh widget snapshot (Services/WidgetSync.swift).
+        .widgetSync()
         .onChange(of: appState.hasCompletedOnboarding) { _, _ in
             showWhatsNewIfNeeded()
         }

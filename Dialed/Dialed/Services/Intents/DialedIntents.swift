@@ -26,9 +26,10 @@ enum IntentStore {
         return made.mainContext
     }
 
-    /// After a log: keep Siri's favorite-meal phrases current.
+    /// After a log (or before reading totals): log queued widget taps,
+    /// refresh the widget snapshot and Siri's favorite-meal phrases.
     static func finish(_ context: ModelContext) async {
-        DialedShortcuts.updateAppShortcutParameters()
+        await WidgetSync.refresh(context: context)
     }
 }
 
@@ -145,6 +146,7 @@ struct TodayStatusIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ReturnsValue<String> & ProvidesDialog {
         let context = try IntentStore.context()
+        await IntentStore.finish(context)
         let totals = await QuickLogService.todayTotalsIncludingHealth(context: context)
         let summary = totals.spokenSummary
         return .result(value: summary, dialog: IntentDialog(stringLiteral: summary + "."))
