@@ -67,7 +67,7 @@ enum HealthSection: String, CaseIterable, Identifiable {
 
 /// Quick-log sheets available from every tab.
 enum QuickLog: String, Identifiable, CaseIterable {
-    case meal, snapMeal, scanFood, water, weighIn, voice
+    case meal, snapMeal, scanFood, workout, water, weighIn, voice
 
     var id: String { rawValue }
 
@@ -78,6 +78,7 @@ enum QuickLog: String, Identifiable, CaseIterable {
         case .meal:    return "Add food"
         case .snapMeal: return "Snap a meal"
         case .scanFood: return "Scan barcode"
+        case .workout: return "Log workout"
         case .voice:   return "Voice note"
         }
     }
@@ -89,6 +90,7 @@ enum QuickLog: String, Identifiable, CaseIterable {
         case .meal:    return "fork.knife"
         case .snapMeal: return "camera.fill"
         case .scanFood: return "barcode.viewfinder"
+        case .workout: return "dumbbell.fill"
         case .voice:   return "mic.fill"
         }
     }

@@ -220,7 +220,7 @@ struct HomeMorningCard: View {
                         value: mileStreak > 0
                             ? "🔥 \(mileStreak) day\(mileStreak == 1 ? "" : "s")"
                             : (yesterday.map { String(format: "%.1f mi yesterday", $0) } ?? "Start one today")))
-        let session = WorkoutProgram.session(on: Date(), start: WorkoutPlanStore.startDate, goal: WorkoutPlanStore.goalDate)
+        let session = WorkoutPlanStore.session(on: Date())
         out.append(Tile(id: "workout", icon: session.symbol, tint: Neka.orange, title: "Today",
                         value: session.minutes > 0 ? "\(session.title.components(separatedBy: " · ").first ?? session.title) · \(session.minutes) min" : session.title))
         if let progress, let friendName {

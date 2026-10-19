@@ -165,6 +165,10 @@ struct MainTabView: View {
         case .scanFood:
             AddFoodSheet(start: .scan)
                 .presentationDetents([.large])
+        case .workout:
+            WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),
+                              session: WorkoutPlanStore.session(on: Date()))
+                .presentationDetents([.large])
         case .voice:
             VoiceCaptureSheet()
                 .environment(\.colorScheme, .dark)
