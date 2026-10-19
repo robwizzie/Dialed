@@ -209,7 +209,7 @@ struct WeeklyReviewView: View {
     @ViewBuilder
     private func tiles(_ s: WeeklyReview.Summary) -> some View {
         let t = model.targets
-        HealthTile(title: "Calories", value: number(s.avgCalories), unit: "kcal avg",
+        HealthTile(title: "Calories", value: number(s.avgCalories), unit: "calories avg",
                    status: "\(s.calorieDays)/7 in budget", statusColor: hitColor(s.calorieDays),
                    footnote: "budget \(Int(t.calories).formatted())", wash: .peach) {
             HealthMiniBars(values: s.days.map { $0.caloriesIn ?? 0 }, tint: Neka.orange, target: t.calories)

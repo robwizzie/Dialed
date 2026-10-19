@@ -196,7 +196,7 @@ struct FoodLogView: View {
         let calTarget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)
         let proteinTarget = settings.proteinTargetGrams
         return HStack(spacing: 12) {
-            total("Calories", value: calories, target: calTarget, unit: "kcal", tint: calories > calTarget ? Neka.rose : Neka.orange)
+            total("Calories", value: calories, target: calTarget, unit: "calories", tint: calories > calTarget ? Neka.rose : Neka.orange)
             total("Protein", value: protein, target: proteinTarget, unit: "g", tint: Neka.green)
         }
     }
@@ -277,7 +277,7 @@ struct FoodLogView: View {
                                     .font(.system(size: 13, weight: .semibold))
                                     .foregroundColor(Neka.ink)
                                     .lineLimit(1)
-                                Text("\(Int(item.calories)) kcal · \(Int(item.protein)) g protein")
+                                Text("\(Int(item.calories)) calories · \(Int(item.protein)) g protein")
                                     .font(.system(size: 10))
                                     .foregroundColor(Neka.inkSecondary)
                             }
@@ -315,7 +315,7 @@ struct FoodLogView: View {
             Text("\(Int(food.calories))")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Neka.ink)
-            + Text(" kcal")
+            + Text(" calories")
                 .font(.system(size: 11))
                 .foregroundColor(Neka.inkTertiary)
         }
@@ -364,7 +364,7 @@ struct FoodEditSheet: View {
                     DatePicker("Time", selection: $draft.time)
                 }
                 Section {
-                    numberRow("Calories", value: $draft.calories, unit: "kcal", steps: [-100, -25, 25, 100])
+                    numberRow("Calories", value: $draft.calories, unit: "calories", steps: [-100, -25, 25, 100])
                     numberRow("Protein", value: $draft.protein, unit: "g", steps: [-10, -5, 5, 10])
                     optionalRow("Carbs", value: $draft.carbs)
                     optionalRow("Fat", value: $draft.fat)
