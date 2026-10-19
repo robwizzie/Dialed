@@ -91,9 +91,11 @@ struct WaterLogSheet: View {
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(Neka.ink)
                                     Button {
+                                        HealthWriteBack.remove(eventID: event.id)
                                         modelContext.delete(event)
                                         try? modelContext.save()
                                         reload()
+                                        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundColor(Neka.inkTertiary)
@@ -120,8 +122,10 @@ struct WaterLogSheet: View {
     }
 
     private func log(_ oz: Double) {
-        modelContext.insert(ContextEvent.water(oz))
+        let event = ContextEvent.water(oz)
+        modelContext.insert(event)
         try? modelContext.save()
+        HealthWriteBack.sync(event)
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         #endif

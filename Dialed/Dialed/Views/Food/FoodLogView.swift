@@ -19,6 +19,7 @@ struct FoodLogView: View {
     @State private var editing: EditTarget?
     @State private var showAIMeal = false
     @State private var justLogged: String?
+    @AppStorage(HealthWriteBack.defaultsKey) private var writeBack = true
 
     private let calendar = Calendar.current
     private var settings: UserSettings { UserSettings.load() }
@@ -75,6 +76,23 @@ struct FoodLogView: View {
                         .font(.system(size: 11))
                         .foregroundColor(Neka.inkTertiary)
                 }
+            }
+
+            Section {
+                Toggle(isOn: $writeBack) {
+                    Label("Save to Apple Health", systemImage: "heart.text.square")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+                .tint(Neka.green)
+                .listRowBackground(Neka.surface)
+                .onChange(of: writeBack) { _, on in
+                    if on { Task { await HealthWriteBack.requestAccessIfNeeded() } }
+                }
+            } footer: {
+                Text("Meals and water you log here are copied to Apple Health (calories, protein, carbs, fat, water). Edits and deletes stay in sync. Dialed never counts its own copies twice.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
             }
         }
         .listStyle(.insetGrouped)
