@@ -23,14 +23,6 @@ struct Constants {
         static let routineWeight = 10
     }
 
-    // Score thresholds
-    struct ScoreThresholds {
-        static let elite = 90
-        static let strong = 75
-        static let decent = 60
-        static let slipping = 40
-    }
-
     // Sleep score targets (for automated calculation)
     struct Sleep {
         static let optimalDurationMin = 7.0  // hours
@@ -39,16 +31,6 @@ struct Constants {
         static let optimalDeepSleepMin = 0.15  // 15% of total
         static let optimalDeepSleepMax = 0.25  // 25% of total
         static let goodHRVThreshold = 50.0  // milliseconds
-    }
-
-    // Red flag thresholds
-    struct RedFlags {
-        static let lowSleepScoreThreshold = 2.0
-        static let lowWorkoutScoreThreshold = 2.0
-        static let lowProteinGrams = 150.0
-        static let lowWaterPercentage = 0.70
-        static let daysToCheck = 3
-        static let mileMissedDaysInWeek = 2
     }
 
     // Checklist item types

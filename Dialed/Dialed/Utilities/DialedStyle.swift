@@ -13,7 +13,6 @@
 //      Button(...) { ... }
 //          .buttonStyle(.dialedPrimary(.readiness))
 //      Button(...) { ... }
-//          .buttonStyle(.dialedSecondary)
 //
 
 import SwiftUI
@@ -89,36 +88,11 @@ struct DialedPrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Subtle secondary action — outlined, no fill, ghost-style.
-struct DialedSecondaryButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundColor(.white.opacity(0.8))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.white.opacity(configuration.isPressed ? 0.08 : 0.04))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.6)
-                    )
-            )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(response: 0.28, dampingFraction: 0.7), value: configuration.isPressed)
-    }
-}
-
 extension ButtonStyle where Self == DialedPrimaryButtonStyle {
     static func dialedPrimary(_ pillar: AppColors.Pillar = .readiness,
                               cornerRadius: CGFloat = 18) -> DialedPrimaryButtonStyle {
         DialedPrimaryButtonStyle(pillar, cornerRadius: cornerRadius)
     }
-}
-
-extension ButtonStyle where Self == DialedSecondaryButtonStyle {
-    static var dialedSecondary: DialedSecondaryButtonStyle { DialedSecondaryButtonStyle() }
 }
 
 // MARK: - Grabber
@@ -175,33 +149,5 @@ extension String {
     /// Was duplicated as a fileprivate in two files — promote.
     func ifEmpty(_ fallback: String) -> String {
         trimmingCharacters(in: .whitespaces).isEmpty ? fallback : self
-    }
-}
-
-// MARK: - Pillar-tinted icon tile
-
-/// 40x40 rounded tile holding a pillar-tinted SF Symbol. Used as the
-/// leading element of list rows across the app.
-struct DialedPillarIcon: View {
-    let icon: String
-    let pillar: AppColors.Pillar
-    var size: CGFloat = 40
-    var iconSize: CGFloat = 18
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(LinearGradient(
-                    colors: pillar.gradient.map { $0.opacity(0.18) },
-                    startPoint: .top, endPoint: .bottom
-                ))
-            Image(systemName: icon)
-                .font(.system(size: iconSize, weight: .semibold))
-                .foregroundStyle(LinearGradient(
-                    colors: pillar.gradient,
-                    startPoint: .top, endPoint: .bottom
-                ))
-        }
-        .frame(width: size, height: size)
     }
 }

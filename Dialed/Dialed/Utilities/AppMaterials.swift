@@ -69,26 +69,6 @@ struct AppMaterials {
         }
     }
 
-    /// Subtle glass effect for progress bars
-    struct GlassProgress: ViewModifier {
-        let cornerRadius: CGFloat
-
-        init(cornerRadius: CGFloat = 10) {
-            self.cornerRadius = cornerRadius
-        }
-
-        func body(content: Content) -> some View {
-            content
-                .background(
-                    RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(.thickMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: cornerRadius)
-                                .stroke(.white.opacity(0.15), lineWidth: 0.5)
-                        )
-                )
-        }
-    }
 }
 
 // MARK: - View Extensions
@@ -104,10 +84,6 @@ extension View {
         modifier(AppMaterials.ElevatedGlassCard(cornerRadius: cornerRadius, padding: padding))
     }
 
-    /// Apply glass progress style
-    func glassProgress(cornerRadius: CGFloat = 10) -> some View {
-        modifier(AppMaterials.GlassProgress(cornerRadius: cornerRadius))
-    }
 }
 
 // MARK: - Color Extensions for Vibrancy
