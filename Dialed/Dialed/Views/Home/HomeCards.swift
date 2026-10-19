@@ -592,3 +592,89 @@ struct HomeFutureYouCard: View {
         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Neka.cardStroke, lineWidth: 1))
     }
 }
+
+// MARK: - If every day were like…
+
+/// Where your weight lands on the goal day if every day from now on
+/// looked like one of your recent days. Green = losing, red = gaining.
+struct HomePathsCard: View {
+    let scenarios: [PathProjection.Scenario]
+    let targetDate: Date?
+    let eventName: String?
+
+    private var targetLabel: String {
+        guard let targetDate else { return "in 30 days" }
+        let day = targetDate.formatted(.dateTime.month(.abbreviated).day())
+        return eventName.map { "by \($0.lowercased()) · \(day)" } ?? "by \(day)"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("If every day were like…")
+                    .font(Neka.title)
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Text(targetLabel)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkTertiary)
+                    .lineLimit(1)
+            }
+
+            ForEach(scenarios) { s in
+                row(s)
+                if s.id != scenarios.last?.id {
+                    Divider().overlay(Neka.hairline)
+                }
+            }
+
+            if !scenarios.contains(where: { $0.kind != .plan }) {
+                Text("Log your meals for a couple of days (or let your food app write to Apple Health) to see where your real days lead.")
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text("Estimate: calories eaten minus calories your watch says you burned, at ~3,500 kcal per pound.")
+                .font(.system(size: 10))
+                .foregroundColor(Neka.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private func row(_ s: PathProjection.Scenario) -> some View {
+        let flat = abs(s.poundsChange) < 0.3
+        let tint = flat ? Neka.inkSecondary : (s.losing ? Neka.green : Neka.rose)
+        let fill = flat ? Neka.track : (s.losing ? Neka.greenSoft : Neka.roseSoft)
+        let icon = flat ? "arrow.right" : (s.losing ? "arrow.down.right" : "arrow.up.right")
+        return HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(tint)
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(fill))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Text(s.detail)
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(flat ? "±0 lb" : String(format: "%@%.1f lb", s.losing ? "−" : "+", abs(s.poundsChange)))
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(tint)
+                Text(String(format: "%.1f lb", s.projectedWeight))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
