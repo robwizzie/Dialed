@@ -11,8 +11,8 @@ A dial built from glass over the app's colours:
   * a glass lens sits on the ring at the dialed-in value and magnifies the
     colour under it, like an iOS 26 slider thumb.
 
-One geometry, three appearances (light / dark / tinted) plus separate
-layers for Icon Composer. Everything is drawn on a 1024 canvas; run this,
+One geometry, three appearances (light / dark / tinted), a Watch icon, and
+an Icon Composer bundle (Dialed.icon) for iOS 26's live Liquid Glass. Everything is drawn on a 1024 canvas; run this,
 then render.js turns the SVGs into the PNGs in the asset catalog.
 
     python3 make_icon.py     # writes ./svg/*.svg
@@ -35,7 +35,7 @@ POINTER = START + SWEEP * VALUE
 
 RING_R, RING_W = 316, 92     # the colour ring
 KNOB_R = 200                 # the glass knob
-LENS_R = 70                  # glass lens on the ring
+LENS_R = 50                  # glass bead on the ring — small, so the knob leads
 LIFT, WALL = 16, 30          # knob top sits LIFT above centre; its side wall drops WALL
 PTR = (64, 168, 26)          # pointer line: from, to, width
 KNURL = (KNOB_R - 24, KNOB_R - 6, 72)   # grip ridges: from, to, count
@@ -111,17 +111,17 @@ def arc_path(r, a0, a1):
 
 def theme(name):
     if name == "light":
-        return dict(name=name, bg0="#FFFFFF", bg1="#EDEDF2", bloomA=0.35, glass="#FFFFFF", glassA=0.62,
+        return dict(name=name, bg0="#FFFFFF", bg1="#EDEDF2", bloomA=0.26, bloomW=130, frostA=0.9, glass="#FFFFFF", glassA=0.62,
                     spec=1.0, edgeA=0.10, dot="#151619", shadowA=0.18, col=lambda c: c,
                     dim="#000000", dimA=0.16, ridge="#000000", ridgeA=0.16,
                     wall0="#F4F4F7", wall1="#BDBDC6", socketA=0.22, dishA=0.10)
     if name == "dark":
-        return dict(name=name, bg0="#202024", bg1="#050506", bloomA=0.45, glass="#FFFFFF", glassA=0.14,
+        return dict(name=name, bg0="#202024", bg1="#050506", bloomA=0.45, bloomW=200, frostA=0.9, glass="#FFFFFF", glassA=0.14,
                     spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=lambda c: c,
                     dim="#FFFFFF", dimA=0.22, ridge="#000000", ridgeA=0.45,
                     wall0="#5A5A62", wall1="#1A1A1E", socketA=0.65, dishA=0.30)
     # tinted: iOS turns this into the user's tint colour, so it's drawn in luminance only
-    return dict(name=name, bg0="#141414", bg1="#000000", bloomA=0.30, glass="#FFFFFF", glassA=0.14,
+    return dict(name=name, bg0="#141414", bg1="#000000", bloomA=0.30, bloomW=200, frostA=0.18, glass="#FFFFFF", glassA=0.04,
                 spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=gray,
                 dim="#FFFFFF", dimA=0.25, ridge="#000000", ridgeA=0.45,
                 wall0="#6A6A6A", wall1="#222222", socketA=0.65, dishA=0.30)
@@ -198,7 +198,7 @@ def ring_strokes(t, r=RING_R, w=RING_W, seg=150, a_from=START, a_to=START + SWEE
 def background(t):
     # a soft bloom of the ring's colours, for the glass to refract
     return (f'<rect width="{S}" height="{S}" fill="url(#bg)"/>'
-            f'<g filter="url(#bloom)" opacity="{t["bloomA"]}">{ring_strokes(t, r=RING_R - 40, w=200, seg=40)}</g>')
+            f'<g filter="url(#bloom)" opacity="{t["bloomA"]}">{ring_strokes(t, r=RING_R - 40, w=t["bloomW"], seg=40)}</g>')
 
 
 def ring(t):
@@ -258,7 +258,7 @@ def knob(t):
     # top face: frosted glass picking up the colours round it
     out.append(f'<g clip-path="url(#knobClip)">'
                f'<circle cx="{cx}" cy="{top}" r="{KNOB_R}" fill="{t["bg0"]}"/>'
-               f'<g filter="url(#frost)" opacity="0.9" transform="translate(0 {-LIFT})">'
+               f'<g filter="url(#frost)" opacity="{t["frostA"]}" transform="translate(0 {-LIFT})">'
                f'{ring_strokes(t, r=KNOB_R - 10, w=90, seg=40)}</g>'
                f'<circle cx="{cx}" cy="{top}" r="{KNOB_R}" fill="url(#knobFace)"/>'
                f'<circle cx="{cx}" cy="{top}" r="{KNOB_R - 22}" fill="url(#dish)"/></g>')
@@ -280,14 +280,14 @@ def lens(t):
     # a glass lens riding the ring at the value, magnifying the colour under it
     x, y = pt(RING_R, POINTER)
     out = []
-    out.append(f'<circle cx="{x:.1f}" cy="{y + 14:.1f}" r="{LENS_R - 4}" fill="#000000" opacity="{t["shadowA"] * 1.2:.2f}" filter="url(#tiny)"/>')
+    out.append(f'<circle cx="{x:.1f}" cy="{y + 10:.1f}" r="{LENS_R - 4}" fill="#000000" opacity="{t["shadowA"] * 1.2:.2f}" filter="url(#tiny)"/>')
     # tinted with the colour under it, lit from the top left
     out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{LENS_R}" fill="{t["col"](grad(VALUE))}"/>')
     out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{LENS_R}" fill="url(#lensFace)"/>')
     out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{LENS_R - 3}" fill="none" stroke="url(#spec)" stroke-width="6"/>')
     out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{LENS_R - 0.5}" fill="none" stroke="#000000" stroke-opacity="{t["edgeA"] * 0.6:.2f}" stroke-width="1.5"/>')
-    out.append(f'<ellipse cx="{x - 22:.1f}" cy="{y - 30:.1f}" rx="26" ry="13" fill="#FFFFFF" opacity="{0.85 * t["spec"]:.2f}" '
-               f'transform="rotate(-30 {x - 22:.1f} {y - 30:.1f})"/>')
+    out.append(f'<ellipse cx="{x - 16:.1f}" cy="{y - 21:.1f}" rx="19" ry="9" fill="#FFFFFF" opacity="{0.85 * t["spec"]:.2f}" '
+               f'transform="rotate(-30 {x - 16:.1f} {y - 21:.1f})"/>')
     return "".join(out)
 
 
@@ -301,9 +301,86 @@ for name in ("light", "dark", "tinted"):
     open(os.path.join(OUT, f"dialed-icon-{name}.svg"), "w").write(
         svg(background(t) + ring(t) + scale(t) + knob(t) + lens(t), t))
 
-# Icon Composer layers (light geometry; Icon Composer adds its own glass)
-t = theme("light")
-open(os.path.join(OUT, "layer-1-background.svg"), "w").write(svg(background(t), t))
-open(os.path.join(OUT, "layer-2-ring.svg"), "w").write(svg(ring(t) + scale(t), t))
-open(os.path.join(OUT, "layer-3-knob.svg"), "w").write(svg(knob(t) + lens(t), t))
+# Apple Watch: dark, drawn a touch smaller so the dial sits well inside
+# the round mask
+t = theme("dark")
+open(os.path.join(OUT, "dialed-icon-watch.svg"), "w").write(svg(
+    background(t) + f'<g transform="translate({S / 2} {S / 2}) scale(0.9) translate({-S / 2} {-S / 2 - 18})">'
+    + ring(t) + scale(t) + knob(t) + lens(t) + '</g>', t))
+
 print("wrote", sorted(os.listdir(OUT)))
+
+
+# ---------------------------------------------------------------------------
+# Icon Composer bundle (Dialed.icon) for iOS 26's live Liquid Glass.
+# Icon Composer draws the glass, specular and shadows itself, so these
+# layers are flat shapes in the app colours — no painted lighting.
+import json
+
+ICON = os.path.join(os.path.dirname(__file__), "Dialed.icon")
+ASSETS = os.path.join(ICON, "Assets")
+os.makedirs(ASSETS, exist_ok=True)
+light = theme("light")
+
+
+def flat(body):
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {S} {S}" width="{S}" height="{S}">'
+            f'{body}</svg>\n')
+
+
+def flat_scale():
+    out = []
+    for i in range(SCALE_N + 1):
+        f = i / SCALE_N
+        a = START + SWEEP * f
+        major = i % 3 == 0
+        x0, y0 = pt(SCALE_R[0] if major else SCALE_R[0] + 9, a)
+        x1, y1 = pt(SCALE_R[1], a)
+        col, op = (grad(f), 1) if f <= VALUE + 1e-6 else ("#8E8E93", 0.5)
+        out.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{col}" '
+                   f'stroke-opacity="{op}" stroke-width="{11 if major else 7}" stroke-linecap="round"/>')
+    return "".join(out)
+
+
+cx, cy = C
+x0, y0 = pt(PTR[0], POINTER)
+x1, y1 = pt(PTR[1] - 14, POINTER)
+bx, by = pt(RING_R, POINTER)
+layers = {
+    "ring.svg": flat(ring_strokes(light)),
+    "scale.svg": flat(flat_scale()),
+    "knob.svg": flat(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R}" fill="#F4F4F7"/>'),
+    "pointer.svg": flat(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="#151619" '
+                        f'stroke-width="{PTR[2]}" stroke-linecap="round"/>'),
+    "bead.svg": flat(f'<circle cx="{bx:.1f}" cy="{by:.1f}" r="{LENS_R}" fill="{grad(VALUE)}"/>'),
+}
+for f in os.listdir(ASSETS):
+    os.remove(os.path.join(ASSETS, f))
+for name, body in layers.items():
+    open(os.path.join(ASSETS, name), "w").write(body)
+
+
+def layer(name, glass=True):
+    return {"image-name": name, "name": name.rsplit(".", 1)[0], "glass": glass}
+
+
+# Groups are listed front to back.
+icon = {
+    "fill": {"automatic-gradient": "extended-srgb:0.95000,0.95000,0.96500,1.00000"},
+    "fill-specializations": [
+        {"appearance": "dark", "value": {"automatic-gradient": "extended-srgb:0.09000,0.09000,0.10000,1.00000"}}
+    ],
+    "groups": [
+        {"name": "Knob", "layers": [layer("pointer.svg", glass=False), layer("knob.svg")],
+         "shadow": {"kind": "neutral", "opacity": 0.6},
+         "translucency": {"enabled": True, "value": 0.35}, "specular": True},
+        {"name": "Bead", "layers": [layer("bead.svg")],
+         "shadow": {"kind": "layer-color", "opacity": 0.5},
+         "translucency": {"enabled": True, "value": 0.25}, "specular": True},
+        {"name": "Scale", "layers": [layer("scale.svg", glass=False), layer("ring.svg")],
+         "shadow": {"kind": "layer-color", "opacity": 0.4},
+         "translucency": {"enabled": True, "value": 0.2}, "specular": True},
+    ],
+    "supported-platforms": {"circles": ["watchOS"], "squares": "shared"},
+}
+open(os.path.join(ICON, "icon.json"), "w").write(json.dumps(icon, indent=2) + "\n")
