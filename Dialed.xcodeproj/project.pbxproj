@@ -401,6 +401,7 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Dialed-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and take your progress photos.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
@@ -438,6 +439,7 @@
 				DEVELOPMENT_TEAM = NS237SS5KD;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Dialed-Info.plist";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and take your progress photos.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";

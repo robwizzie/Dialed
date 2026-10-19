@@ -66,6 +66,9 @@ struct HomeView: View {
                         onOpen: { sheet = .avatar }
                     )
                     HomeWorkoutCard(onOpen: { path.append(.workout) })
+                    if HomeWeeklyReviewCard.isShowing() {
+                        HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
+                    }
                     if !viewModel.pathScenarios.isEmpty {
                         HomePathsCard(
                             scenarios: viewModel.pathScenarios,
@@ -131,6 +134,8 @@ struct HomeView: View {
                 switch destination {
                 case .workout:
                     WorkoutPlanView()
+                case .weeklyReview:
+                    WeeklyReviewView()
                 case .timeline:
                     TimelineView().environment(\.colorScheme, .dark)
                 case .foodLog:
