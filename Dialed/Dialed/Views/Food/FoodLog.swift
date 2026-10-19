@@ -125,10 +125,14 @@ enum FoodLog {
         return out
     }
 
-    static func add(_ draft: FoodDraft, context: ModelContext) {
-        context.insert(ContextEvent.meal(name: draft.name, calories: draft.calories, protein: draft.protein,
-                                         carbs: draft.carbs, fat: draft.fat, at: draft.time))
+    @discardableResult
+    static func add(_ draft: FoodDraft, context: ModelContext) -> ContextEvent {
+        let event = ContextEvent.meal(name: draft.name, calories: draft.calories, protein: draft.protein,
+                                      carbs: draft.carbs, fat: draft.fat, at: draft.time)
+        context.insert(event)
         finish(context)
+        HealthWriteBack.sync(event)
+        return event
     }
 
     static func update(_ food: LoggedFood, with draft: FoodDraft, context: ModelContext) {
@@ -136,6 +140,7 @@ enum FoodLog {
         case .meal(let e):
             e.updateMeal(name: draft.name, calories: draft.calories, protein: draft.protein,
                          carbs: draft.carbs, fat: draft.fat, time: draft.time)
+            HealthWriteBack.sync(e)
         case .entry(let f):
             let oldCalories = f.calories, oldProtein = f.proteinGrams
             f.name = draft.name.isEmpty ? f.name : draft.name
@@ -152,6 +157,7 @@ enum FoodLog {
     static func delete(_ food: LoggedFood, context: ModelContext) {
         switch food.record {
         case .meal(let e):
+            HealthWriteBack.remove(eventID: e.id)
             context.delete(e)
         case .entry(let f):
             adjustDayLog(for: f, context: context, calories: -f.calories, protein: -f.proteinGrams, removing: true)
