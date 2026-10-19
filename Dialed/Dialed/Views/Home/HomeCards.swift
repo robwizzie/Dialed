@@ -312,8 +312,8 @@ struct HomeFuelCard: View {
     private var calorieNote: String {
         let left = calorieTarget - calories
         if calories == 0 { return "Nothing logged yet today." }
-        if left >= 0 { return "\(Int(left).formatted()) kcal left in today's deficit budget." }
-        return "\(Int(-left).formatted()) kcal over budget — a walk claws some back."
+        if left >= 0 { return "\(Int(left).formatted()) calories left in today's deficit budget." }
+        return "\(Int(-left).formatted()) calories over budget — a walk claws some back."
     }
 
     private func row(title: String, value: String, progress: Double, tint: Color) -> some View {
@@ -670,7 +670,7 @@ struct HomePathsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Estimate: calories eaten minus calories your watch says you burned, at ~3,500 kcal per pound.")
+            Text("Estimate: calories eaten minus calories your watch says you burned, at ~3,500 calories per pound.")
                 .font(.system(size: 10))
                 .foregroundColor(Neka.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)

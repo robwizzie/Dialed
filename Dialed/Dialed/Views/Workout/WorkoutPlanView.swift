@@ -363,7 +363,7 @@ struct WorkoutPlanView: View {
             guideItem("figure.walk", "Mile a day",
                       "Walk or run at least a mile every single day — Dialed counts it from Apple Health. Week 1 brisk walks only; from week 2, Thursdays are 2 min jog / 3 min walk × 6–8.")
             guideItem("fork.knife", "Food & recovery",
-                      "500–750 kcal/day deficit (never under 1,500), ~190 g protein, 120 oz water, 7.5+ h sleep, no alcohol until the day.")
+                      "500–750 calories/day deficit (never under 1,500), ~190 g protein, 120 oz water, 7.5+ h sleep, no alcohol until the day.")
             guideItem("sparkles", "Event week",
                       "Last hard session 3 days out, then walks and one light session. No crash dieting, no cutting water, no new foods.")
         }

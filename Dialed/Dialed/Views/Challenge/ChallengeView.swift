@@ -454,7 +454,7 @@ struct ChallengeView: View {
                 )
                 paceStat(
                     "Daily deficit needed",
-                    p.requiredDailyDeficit > 0 ? "\(Int((p.requiredDailyDeficit / 10).rounded() * 10)) kcal" : "Goal hit",
+                    p.requiredDailyDeficit > 0 ? "\(Int((p.requiredDailyDeficit / 10).rounded() * 10)) calories" : "Goal hit",
                     p.requiredDailyDeficit > 1_000 ? "aggressive — be safe" : "to reach −\(Int(c.goalLossLbs)) lb",
                     p.requiredDailyDeficit > 1_000 ? Neka.rose : Neka.ink
                 )

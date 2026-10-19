@@ -147,7 +147,7 @@ struct BarcodeScanView: View {
                 .nekaCard()
 
                 HStack(spacing: 10) {
-                    stat("Calories", n?.calories, unit: "kcal", tint: Neka.orangeSoft)
+                    stat("Calories", n?.calories, unit: "calories", tint: Neka.orangeSoft)
                     stat("Protein", n?.protein, unit: "g", tint: Neka.greenSoft)
                 }
                 HStack(spacing: 10) {

@@ -238,7 +238,7 @@ struct AddFoodSheet: View {
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(Neka.ink)
                                     .lineLimit(1)
-                                Text("\(Int(item.calories)) kcal · \(Int(item.protein)) g protein")
+                                Text("\(Int(item.calories)) calories · \(Int(item.protein)) g protein")
                                     .font(.system(size: 12))
                                     .foregroundColor(Neka.inkSecondary)
                             }
@@ -690,7 +690,7 @@ private struct FoodReviewStep: View {
                         .font(.system(size: 44, weight: .bold, design: .rounded))
                         .foregroundColor(Neka.ink)
                         .fixedSize()
-                    Text("kcal")
+                    Text("calories")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Neka.inkSecondary)
                     Spacer()
@@ -734,7 +734,7 @@ private struct FoodReviewStep: View {
                 }
                 onLog(draft)
             } label: {
-                Label("Log \(Int(draft.calories)) kcal", systemImage: "checkmark")
+                Label("Log \(Int(draft.calories)) calories", systemImage: "checkmark")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.nekaPrimary)

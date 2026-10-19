@@ -197,7 +197,7 @@ enum ReminderPlanner {
                 if h == 13 {
                     body += "Make lunch count — about \(need) g (chicken, Greek yogurt, a shake) gets you on pace."
                 } else if let left = caloriesLeft, left > 0 {
-                    body += "\(left) kcal left — a lean-protein dinner of ~\(need) g keeps you on track."
+                    body += "\(left) calories left — a lean-protein dinner of ~\(need) g keeps you on track."
                 } else {
                     body += "A ~\(need) g protein dinner keeps the day on track."
                 }
