@@ -490,6 +490,8 @@ struct AIMealSheet: View {
         if !title.isEmpty { event.text = title }
         modelContext.insert(event)
         try? modelContext.save()
+        HealthWriteBack.sync(event)
+        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif

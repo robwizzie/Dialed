@@ -126,9 +126,7 @@ struct WaterCaptureSheet: View {
     }
 
     private func save() {
-        let event = ContextEvent.water(ounces)
-        modelContext.insert(event)
-        try? modelContext.save()
+        QuickLogService.logWater(ounces, context: modelContext)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif

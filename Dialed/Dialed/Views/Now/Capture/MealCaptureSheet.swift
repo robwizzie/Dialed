@@ -141,6 +141,8 @@ struct MealCaptureSheet: View {
         let event = ContextEvent.meal(calories: cals, protein: prot, items: items)
         modelContext.insert(event)
         try? modelContext.save()
+        HealthWriteBack.sync(event)
+        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
