@@ -35,8 +35,10 @@ struct ContentView: View {
     }
 
     private func showWhatsNewIfNeeded() {
-        if appState.shouldShowWhatsNew {
-            showWhatsNew = true
+        guard appState.shouldShowWhatsNew else { return }
+        // The app is built under the launch splash; wait for it to lift.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+            if appState.shouldShowWhatsNew { showWhatsNew = true }
         }
     }
 }
