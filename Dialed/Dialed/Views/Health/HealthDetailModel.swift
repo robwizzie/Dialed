@@ -264,13 +264,5 @@ final class HealthDetailModel: ObservableObject {
         return byDay.map { DayValue(date: $0.key, value: $0.value) }.sorted { $0.date < $1.date }
     }
 
-    private static func mealName(_ event: ContextEvent) -> String {
-        struct Payload: Decodable { var items: [String] }
-        if let json = event.structuredJSON?.data(using: .utf8),
-           let payload = try? JSONDecoder().decode(Payload.self, from: json),
-           !payload.items.isEmpty {
-            return payload.items.joined(separator: ", ")
-        }
-        return "Meal"
-    }
+    private static func mealName(_ event: ContextEvent) -> String { event.mealName }
 }

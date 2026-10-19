@@ -236,6 +236,8 @@ struct HomeFuelCard: View {
     let calories: Double
     let calorieTarget: Double
     var onLogMeal: () -> Void
+    /// Opens the food log (see and edit everything eaten today).
+    var onOpenLog: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -244,6 +246,15 @@ struct HomeFuelCard: View {
                     .font(Neka.label)
                     .foregroundColor(Neka.ink)
                 Spacer()
+                Button(action: onOpenLog) {
+                    Label("Food log", systemImage: "list.bullet")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Neka.track))
+                }
+                .buttonStyle(.dialedScale)
                 Button(action: onLogMeal) {
                     Label("Log meal", systemImage: "plus")
                         .font(.system(size: 12, weight: .semibold))
