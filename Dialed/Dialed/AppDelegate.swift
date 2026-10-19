@@ -16,6 +16,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         // Set notification center delegate
         UNUserNotificationCenter.current().delegate = self
 
+        // Smart reminders re-plan in a background app refresh task; it has
+        // to be registered before launch finishes.
+        SmartReminders.registerBackgroundTask()
+
         // Register notification categories
         Task {
             await NotificationManager.shared.registerCategories()
@@ -141,6 +145,12 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
     }
 
     private func handleNotificationTap(notification: UNNotification) {
+        // Smart reminders carry where to go (water sheet, food log, …).
+        if let route = notification.request.content.userInfo[ReminderRoute.userInfoKey] as? String {
+            SmartReminders.deliverRoute(route)
+            return
+        }
+
         let categoryIdentifier = notification.request.content.categoryIdentifier
 
         // Deep link based on notification type
