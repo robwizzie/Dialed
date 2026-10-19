@@ -2,8 +2,9 @@
 
 A dial made of glass over the app's colours: a full 270° ring in green →
 sky → lavender → orange (blended in OKLCH so it stays vivid) lit like a
-glass tube, a graduated scale lit up to the value, a frosted knurled glass
-knob that picks up the colours round it with a pointer line, and a glass
+glass tube, a graduated scale lit up to the value, a raised knob sitting
+in a socket (knurled side wall, chamfered edge, frosted dished glass top with
+a pointer groove), and a glass
 lens riding the ring at "dialed in". The same geometry is drawn live in the app by
 `Views/Brand/DialedMark.swift` (splash, onboarding, Settings).
 
