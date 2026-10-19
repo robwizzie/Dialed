@@ -40,7 +40,10 @@ final class NowViewModel: ObservableObject {
         refreshHeader(now: now)
         refreshAmbient(now: now, dominantPillar: nil)
 
-        // 1. Load the baseline, latest sleep, latest biometric.
+        // 1. Load the baseline, latest sleep, latest biometric. Refresh the
+        //    baseline first — no-op unless it's a new logical day or new
+        //    sleep/biometric rows have synced since the last compute.
+        BaselineEngine.recomputeIfNeeded(now: now, context: context)
         let baseline = latestBaseline(context: context)
         let lastSleep = latestSleep(context: context)
         let latestBio = latestBiometric(context: context)
