@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#ECEAE4"/>
+    </linearGradient>
+    <radialGradient id="knob" cx="0.38" cy="0.30" r="0.85">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E9E7E1"/>
+    </radialGradient>
+    <radialGradient id="spec" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0.47"/>
+    </linearGradient>
+    <filter id="soft" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="26"/></filter>
+    <filter id="blur90" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="70"/></filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="14"/></filter>
+    <clipPath id="knobClip"><circle cx="512" cy="528" r="214"/></clipPath>
+  </defs><rect width="1024" height="1024" fill="url(#bg)"/><g filter="url(#blur90)" opacity="0.3"><circle cx="226.7" cy="620.7" r="170" fill="#50B78C"/><circle cx="442.0" cy="236.3" r="170" fill="#6DABEF"/><circle cx="808.3" cy="481.1" r="170" fill="#C290B6"/></g></svg>

@@ -93,6 +93,11 @@ struct SettingsView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 14)
                     }
+
+                    DialedLockup(markSize: 28, textSize: 20)
+                        .opacity(0.9)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 12)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
