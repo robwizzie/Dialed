@@ -7,8 +7,8 @@
 //
 //    • a full 270° scale ring in all four app colours, lit like a glass tube
 //    • a graduated scale inside the ring, lit up to the value
-//    • a frosted, knurled glass knob that picks up the colours round it,
-//      with a pointer line
+//    • a raised knob in a socket — knurled side wall, chamfered edge and a
+//      frosted, slightly dished glass top with a pointer groove
 //    • a glass lens riding the ring at the value, tinted by the colour
 //      under it
 //
@@ -162,54 +162,121 @@ struct DialedMark: View, Animatable {
 
     // MARK: - Knob
 
+    /// A real knob seen from just above: it sits in a recessed socket,
+    /// rises on a knurled side wall, and has a slightly dished glass top
+    /// with a chamfered edge.
+    private static let lift = 16.0, wall = 30.0
+
     private func knob(k: CGFloat, angle: Double) -> some View {
-        let d = Self.knobRadius * 2 * k
-        let glassA = dark ? 0.14 : 0.62
+        let r = Self.knobRadius
+        let d = r * 2 * k
         return ZStack {
+            // Socket the knob sits in.
+            Circle()
+                .fill(LinearGradient(stops: [.init(color: .black.opacity(dark ? 0.65 : 0.22), location: 0),
+                                             .init(color: .black.opacity(0), location: 0.55),
+                                             .init(color: .white.opacity(dark ? 0.38 : 0.7), location: 1)],
+                                     startPoint: .top, endPoint: .bottom))
+                .frame(width: (r + 14) * 2 * k, height: (r + 14) * 2 * k)
+
+            // Cast shadow, long and soft, falling down and away from the light.
+            Ellipse()
+                .fill(.black.opacity(dark ? 0.85 : 0.29))
+                .frame(width: (r + 4) * 2 * k, height: (r - 10) * 2 * k)
+                .blur(radius: 24 * k)
+                .offset(x: 14 * k, y: (Self.wall - Self.lift + 34) * k)
+            Circle()
+                .fill(.black.opacity(dark ? 0.75 : 0.25))
+                .frame(width: (r + 2) * 2 * k, height: (r + 2) * 2 * k)
+                .blur(radius: 8 * k)
+                .offset(y: (Self.wall - Self.lift + 6) * k)
+
+            sideWall(k: k)
+                .frame(width: d, height: d + Self.wall * k)
+                .offset(y: (Self.wall / 2 - Self.lift) * k)
+
+            top(k: k, angle: angle)
+                .frame(width: d, height: d)
+                .offset(y: -Self.lift * k)
+        }
+    }
+
+    /// The cylinder between the top face and the base, with vertical
+    /// knurling spaced by its curve.
+    private func sideWall(k: CGFloat) -> some View {
+        Canvas { ctx, size in
+            let r = Self.knobRadius * k, h = Self.wall * k
+            let cx = size.width / 2, top = r
+            var body = Path()
+            body.addArc(center: CGPoint(x: cx, y: top), radius: r, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
+            body.addLine(to: CGPoint(x: cx + r, y: top + h))
+            body.addArc(center: CGPoint(x: cx, y: top + h), radius: r, startAngle: .degrees(0), endAngle: .degrees(180), clockwise: false)
+            body.closeSubpath()
+            let edge = dark ? Color(hex: "1A1A1E") : Color(hex: "BDBDC6")
+            let mid = dark ? Color(hex: "5A5A62") : Color(hex: "F4F4F7")
+            ctx.fill(body, with: .linearGradient(
+                Gradient(stops: [.init(color: edge, location: 0), .init(color: mid, location: 0.3),
+                                 .init(color: mid, location: 0.65), .init(color: edge, location: 1)]),
+                startPoint: CGPoint(x: cx - r, y: 0), endPoint: CGPoint(x: cx + r, y: 0)))
+            for i in 1..<60 {
+                let x = cx - r * cos(Double(i) / 60 * .pi)
+                let y = top + sqrt(max(0, r * r - (x - cx) * (x - cx)))
+                var p = Path()
+                p.move(to: CGPoint(x: x, y: y - 2 * k))
+                p.addLine(to: CGPoint(x: x, y: y + h - 3 * k))
+                ctx.stroke(p, with: .color(.black.opacity(dark ? 0.45 : 0.16)),
+                           style: StrokeStyle(lineWidth: 3.5 * k, lineCap: .round))
+            }
+        }
+    }
+
+    private func top(k: CGFloat, angle: Double) -> some View {
+        let r = Self.knobRadius
+        let glassA = dark ? 0.14 : 0.62
+        let dishA = dark ? 0.30 : 0.10
+        return ZStack {
+            Circle().fill(dark ? Color(hex: "202024") : .white)
             // Frosted: the colours round the knob, blurred and pulled inward.
-            ringShape(radius: Self.knobRadius - 10, width: 90, k: k)
+            ringShape(radius: r - 10, width: 90, k: k)
                 .blur(radius: 34 * k)
                 .opacity(0.9)
             Circle()
                 .fill(LinearGradient(colors: [.white.opacity(min(1, glassA + 0.25)), .white.opacity(glassA)],
                                      startPoint: UnitPoint(x: 0.2, y: 0), endPoint: UnitPoint(x: 0.8, y: 1)))
-            Circle().stroke(.black.opacity(dark ? 0.12 : 0.05), lineWidth: 1.5 * k)
+            // Slight dish in the top.
             Circle()
-                .stroke(Self.specular(strength: dark ? 0.55 : 1), lineWidth: 7 * k)
-                .padding(4 * k)
+                .fill(RadialGradient(stops: [.init(color: .white.opacity(dark ? 0.19 : 0.35), location: 0),
+                                             .init(color: .white.opacity(0), location: 0.7),
+                                             .init(color: .black.opacity(dishA), location: 1)],
+                                     center: UnitPoint(x: 0.62, y: 0.70), startRadius: 0, endRadius: (r - 22) * 1.5 * k))
+                .padding(22 * k)
+            // Chamfered edge: light catches the near lip, the far lip is shaded.
+            Circle()
+                .stroke(LinearGradient(stops: [.init(color: .black.opacity(dishA * 1.4), location: 0),
+                                               .init(color: .black.opacity(0), location: 0.5),
+                                               .init(color: .white.opacity(dark ? 0.5 : 0.9), location: 1)],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 20 * k)
+                .padding(11 * k)
+            Circle()
+                .stroke(Self.specular(strength: dark ? 0.55 : 1), lineWidth: 4 * k)
+                .padding(1.5 * k)
 
-            // Knurled grip round the edge.
-            Canvas { ctx, size in
-                let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                let r0 = (Self.knobRadius - 24) * k, r1 = (Self.knobRadius - 6) * k
-                for i in 0..<72 {
-                    let a = Double(i) / 72 * 2 * .pi
-                    var p = Path()
-                    p.move(to: CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0))
-                    p.addLine(to: CGPoint(x: c.x + cos(a) * r1, y: c.y + sin(a) * r1))
-                    ctx.stroke(p, with: .color((dark ? Color.white : .black).opacity(dark ? 0.10 : 0.07)),
-                               style: StrokeStyle(lineWidth: 6 * k, lineCap: .round))
-                }
+            // Pointer: a groove cut into the top, turning with the value.
+            if !dark {
+                Capsule().fill(.white.opacity(0.85))
+                    .frame(width: 116 * k, height: 26 * k)
+                    .offset(x: 109 * k)
+                    .rotationEffect(.degrees(angle))
+                    .offset(y: 3 * k)
             }
-
-            // Pointer: a recessed line from the centre out, turning with the value.
-            ZStack {
-                Capsule().fill(.white.opacity(dark ? 0.44 : 0.8)).offset(y: 3 * k)
-                Capsule().fill(dark ? Color.white : Neka.ink)
-            }
-            .frame(width: 130 * k, height: 26 * k)
-            .offset(x: 116 * k)
-            .rotationEffect(.degrees(angle))
-        .frame(width: d, height: d)
+            Capsule().fill(dark ? Color.white : Neka.ink)
+                .frame(width: 116 * k, height: 26 * k)
+                .offset(x: 109 * k)
+                .rotationEffect(.degrees(angle))
+        }
         .clipShape(Circle())
         .liquidGlass(tint: nil)
-        .background(
-            Circle()
-                .fill(.black.opacity(dark ? 0.55 : 0.18))
-                .padding(8 * k)
-                .blur(radius: 24 * k)
-                .offset(y: 28 * k)
-        )
     }
 
     // MARK: - Lens

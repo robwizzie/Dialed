@@ -36,6 +36,7 @@ POINTER = START + SWEEP * VALUE
 RING_R, RING_W = 316, 92     # the colour ring
 KNOB_R = 200                 # the glass knob
 LENS_R = 70                  # glass lens on the ring
+LIFT, WALL = 16, 30          # knob top sits LIFT above centre; its side wall drops WALL
 PTR = (64, 168, 26)          # pointer line: from, to, width
 KNURL = (KNOB_R - 24, KNOB_R - 6, 72)   # grip ridges: from, to, count
 SCALE_R = (220, 250)         # graduations between knob and ring
@@ -112,15 +113,18 @@ def theme(name):
     if name == "light":
         return dict(name=name, bg0="#FFFFFF", bg1="#EDEDF2", bloomA=0.35, glass="#FFFFFF", glassA=0.62,
                     spec=1.0, edgeA=0.10, dot="#151619", shadowA=0.18, col=lambda c: c,
-                    dim="#000000", dimA=0.16, ridge="#000000", ridgeA=0.07)
+                    dim="#000000", dimA=0.16, ridge="#000000", ridgeA=0.16,
+                    wall0="#F4F4F7", wall1="#BDBDC6", socketA=0.22, dishA=0.10)
     if name == "dark":
         return dict(name=name, bg0="#202024", bg1="#050506", bloomA=0.45, glass="#FFFFFF", glassA=0.14,
                     spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=lambda c: c,
-                    dim="#FFFFFF", dimA=0.22, ridge="#FFFFFF", ridgeA=0.10)
+                    dim="#FFFFFF", dimA=0.22, ridge="#000000", ridgeA=0.45,
+                    wall0="#5A5A62", wall1="#1A1A1E", socketA=0.65, dishA=0.30)
     # tinted: iOS turns this into the user's tint colour, so it's drawn in luminance only
     return dict(name=name, bg0="#141414", bg1="#000000", bloomA=0.30, glass="#FFFFFF", glassA=0.14,
                 spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=gray,
-                dim="#FFFFFF", dimA=0.25, ridge="#FFFFFF", ridgeA=0.12)
+                dim="#FFFFFF", dimA=0.25, ridge="#000000", ridgeA=0.45,
+                wall0="#6A6A6A", wall1="#222222", socketA=0.65, dishA=0.30)
 
 
 def defs(t):
@@ -150,7 +154,28 @@ def defs(t):
     <filter id="frost" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="34"/></filter>
     <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="24"/></filter>
     <filter id="tiny" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
-    <clipPath id="knobClip"><circle cx="{cx}" cy="{cy}" r="{KNOB_R}"/></clipPath>
+    <clipPath id="knobClip"><circle cx="{cx}" cy="{cy - LIFT}" r="{KNOB_R}"/></clipPath>
+    <clipPath id="wallClip"><path d="M{cx - KNOB_R} {cy - LIFT} A{KNOB_R} {KNOB_R} 0 0 0 {cx + KNOB_R} {cy - LIFT}
+      L{cx + KNOB_R} {cy - LIFT + WALL} A{KNOB_R} {KNOB_R} 0 0 1 {cx - KNOB_R} {cy - LIFT + WALL} Z"/></clipPath>
+    <linearGradient id="wall" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="{t['wall1']}"/><stop offset="0.3" stop-color="{t['wall0']}"/>
+      <stop offset="0.65" stop-color="{t['wall0']}"/><stop offset="1" stop-color="{t['wall1']}"/>
+    </linearGradient>
+    <linearGradient id="socket" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity="{t['socketA']}"/>
+      <stop offset="0.55" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="{0.7 * t['spec']:.2f}"/>
+    </linearGradient>
+    <radialGradient id="dish" cx="0.62" cy="0.70" r="0.75">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="{0.35 * t['spec']:.2f}"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="{t['dishA']}"/>
+    </radialGradient>
+    <linearGradient id="chamfer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#000000" stop-opacity="{t['dishA'] * 1.4:.2f}"/>
+      <stop offset="0.5" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="{0.9 * t['spec']:.2f}"/>
+    </linearGradient>
     <clipPath id="lensClip"><circle cx="{pt(RING_R, POINTER)[0]:.1f}" cy="{pt(RING_R, POINTER)[1]:.1f}" r="{LENS_R}"/></clipPath>
   </defs>"""
 
@@ -206,30 +231,46 @@ def scale(t):
 
 
 def knob(t):
+    # A real knob seen from just above: it sits in a recessed socket, rises
+    # on a knurled side wall, and has a slightly dished glass top with a
+    # chamfered edge.
     cx, cy = C
+    top = cy - LIFT
     out = []
-    out.append(f'<circle cx="{cx}" cy="{cy + 28}" r="{KNOB_R - 8}" fill="#000000" opacity="{t["shadowA"]}" filter="url(#soft)"/>')
-    # frosted glass: the colours round the knob, blurred and pulled inward
-    out.append(f'<g clip-path="url(#knobClip)"><g filter="url(#frost)" opacity="0.9">'
-               f'{ring_strokes(t, r=KNOB_R - 10, w=90, seg=40)}</g>'
-               f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R}" fill="url(#knobFace)"/></g>')
-    # specular rim + a faint dark edge so it sits off the background
-    out.append(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R - 0.5}" fill="none" stroke="#000000" stroke-opacity="{t["edgeA"] * 0.5:.2f}" stroke-width="1.5"/>')
-    out.append(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R - 4}" fill="none" stroke="url(#spec)" stroke-width="7"/>')
-    # knurled grip round the edge
+    # socket the knob sits in
+    out.append(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R + 14}" fill="url(#socket)"/>')
+    # cast shadow, long and soft, falling down and away from the light
+    out.append(f'<ellipse cx="{cx + 14}" cy="{top + WALL + 34}" rx="{KNOB_R + 4}" ry="{KNOB_R - 10}" fill="#000000" '
+               f'opacity="{t["shadowA"] * 1.6:.2f}" filter="url(#soft)"/>')
+    out.append(f'<circle cx="{cx}" cy="{top + WALL + 6}" r="{KNOB_R + 2}" fill="#000000" opacity="{t["shadowA"] * 1.4:.2f}" filter="url(#tiny)"/>')
+    # side wall: the cylinder between the top face and the base
+    out.append(f'<rect x="{cx - KNOB_R}" y="{top}" width="{2 * KNOB_R}" height="{WALL}" fill="url(#wall)"/>')
+    out.append(f'<circle cx="{cx}" cy="{top + WALL}" r="{KNOB_R}" fill="url(#wall)"/>')
+    # knurling on the wall: vertical ridges, spaced by the cylinder's curve
     ridges = []
-    for i in range(KNURL[2]):
-        a = 360 * i / KNURL[2]
-        x0, y0 = pt(KNURL[0], a)
-        x1, y1 = pt(KNURL[1], a)
-        ridges.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}"/>')
-    out.append(f'<g stroke="{t["ridge"]}" stroke-opacity="{t["ridgeA"]}" stroke-width="6" stroke-linecap="round" '
-               f'clip-path="url(#knobClip)">' + "".join(ridges) + '</g>')
-    # pointer: a recessed line from the centre out to the edge, aimed at the value
-    x0, y0 = pt(PTR[0], POINTER)
-    x1, y1 = pt(PTR[1], POINTER)
+    for i in range(1, 60):
+        a = 180 * i / 60
+        x = cx - KNOB_R * math.cos(math.radians(a))
+        y0 = top + KNOB_R * math.sin(math.radians(a)) * 0 + math.sqrt(max(0, KNOB_R ** 2 - (x - cx) ** 2))
+        ridges.append(f'<line x1="{x:.1f}" y1="{y0 - 2:.1f}" x2="{x:.1f}" y2="{y0 + WALL - 3:.1f}"/>')
+    out.append(f'<g stroke="{t["ridge"]}" stroke-opacity="{t["ridgeA"]}" stroke-width="3.5" stroke-linecap="round">'
+               + "".join(ridges) + '</g>')
+    # top face: frosted glass picking up the colours round it
+    out.append(f'<g clip-path="url(#knobClip)">'
+               f'<circle cx="{cx}" cy="{top}" r="{KNOB_R}" fill="{t["bg0"]}"/>'
+               f'<g filter="url(#frost)" opacity="0.9" transform="translate(0 {-LIFT})">'
+               f'{ring_strokes(t, r=KNOB_R - 10, w=90, seg=40)}</g>'
+               f'<circle cx="{cx}" cy="{top}" r="{KNOB_R}" fill="url(#knobFace)"/>'
+               f'<circle cx="{cx}" cy="{top}" r="{KNOB_R - 22}" fill="url(#dish)"/></g>')
+    # chamfered edge: light catches the near (bottom) lip, the far lip is shaded
+    out.append(f'<circle cx="{cx}" cy="{top}" r="{KNOB_R - 11}" fill="none" stroke="url(#chamfer)" stroke-width="20"/>')
+    out.append(f'<circle cx="{cx}" cy="{top}" r="{KNOB_R - 1.5}" fill="none" stroke="url(#spec)" stroke-width="4"/>')
+    out.append(f'<circle cx="{cx}" cy="{top}" r="{KNOB_R - 21}" fill="none" stroke="#000000" stroke-opacity="{t["edgeA"] * 0.6:.2f}" stroke-width="1.5"/>')
+    # pointer: a groove cut into the top, aimed at the value
+    x0, y0 = pt(PTR[0], POINTER, (cx, top))
+    x1, y1 = pt(PTR[1] - 14, POINTER, (cx, top))
     out.append(f'<line x1="{x0:.1f}" y1="{y0 + 3:.1f}" x2="{x1:.1f}" y2="{y1 + 3:.1f}" stroke="#FFFFFF" '
-               f'stroke-opacity="{0.8 * t["spec"]:.2f}" stroke-width="{PTR[2]}" stroke-linecap="round"/>')
+               f'stroke-opacity="{0.85 if t["name"] == "light" else 0}" stroke-width="{PTR[2]}" stroke-linecap="round"/>')
     out.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{t["dot"]}" '
                f'stroke-width="{PTR[2]}" stroke-linecap="round"/>')
     return "".join(out)
