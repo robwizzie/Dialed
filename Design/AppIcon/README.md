@@ -1,9 +1,10 @@
 # Dialed app icon — "The Dial"
 
-A real dial, drawn the way Apple draws its own icons — three shapes and
-nothing else: a thick green → sky → lavender ring (with an Activity-ring
-shadow under its end cap), a smooth glass knob with a quiet printed scale,
-and one pointer dot turned to "dialed in". The same geometry is drawn live in the app by
+A dial made of glass over the app's colours: a full 270° ring in green →
+sky → lavender → orange (blended in OKLCH so it stays vivid) lit like a
+glass tube, a frosted glass knob that picks up the colours round it with one
+pointer dot, and a glass lens riding the ring at "dialed in". The same
+geometry is drawn live in the app by
 `Views/Brand/DialedMark.swift` (splash, onboarding, Settings).
 
 ## Files
@@ -32,7 +33,7 @@ Open Developer Tool → Icon Composer):
 
 1. Drag in `layer-1-background.svg`, `layer-2-ring.svg`, `layer-3-knob.svg`
    as three groups, bottom to top.
-2. Turn **Liquid Glass** on for the knob group (and lightly for the ring);
+2. Turn **Liquid Glass** on for the knob group (knob + lens) and lightly for the ring;
    leave the background plain.
 3. Save as `AppIcon.icon` into the app target and set it as the app icon in
    the target's General tab. Xcode uses it on iOS 26 and the PNG set below that.
