@@ -7,6 +7,10 @@
 //  on empty) plus a "future you" for your goal day. Images are generated
 //  once and cached on disk; changing your photo clears them.
 //
+//  Each look can use its own reference photo (say, a gym selfie for
+//  "Locked in" and a suit photo for "future you"). Looks without one use
+//  your profile photo; changing that only clears the looks that use it.
+//
 //  Generation tries the programmatic ImageCreator API (iOS 18.4+) first.
 //  If Image Playground needs you to confirm the person yourself, it falls
 //  back to presenting the system Image Playground sheet pre-filled with
@@ -32,6 +36,8 @@ final class AvatarStudio: ObservableObject {
     /// Where the face sits in each avatar (unit coordinates, top-left
     /// origin), so views can frame it instead of center-cropping.
     @Published private(set) var focusPoints: [String: CGPoint] = [:]
+    /// Per-look reference photos, keyed like `images`.
+    @Published private(set) var references: [String: UIImage] = [:]
 
     /// Set when generation needs the interactive Image Playground sheet.
     @Published var sheetRequest: SheetRequest?
@@ -50,13 +56,86 @@ final class AvatarStudio: ObservableObject {
         didSet { UserDefaults.standard.set(isEnabled, forKey: "avatar.enabled") }
     }
 
+    static let allKeys = AvatarMood.allCases.map(\.rawValue) + [futureKey]
+
     private init() {
         isEnabled = UserDefaults.standard.bool(forKey: "avatar.enabled")
-        for key in AvatarMood.allCases.map(\.rawValue) + [Self.futureKey] {
+        for key in Self.allKeys {
             if let data = try? Data(contentsOf: Self.url(for: key)), let image = UIImage(data: data) {
                 images[key] = image
                 locateFocus(of: image, key: key)
             }
+            if let data = try? Data(contentsOf: Self.referenceURL(for: key)), let image = UIImage(data: data) {
+                references[key] = image
+            }
+        }
+    }
+
+    // MARK: - Reference photos
+
+    /// The photo a look is drawn from: its own reference, else your profile photo.
+    func referencePhoto(for key: String) -> UIImage? {
+        references[key] ?? ProfilePhotoStore.shared.original
+    }
+
+    func hasCustomReference(_ key: String) -> Bool { references[key] != nil }
+
+    /// Use `data` as the reference for one look (or every look when `key`
+    /// is nil), then redraw it.
+    func setReference(_ data: Data, for key: String?) async {
+        guard let image = UIImage(data: data).map(Self.downscaled) else {
+            lastError = "Couldn't read that photo. Try another one."
+            return
+        }
+        let keys = key.map { [$0] } ?? Self.allKeys
+        try? FileManager.default.createDirectory(at: Self.referenceDirectory, withIntermediateDirectories: true)
+        let jpeg = image.jpegData(compressionQuality: 0.9)
+        for k in keys {
+            references[k] = image
+            try? jpeg?.write(to: Self.referenceURL(for: k), options: .atomic)
+            removeImage(k)
+        }
+        if let key {
+            await regenerate(key: key)
+        } else if let mood = AvatarMood.allCases.first {
+            // Redraw one now; the rest fill in as each mood comes up.
+            await regenerate(key: mood.rawValue)
+        }
+    }
+
+    /// Go back to the profile photo for one look.
+    func clearReference(for key: String) async {
+        references[key] = nil
+        try? FileManager.default.removeItem(at: Self.referenceURL(for: key))
+        removeImage(key)
+        await regenerate(key: key)
+    }
+
+    /// Draw a look again from its reference photo.
+    func regenerate(key: String) async {
+        if key == Self.futureKey {
+            await generateFuture(event: GoalEvent.load())
+        } else if let mood = AvatarMood(rawValue: key) {
+            await generate(mood: mood)
+        }
+    }
+
+    func removeImage(_ key: String) {
+        images[key] = nil
+        focusPoints[key] = nil
+        try? FileManager.default.removeItem(at: Self.url(for: key))
+    }
+
+    private static func downscaled(_ image: UIImage) -> UIImage {
+        let maxSide: CGFloat = 1536
+        let longest = max(image.size.width, image.size.height)
+        guard longest > maxSide else { return image }
+        let scale = maxSide / longest
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
         }
     }
 
@@ -98,7 +177,7 @@ final class AvatarStudio: ObservableObject {
 
     func generate(key: String, prompt: String) async {
         guard !inProgress.contains(key) else { return }
-        guard let photo = ProfilePhotoStore.shared.original?.cgImage else {
+        guard let photo = referencePhoto(for: key)?.cgImage else {
             lastError = "Add a photo of yourself first (tap your picture on Home)."
             return
         }
@@ -140,12 +219,12 @@ final class AvatarStudio: ObservableObject {
     /// Fill in the current mood in the background once avatars are on.
     func ensure(mood: AvatarMood) async {
         guard isEnabled, images[mood.rawValue] == nil, canGenerate,
-              ProfilePhotoStore.shared.original != nil else { return }
+              referencePhoto(for: mood.rawValue) != nil else { return }
         #if canImport(ImagePlayground)
         // Background fills use only the silent API — never pop a sheet.
         if #available(iOS 18.4, *) {
             let key = mood.rawValue
-            guard !inProgress.contains(key), let photo = ProfilePhotoStore.shared.original?.cgImage else { return }
+            guard !inProgress.contains(key), let photo = referencePhoto(for: key)?.cgImage else { return }
             inProgress.insert(key)
             defer { inProgress.remove(key) }
             if let creator = try? await ImageCreator() {
@@ -180,11 +259,12 @@ final class AvatarStudio: ObservableObject {
         }
     }
 
-    /// Called when your photo changes — old avatars no longer match.
+    /// Called when your profile photo changes. Looks drawn from it no
+    /// longer match; looks with their own reference photo stay.
     func clearAll() {
-        images = [:]
-        focusPoints = [:]
-        try? FileManager.default.removeItem(at: Self.directory)
+        for key in Self.allKeys where references[key] == nil {
+            removeImage(key)
+        }
     }
 
     // MARK: - Framing
@@ -233,6 +313,15 @@ final class AvatarStudio: ObservableObject {
     private static func url(for key: String) -> URL {
         directory.appendingPathComponent("\(key).png")
     }
+
+    private static var referenceDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AvatarReferences", isDirectory: true)
+    }
+
+    private static func referenceURL(for key: String) -> URL {
+        referenceDirectory.appendingPathComponent("\(key).jpg")
+    }
 }
 
 // MARK: - Interactive fallback sheet
@@ -267,7 +356,7 @@ private struct AvatarPlaygroundSheetInner: ViewModifier {
                 set: { if !$0 { studio.sheetRequest = nil } }
             ),
             concepts: studio.sheetRequest.map { [ImagePlaygroundConcept.text($0.prompt)] } ?? [],
-            sourceImage: ProfilePhotoStore.shared.original.map { Image(uiImage: $0) },
+            sourceImage: studio.sheetRequest.flatMap { studio.referencePhoto(for: $0.key) }.map { Image(uiImage: $0) },
             onCompletion: { url in
                 studio.storeFromFile(url)
             },
