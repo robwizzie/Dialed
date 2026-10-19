@@ -32,6 +32,8 @@ struct HomeView: View {
     @StateObject private var signals = HealthDetailModel()
     @ObservedObject private var studio = AvatarStudio.shared
     @AppStorage("avatar.useOnHome") private var useAvatarOnHome = true
+    /// The morning card is hidden for the rest of this day once dismissed.
+    @AppStorage("morning.dismissedDay") private var morningDismissedDay = ""
     @State private var aiAvailability: AIAvailability = DialedAI.availability
     @State private var askedForHealthAccess = false
 
@@ -41,6 +43,17 @@ struct HomeView: View {
     @State private var sheet: HomeSheet?
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
+
+    /// 4 AM – noon, until you dismiss it.
+    private var showsMorning: Bool {
+        let hour = Calendar.current.component(.hour, from: Date())
+        return (4..<12).contains(hour) && morningDismissedDay != Self.dayKey(Date())
+    }
+
+    private static func dayKey(_ date: Date) -> String {
+        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return "\(c.year ?? 0)-\(c.month ?? 0)-\(c.day ?? 0)"
+    }
 
     enum HomeSheet: String, Identifiable {
         case water, meal, weighIn, voice, profile, challengeSetup, ask, avatar
@@ -53,6 +66,27 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     header
                         .padding(.top, 8)
+                    if showsMorning {
+                        HomeMorningCard(
+                            firstName: viewModel.firstName,
+                            night: signals.lastNight,
+                            recentNights: signals.nights,
+                            readiness: signals.readiness,
+                            weightReadings: viewModel.weightReadings,
+                            mileStreak: viewModel.mileStreak,
+                            progress: viewModel.progress,
+                            friendName: viewModel.challenge?.friendDisplayName,
+                            goalEvent: viewModel.goalEvent,
+                            onWeighIn: { sheet = .weighIn },
+                            onOpenSleep: { router.openHealth(.sleep) },
+                            onDismiss: {
+                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                    morningDismissedDay = Self.dayKey(Date())
+                                }
+                            }
+                        )
+                        .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
+                    }
                     hero
                     HomeDialedTodayCard(
                         waterOz: viewModel.waterOz,
@@ -583,7 +617,7 @@ struct HomeView: View {
             WaterLogSheet()
                 .presentationDetents([.large])
         case .meal:
-            AIMealSheet()
+            AddFoodSheet()
                 .presentationDetents([.large])
         case .ask:
             AskDialedSheet(snapshot: viewModel.snapshot)
