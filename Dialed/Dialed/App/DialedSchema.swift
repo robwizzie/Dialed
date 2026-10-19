@@ -40,7 +40,11 @@ enum DialedSchema {
         PlanBlock.self,
 
         // Weight-loss challenge — manual weigh-ins
-        WeightEntry.self
+        WeightEntry.self,
+
+        // Workout plan logging (sets / cardio per plan day)
+        PlanWorkoutLog.self,
+        PlanSetLog.self
     ]
 
     /// Build a ModelContainer with the full schema. Used by previews and the

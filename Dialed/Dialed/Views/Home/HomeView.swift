@@ -139,6 +139,10 @@ struct HomeView: View {
                     CalendarView().environment(\.colorScheme, .dark)
                 case .devices:
                     DevicesView()
+                case .strength:
+                    StrengthProgressView()
+                case .progressPhotos:
+                    ProgressPhotosView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -480,6 +484,11 @@ struct HomeView: View {
             moreRow(icon: "calendar", title: "Score calendar", subtitle: "Streaks and past days", tint: Neka.green, fill: Neka.greenSoft) {
                 CalendarView()
             }
+            Divider().overlay(Neka.hairline).padding(.leading, 62)
+            Button { path.append(.progressPhotos) } label: {
+                moreLabel(icon: "camera.fill", title: "Progress photos", subtitle: "Weekly photo, same pose, side by side", tint: Neka.lavender, fill: Neka.lavenderSoft)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.vertical, 4)
         .nekaCard()
