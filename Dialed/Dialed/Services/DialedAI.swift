@@ -164,6 +164,45 @@ enum DialedAI {
         return nil
     }
 
+    // MARK: Workout from text
+
+    /// Read a typed gym log ("bench 185 for 8 then 7, squats felt heavy at
+    /// 225, five sets of five") into exercises and sets. Used when the rule
+    /// parser can't make sense of it.
+    static func parseWorkout(_ text: String) async -> [WorkoutTextParser.ParsedExercise]? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You turn a person's quick gym notes into a list of exercises with their sets. \
+            Only include what they actually wrote — never invent exercises, weights or reps. \
+            Weights are in pounds. Bodyweight exercises have weight 0.
+            """)
+            do {
+                let response = try await session.respond(to: "Gym notes: \(trimmed)", generating: GeneratedWorkout.self)
+                let out = response.content.exercises.compactMap { e -> WorkoutTextParser.ParsedExercise? in
+                    let count = min(e.reps.count, 12)
+                    let sets = (0..<count).compactMap { i -> WorkoutTextParser.ParsedSet? in
+                        let reps = e.reps[i]
+                        guard reps > 0, reps <= 100 else { return nil }
+                        let w = i < e.weightsLbs.count ? e.weightsLbs[i] : (e.weightsLbs.last ?? 0)
+                        return WorkoutTextParser.ParsedSet(weight: w > 0 ? min(w, 1_500) : nil, reps: reps)
+                    }
+                    let minutes = e.minutes > 0 ? e.minutes : nil
+                    let miles = e.miles > 0 ? e.miles : nil
+                    guard !e.name.isEmpty, !sets.isEmpty || minutes != nil || miles != nil else { return nil }
+                    return WorkoutTextParser.ParsedExercise(name: e.name, sets: sets, minutes: minutes, miles: miles)
+                }
+                return out.isEmpty ? nil : out
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
     // MARK: Trash talk
 
     static func trashTalk(_ snapshot: HealthSnapshot, tone: TrashTalkTone) async -> String? {
@@ -277,6 +316,32 @@ struct GeneratedBrief {
 
     @Guide(description: "Three short, concrete actions for the rest of today, each under 8 words")
     var actions: [String]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedWorkout {
+    @Guide(description: "Every exercise the person wrote, in order")
+    var exercises: [GeneratedExercise]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedExercise {
+    @Guide(description: "The exercise name as written, e.g. bench press, squat, lat pulldown")
+    var name: String
+
+    @Guide(description: "Weight in pounds for each set, one number per set; 0 for bodyweight")
+    var weightsLbs: [Double]
+
+    @Guide(description: "Reps for each set, one number per set")
+    var reps: [Int]
+
+    @Guide(description: "Minutes, for timed or cardio work; otherwise 0")
+    var minutes: Double
+
+    @Guide(description: "Miles, for walking, running or biking; otherwise 0")
+    var miles: Double
 }
 
 @available(iOS 26.0, *)
