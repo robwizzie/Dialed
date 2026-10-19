@@ -225,4 +225,44 @@ extension ContextEvent {
 
 private struct MealPayload: Codable {
     var items: [String]
+    // Optional so older payloads (items only) still decode.
+    var carbs: Double?
+    var fat: Double?
+}
+
+// MARK: - Meal fields (food log editing)
+
+extension ContextEvent {
+    private var mealPayload: MealPayload? {
+        structuredJSON?.data(using: .utf8).flatMap { try? JSONDecoder().decode(MealPayload.self, from: $0) }
+    }
+
+    /// "Chicken bowl", from the text or the items list.
+    var mealName: String {
+        if let t = text, !t.isEmpty { return t }
+        if let items = mealPayload?.items, !items.isEmpty { return items.joined(separator: ", ") }
+        return "Meal"
+    }
+
+    var mealCarbs: Double? { mealPayload?.carbs }
+    var mealFat: Double? { mealPayload?.fat }
+
+    /// Rewrite a meal in place; moves it to the right day if the time changed.
+    func updateMeal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, time: Date) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = trimmed.isEmpty ? nil : trimmed
+        value = calories
+        secondaryValue = protein
+        let payload = MealPayload(items: trimmed.isEmpty ? [] : [trimmed], carbs: carbs, fat: fat)
+        structuredJSON = (try? JSONEncoder().encode(payload)).flatMap { String(data: $0, encoding: .utf8) }
+        timestamp = time
+        logicalDate = Self.logicalDate(for: time)
+        updatedAt = Date()
+    }
+
+    static func meal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, at time: Date = Date()) -> ContextEvent {
+        let event = ContextEvent.meal(calories: calories, protein: protein, items: [], at: time)
+        event.updateMeal(name: name, calories: calories, protein: protein, carbs: carbs, fat: fat, time: time)
+        return event
+    }
 }

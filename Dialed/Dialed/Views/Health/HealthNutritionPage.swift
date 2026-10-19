@@ -239,6 +239,15 @@ struct HealthNutritionPage: View {
                         .minimumScaleFactor(0.8)
                 }
                 Spacer()
+                Button { router.openHome(.foodLog) } label: {
+                    Text("Edit")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .padding(.horizontal, 12)
+                        .frame(height: 32)
+                        .background(Capsule().fill(Neka.track))
+                }
+                .accessibilityLabel("Open the food log")
                 Button { router.quickLog = .meal } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 13, weight: .bold))

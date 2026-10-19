@@ -88,7 +88,8 @@ struct HomeView: View {
                         proteinTarget: viewModel.proteinTarget,
                         calories: viewModel.caloriesIn,
                         calorieTarget: viewModel.calorieTarget,
-                        onLogMeal: { sheet = .meal }
+                        onLogMeal: { sheet = .meal },
+                        onOpenLog: { path.append(.foodLog) }
                     )
                     HomeTimelineCard(items: viewModel.timeline)
                     HomeCoachCard(insights: viewModel.insights)
@@ -132,8 +133,8 @@ struct HomeView: View {
                     WorkoutPlanView()
                 case .timeline:
                     TimelineView().environment(\.colorScheme, .dark)
-                case .tracking:
-                    TodayView().environment(\.colorScheme, .dark)
+                case .foodLog:
+                    FoodLogView()
                 case .calendar:
                     CalendarView().environment(\.colorScheme, .dark)
                 case .devices:
@@ -471,9 +472,10 @@ struct HomeView: View {
                 TimelineView()
             }
             Divider().overlay(Neka.hairline).padding(.leading, 62)
-            moreRow(icon: "checklist", title: "Detailed tracking", subtitle: "Water, protein, routine checklist", tint: Neka.orange, fill: Neka.orangeSoft) {
-                TodayView()
+            Button { path.append(.foodLog) } label: {
+                moreLabel(icon: "fork.knife", title: "Food log", subtitle: "See and edit everything you ate", tint: Neka.orange, fill: Neka.orangeSoft)
             }
+            .buttonStyle(.plain)
             Divider().overlay(Neka.hairline).padding(.leading, 62)
             moreRow(icon: "calendar", title: "Score calendar", subtitle: "Streaks and past days", tint: Neka.green, fill: Neka.greenSoft) {
                 CalendarView()
@@ -492,32 +494,35 @@ struct HomeView: View {
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink {
-            // Legacy screens are designed dark. Lazy so TodayView /
-            // CalendarView (whose inits open a ModelContainer) are only
-            // built when tapped, not on every Home redraw.
+            // Legacy screens are designed dark. Lazy so CalendarView (whose
+            // init opens a ModelContainer) is only built when tapped.
             LazyDestination(build: destination)
                 .environment(\.colorScheme, .dark)
         } label: {
-            HStack(spacing: 14) {
-                NekaIconBadge(systemName: icon, tint: tint, fill: fill)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(Neka.inkSecondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Neka.inkTertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .contentShape(Rectangle())
+            moreLabel(icon: icon, title: title, subtitle: subtitle, tint: tint, fill: fill)
         }
         .buttonStyle(.plain)
+    }
+
+    private func moreLabel(icon: String, title: String, subtitle: String, tint: Color, fill: Color) -> some View {
+        HStack(spacing: 14) {
+            NekaIconBadge(systemName: icon, tint: tint, fill: fill)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(Neka.inkTertiary)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Sheets
@@ -526,10 +531,8 @@ struct HomeView: View {
     private func sheetContent(_ sheet: HomeSheet) -> some View {
         switch sheet {
         case .water:
-            WaterCaptureSheet()
-                .environment(\.colorScheme, .dark)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
+            WaterLogSheet()
+                .presentationDetents([.large])
         case .meal:
             AIMealSheet()
                 .presentationDetents([.large])
