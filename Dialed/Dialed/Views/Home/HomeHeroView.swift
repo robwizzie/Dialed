@@ -27,6 +27,11 @@ struct HomeHeroView: View {
 
     var onTapPhoto: () -> Void
 
+    /// Today's mood chip (top-right) — opens the avatar sheet.
+    var mood: AvatarMood? = nil
+    var moodScore: Int? = nil
+    var onTapMood: () -> Void = {}
+
     private let height: CGFloat = 430
 
     var body: some View {
@@ -41,10 +46,37 @@ struct HomeHeroView: View {
                 captionView
                     .frame(width: w * 0.42, alignment: .leading)
                     .position(x: 18 + w * 0.21, y: h - 44)
+                if image != nil, let mood {
+                    moodChip(mood)
+                        .frame(width: w - 16, alignment: .trailing)
+                        .padding(.top, 16)
+                }
             }
             .clipShape(RoundedRectangle(cornerRadius: Neka.heroRadius, style: .continuous))
         }
         .frame(height: height)
+    }
+
+    private func moodChip(_ mood: AvatarMood) -> some View {
+        Button(action: onTapMood) {
+            HStack(spacing: 6) {
+                Text(mood.emoji)
+                Text(mood.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                if let moodScore {
+                    Text("\(moodScore)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color(hex: mood.accentHex))
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Neka.surface.opacity(0.92)))
+            .overlay(Capsule().stroke(Color(hex: mood.accentHex).opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Today's mood: \(mood.title)\(moodScore.map { ", \($0) of 100" } ?? ""). Opens your avatar.")
     }
 
     // MARK: - Layers

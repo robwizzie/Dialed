@@ -395,14 +395,14 @@ struct HomeTimelineCard: View {
                     .fill(Neka.ink)
                     .frame(width: 1.5, height: 30)
                     .position(x: nowX, y: trackY + 4)
-                Text(now, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+                Text(now, format: .dateTime.hour().minute())
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Neka.onInk)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Neka.ink))
                     .fixedSize()
-                    .position(x: min(max(nowX, 22), w - 22), y: 6)
+                    .position(x: min(max(nowX, 32), w - 32), y: 6)
             }
         }
     }
@@ -438,7 +438,7 @@ struct HomeTimelineCard: View {
     }
 
     private func timeString(_ d: Date) -> String {
-        d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+        d.formatted(date: .omitted, time: .shortened)
     }
 }
 
@@ -504,5 +504,93 @@ struct HomeCoachCard: View {
         case .info:  return (Neka.blue, Neka.blueSoft)
         case .rest:  return (Neka.lavender, Neka.lavenderSoft)
         }
+    }
+}
+
+// MARK: - Future you
+
+/// Where your current trend lands you on your goal day, with your
+/// "future you" avatar (or your photo until one exists).
+struct HomeFutureYouCard: View {
+    let event: GoalEvent?
+    let projection: WeightChallengeEngine.Projection?
+    let image: UIImage?
+    var onOpen: () -> Void
+
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(spacing: 14) {
+                portrait
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("FUTURE YOU")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundColor(Neka.inkTertiary)
+                    if let event {
+                        Text("\(event.name) · \(event.date.formatted(.dateTime.month(.abbreviated).day()))")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                            .lineLimit(1)
+                        if let p = projection {
+                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                Text(String(format: "%.1f", p.weight))
+                                    .font(.system(size: 26, weight: .semibold))
+                                    .foregroundColor(Neka.ink)
+                                Text("lb")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(Neka.inkSecondary)
+                                NekaPill(
+                                    text: String(format: "%@%.1f", p.change <= 0 ? "−" : "+", abs(p.change)),
+                                    tint: p.change <= 0 ? Neka.green : Neka.rose,
+                                    fill: p.change <= 0 ? Neka.greenSoft : Neka.roseSoft
+                                )
+                            }
+                            Text("\(event.daysAway()) days away · if you keep this pace")
+                                .font(.system(size: 11))
+                                .foregroundColor(Neka.inkSecondary)
+                        } else {
+                            Text("Weigh in a few more mornings to see where you'll land.")
+                                .font(.system(size: 12))
+                                .foregroundColor(Neka.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else {
+                        Text("Set your goal day")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("The wedding, a trip, a beach day — see where your trend lands you.")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+            .padding(14)
+            .nekaCard(wash: .lavender)
+        }
+        .buttonStyle(.dialedScale)
+    }
+
+    private var portrait: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(Neka.surface)
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: "tshirt.fill")
+                    .font(.system(size: 28))
+                    .foregroundColor(Neka.lavender)
+            }
+        }
+        .frame(width: 84, height: 84)
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Neka.cardStroke, lineWidth: 1))
     }
 }

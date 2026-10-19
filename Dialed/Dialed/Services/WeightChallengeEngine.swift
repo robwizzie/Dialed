@@ -242,6 +242,47 @@ enum WeightChallengeEngine {
         return (slope, meanY - slope * meanX)
     }
 
+    // MARK: - Projection to a goal day
+
+    struct Projection: Equatable {
+        /// Projected weight on the target day, lbs.
+        let weight: Double
+        /// Change from your latest weigh-in (negative = loss).
+        let change: Double
+        /// Trend rate, lbs/week (negative = losing).
+        let weeklyRate: Double
+        let basedOnDays: Int
+    }
+
+    /// Where the last few weeks' trend lands you on `target`. nil with
+    /// fewer than three weigh-in days. The rate is clamped to ±3 lb/week so
+    /// one noisy week can't project something silly.
+    static func projection(
+        readings: [WeightReading],
+        to target: Date,
+        now: Date = Date(),
+        lookbackDays: Int = 21,
+        calendar: Calendar = .current
+    ) -> Projection? {
+        let today = calendar.startOfDay(for: now)
+        guard let since = calendar.date(byAdding: .day, value: -lookbackDays, to: today) else { return nil }
+        let recent = dailySeries(readings, calendar: calendar).filter { $0.day >= since && $0.day <= today }
+        guard let fit = linearFit(recent, calendar: calendar),
+              let first = recent.first, let last = recent.last else { return nil }
+        let slope = max(-3.0 / 7, min(3.0 / 7, fit.slope))
+        let lastX = Double(calendar.dateComponents([.day], from: first.day, to: last.day).day ?? 0)
+        let targetX = Double(calendar.dateComponents([.day], from: first.day, to: calendar.startOfDay(for: target)).day ?? 0)
+        // Anchor on the fitted value today, then extend with the clamped slope.
+        let fittedNow = fit.intercept + fit.slope * lastX
+        let projected = fittedNow + slope * max(0, targetX - lastX)
+        return Projection(
+            weight: projected,
+            change: projected - last.pounds,
+            weeklyRate: slope * 7,
+            basedOnDays: recent.count
+        )
+    }
+
     static func friendProgress(challenge: WeightChallenge) -> FriendProgress? {
         let sorted = challenge.friendWeighIns.sorted { $0.date < $1.date }
         guard let latest = sorted.last else { return nil }

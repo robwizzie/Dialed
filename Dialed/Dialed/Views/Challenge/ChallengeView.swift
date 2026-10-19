@@ -63,6 +63,7 @@ struct ChallengeView: View {
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
+            .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
             .task { await viewModel.refresh(context: modelContext) }
             .refreshable { await viewModel.refresh(context: modelContext) }
