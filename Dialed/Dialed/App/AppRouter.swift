@@ -12,11 +12,12 @@ import SwiftUI
 
 /// Places Home can push to.
 enum HomeDestination: String, Hashable, CaseIterable {
-    case foodLog, workout, timeline, calendar, devices, strength, progressPhotos
+    case foodLog, workout, weeklyReview, timeline, calendar, devices, strength, progressPhotos
 
     var title: String {
         switch self {
         case .workout:  return "Workout plan"
+        case .weeklyReview: return "Week in review"
         case .timeline: return "Day timeline"
         case .foodLog:  return "Food log"
         case .calendar: return "Score calendar"
@@ -29,6 +30,7 @@ enum HomeDestination: String, Hashable, CaseIterable {
     var icon: String {
         switch self {
         case .workout:  return "dumbbell.fill"
+        case .weeklyReview: return "calendar.badge.checkmark"
         case .timeline: return "clock.arrow.circlepath"
         case .foodLog:  return "fork.knife"
         case .calendar: return "calendar"
