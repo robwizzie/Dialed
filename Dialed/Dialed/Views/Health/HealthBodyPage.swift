@@ -13,8 +13,14 @@ import Charts
 struct HealthBodyPage: View {
     @ObservedObject var model: HealthDetailModel
     @State private var expandedMetric: String?
-    @State private var balanceHour: Int?
-    @State private var activityHour: Int?
+    // Raw chart positions while scrubbing; read through `hour(_:)`.
+    @State private var balanceX: Double?
+    @State private var activityX: Double?
+
+    /// Scrub position → a valid hour index (drags past the edge clamp).
+    private func hour(_ x: Double?) -> Int? {
+        x.map { min(23, max(0, Int($0.rounded()))) }
+    }
 
     private typealias DayValue = HealthInsights.DayValue
 
@@ -42,13 +48,20 @@ struct HealthBodyPage: View {
         let hrv = model.value(on: model.hrv)
         let steps = model.dailySteps.last { $0.date <= model.day }?.value ?? 0
         let stepAvg = HealthInsights.mean(model.dailySteps.filter { $0.date < model.day }.map(\.value))
+        // Hoisted so the tile calls stay cheap to type-check.
+        let rhrText: String = rhr.map { "\(Int($0.rounded()))" } ?? "--"
+        let rhrStatus: String? = rhr.map { $0 <= 65 ? "Optimal" : ($0 <= 75 ? "Normal" : "High") }
+        let rhrAvg: String? = HealthInsights.mean(baseline(model.restingHR)).map { "avg \(Int($0))" }
+        let stepsDelta: Double? = stepAvg.flatMap { $0 > 0 ? (steps - $0) / $0 * 100 : nil }
+        let stepsStatus: String = steps >= 10_000 ? "Goal hit" : "\(Int(max(0, 10_000 - steps)).formatted()) to go"
+        let recentSteps: [Double] = model.dailySteps.filter { $0.date <= model.day }.suffix(10).map(\.value)
         return HealthTileGrid {
             HealthTile(
-                title: "Resting Heart Rate", value: rhr.map { "\(Int($0.rounded()))" } ?? "--", unit: "bpm",
+                title: "Resting Heart Rate", value: rhrText, unit: "bpm",
                 delta: HealthInsights.percentChange(rhr, baseline: baseline(model.restingHR)), goodWhenUp: false,
-                status: rhr.map { $0 <= 65 ? "Optimal" : ($0 <= 75 ? "Normal" : "High") },
+                status: rhrStatus,
                 statusColor: (rhr ?? 0) > 75 ? Neka.orange : Neka.green,
-                footnote: HealthInsights.mean(baseline(model.restingHR)).map { "avg \(Int($0))" },
+                footnote: rhrAvg,
                 wash: .mint
             ) { HealthSparkline(values: upTo(model.restingHR), tint: Neka.green) }
 
@@ -70,11 +83,11 @@ struct HealthBodyPage: View {
 
             HealthTile(
                 title: "Steps", value: Int(steps).formatted(), unit: "",
-                delta: stepAvg.flatMap { $0 > 0 ? (steps - $0) / $0 * 100 : nil },
-                status: steps >= 10_000 ? "Goal hit" : "\(Int(max(0, 10_000 - steps)).formatted()) to go",
+                delta: stepsDelta,
+                status: stepsStatus,
                 statusColor: steps >= 10_000 ? Neka.green : Neka.inkSecondary,
                 wash: .peach
-            ) { HealthMiniBars(values: model.dailySteps.filter { $0.date <= model.day }.suffix(10).map(\.value), tint: Neka.orange, target: 10_000) }
+            ) { HealthMiniBars(values: recentSteps, tint: Neka.orange, target: 10_000) }
         }
     }
 
@@ -109,6 +122,7 @@ struct HealthBodyPage: View {
         let nowHour = model.isToday ? Calendar.current.component(.hour, from: Date()) : 23
         let burn = model.burnHourly.prefix(nowHour + 1).reduce(0, +)
         let net = intake - burn
+        let balanceHour = hour(balanceX)
         return VStack(alignment: .leading, spacing: 10) {
             HealthCardHeader(title: "Calorie Balance", trailing: model.isToday ? "so far today" : nil)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -129,24 +143,23 @@ struct HealthBodyPage: View {
                 .foregroundColor(net <= 0 ? Neka.green : Neka.orange)
 
             Chart {
+                // Side by side: intake just left of the hour, burn just right.
                 ForEach(0..<24, id: \.self) { h in
-                    BarMark(x: .value("Hour", h), y: .value("kcal", model.intakeHourly[h]), width: .ratio(0.4))
+                    BarMark(x: .value("Hour", Double(h) - 0.2), y: .value("kcal", model.intakeHourly[h]), width: 4)
                         .foregroundStyle(Neka.orange)
-                        .position(by: .value("Kind", "Intake"))
-                    BarMark(x: .value("Hour", h), y: .value("kcal", h <= nowHour ? model.burnHourly[h] : 0), width: .ratio(0.4))
+                    BarMark(x: .value("Hour", Double(h) + 0.2), y: .value("kcal", h <= nowHour ? model.burnHourly[h] : 0), width: 4)
                         .foregroundStyle(Neka.green.opacity(0.7))
-                        .position(by: .value("Kind", "Burn"))
                 }
                 if let balanceHour {
-                    RuleMark(x: .value("Hour", balanceHour))
+                    RuleMark(x: .value("Hour", Double(balanceHour)))
                         .foregroundStyle(Neka.ink.opacity(0.4))
                         .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
                             chartBubble("\(healthHourLabel(balanceHour)) · in \(Int(model.intakeHourly[balanceHour])) · out \(Int(model.burnHourly[balanceHour]))")
                         }
                 }
             }
-            .chartXSelection(value: $balanceHour)
-            .chartXScale(domain: 0...23)
+            .chartXSelection(value: $balanceX)
+            .chartXScale(domain: -0.6...23.6)
             .chartXAxis { hourAxis }
             .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
             .frame(height: 150)
@@ -199,7 +212,7 @@ struct HealthBodyPage: View {
         let s = upTo(model.weight)
         guard let first = s.first, let last = s.last, s.count >= 2 else { return "Weigh in to see a trend" }
         let diff = last.value - first.value
-        return String(format: "%@%.1f lb in %d days", diff <= 0 ? "−" : "+", abs(diff),
+        return String(format: "%@%.1f lb in %ld days", diff <= 0 ? "−" : "+", abs(diff),
                       Calendar.current.dateComponents([.day], from: first.date, to: last.date).day ?? 0)
     }
 
@@ -265,6 +278,7 @@ struct HealthBodyPage: View {
     private var activityCard: some View {
         let total = model.stepsHourly.reduce(0, +)
         let peak = model.stepsHourly.enumerated().max { $0.element < $1.element }
+        let activityHour = hour(activityX)
         return VStack(alignment: .leading, spacing: 10) {
             HealthCardHeader(title: "Activity Level", trailing: "steps by hour")
             HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -283,20 +297,20 @@ struct HealthBodyPage: View {
             }
             Chart {
                 ForEach(0..<24, id: \.self) { h in
-                    BarMark(x: .value("Hour", h), y: .value("Steps", model.stepsHourly[h]), width: .ratio(0.7))
+                    BarMark(x: .value("Hour", Double(h)), y: .value("Steps", model.stepsHourly[h]), width: 8)
                         .foregroundStyle(h == activityHour ? Neka.green : Neka.green.opacity(0.45))
                         .cornerRadius(3)
                 }
                 if let activityHour {
-                    RuleMark(x: .value("Hour", activityHour))
+                    RuleMark(x: .value("Hour", Double(activityHour)))
                         .foregroundStyle(.clear)
                         .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
                             chartBubble("\(healthHourLabel(activityHour)) · \(Int(model.stepsHourly[activityHour]).formatted()) steps")
                         }
                 }
             }
-            .chartXSelection(value: $activityHour)
-            .chartXScale(domain: 0...23)
+            .chartXSelection(value: $activityX)
+            .chartXScale(domain: -0.6...23.6)
             .chartXAxis { hourAxis }
             .chartYAxis { AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) }
             .frame(height: 140)
@@ -311,9 +325,9 @@ struct HealthBodyPage: View {
     }
 
     private var hourAxis: some AxisContent {
-        AxisMarks(values: [0, 6, 12, 18, 23]) { v in
+        AxisMarks(values: [0.0, 6, 12, 18, 23]) { v in
             AxisValueLabel {
-                if let h = v.as(Int.self) { Text(healthHourLabel(h)) }
+                if let h = v.as(Double.self) { Text(healthHourLabel(Int(h))) }
             }
         }
     }
