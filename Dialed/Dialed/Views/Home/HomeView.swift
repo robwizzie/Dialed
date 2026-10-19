@@ -138,6 +138,8 @@ struct HomeView: View {
         guard !askedForHealthAccess else { return }
         askedForHealthAccess = true
         if await HealthKitManager.shared.needsAuthorizationPrompt() {
+            // Let the launch splash finish before the system sheet appears.
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
             try? await HealthKitManager.shared.requestAuthorization()
         }
     }
