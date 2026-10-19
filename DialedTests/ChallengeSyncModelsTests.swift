@@ -58,4 +58,29 @@ final class ChallengeSyncModelsTests: XCTestCase {
         XCTAssertEqual(counts.week, 2)  // a day logged twice counts once
         XCTAssertEqual(counts.total, 3)
     }
+
+    func testOtherSideSummary() throws {
+        // As the owner, on Oct 21 at noon; Dave posted daily, losing 0.4 lb/day, last from his scale.
+        let json = """
+        {"role":"owner","challenge":{"id":"abc","ownerName":"Rob","friendName":"Dave","startDate":"2026-10-19","endDate":"2026-10-31","ownerStart":214.2,"friendStart":null},
+         "weighins":[{"role":"friend","date":"2026-10-19","pounds":192.0,"source":"manual","updatedAt":"2026-10-19T12:00:00.000Z"},
+                     {"role":"friend","date":"2026-10-20","pounds":191.6,"source":"manual","updatedAt":"2026-10-20T12:00:00.000Z"},
+                     {"role":"friend","date":"2026-10-21","pounds":191.2,"source":"scale","updatedAt":"2026-10-21T11:02:00.000Z"},
+                     {"role":"owner","date":"2026-10-21","pounds":212.0}],
+         "messages":[],
+         "stats":{"friend":{"stepsToday":8123,"stepsDate":"2026-10-21"}}}
+        """
+        let state = try JSONDecoder().decode(ChallengeWire.State.self, from: Data(json.utf8))
+        let s = ChallengeWire.otherSide(state, now: at(21, 12), calendar: calendar)
+        XCTAssertEqual(s.name, "Dave")
+        XCTAssertEqual(s.lastPounds, 191.2)
+        XCTAssertTrue(s.lastFromScale)
+        XCTAssertTrue(s.autoSync)
+        XCTAssertNotNil(s.lastUpdated)
+        XCTAssertEqual(s.streak, 3)
+        XCTAssertEqual(s.weeklyLoss ?? 0, 2.8, accuracy: 0.01)
+        // 10 days left at 0.4 lb/day: 191.2 → 187.2, i.e. 4.8 lb lost from 192.0.
+        XCTAssertEqual(s.projectedLoss ?? 0, 4.8, accuracy: 0.01)
+        XCTAssertEqual(s.stats?.stepsToday, 8123)
+    }
 }

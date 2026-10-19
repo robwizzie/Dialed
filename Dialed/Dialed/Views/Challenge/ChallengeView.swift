@@ -70,6 +70,12 @@ struct ChallengeView: View {
             .task {
                 await viewModel.refresh(context: modelContext)
                 await liveSync.sync(readings: viewModel.readings)
+                // While the tab is open, pick up your friend's weigh-ins and messages.
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    await liveSync.sync(readings: viewModel.readings, force: true)
+                }
             }
             .refreshable {
                 await viewModel.refresh(context: modelContext)
@@ -241,22 +247,24 @@ struct ChallengeView: View {
                 )
             }
 
-            Button { sheet = .friend } label: {
-                HStack {
-                    Image(systemName: "person.badge.plus")
-                    Text("Log \(c.friendDisplayName)'s weigh-in")
-                    Spacer()
-                    if let last = p.friend?.lastWeighIn {
-                        Text(last.formatted(.relative(presentation: .named)))
-                            .foregroundColor(Neka.inkTertiary)
+            // When live, their weigh-ins come from the shared page / their scale.
+            if !liveSync.isLive {
+                Button { sheet = .friend } label: {
+                    HStack {
+                        Image(systemName: "person.badge.plus")
+                        Text("Log \(c.friendDisplayName)'s weigh-in")
+                        Spacer()
+                        if let last = p.friend?.lastWeighIn {
+                            Text(last.formatted(.relative(presentation: .named)))
+                                .foregroundColor(Neka.inkTertiary)
+                        }
                     }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
                 }
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Neka.ink)
-                .padding(14)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
-            }
-            .buttonStyle(.dialedScale)
+                .buttonStyle(.dialedSca            }
         }
         .padding(16)
         .nekaCard()

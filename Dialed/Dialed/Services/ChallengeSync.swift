@@ -52,6 +52,8 @@ final class ChallengeSync: ObservableObject {
 
     var isLive: Bool { challengeID != nil && token != nil }
     var messages: [ChallengeWire.Message] { state?.messages ?? [] }
+    /// Your friend's side, summarized for the Challenge tab.
+    var other: ChallengeWire.OtherSide? { state.map { ChallengeWire.otherSide($0) } }
 
     private var token: String? { try? KeychainStore.string(forKey: Keys.token) }
 
