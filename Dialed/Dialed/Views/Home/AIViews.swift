@@ -12,7 +12,10 @@ import SwiftData
 
 // MARK: - Iridescent rim
 
-/// Apple Intelligence-style glowing gradient rim. Spins while `active`.
+/// Apple Intelligence-style gradient rim. Only animates while `active`
+/// (a generation is running); otherwise it's a static stroke, so idle
+/// cards cost nothing per frame. No blur — a wider translucent stroke
+/// gives the glow cheaply.
 struct IntelligenceRim: View {
     var cornerRadius: CGFloat = Neka.cardRadius
     var active: Bool = false
@@ -22,24 +25,23 @@ struct IntelligenceRim: View {
         let gradient = AngularGradient(colors: Neka.intelligence, center: .center, angle: .degrees(angle))
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(gradient, lineWidth: 1.5)
+                .stroke(gradient, lineWidth: active ? 5 : 3)
+                .opacity(0.25)
             RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .stroke(gradient, lineWidth: active ? 6 : 3)
-                .blur(radius: active ? 10 : 6)
-                .opacity(active ? 0.7 : 0.35)
+                .stroke(gradient, lineWidth: 1.5)
         }
         .allowsHitTesting(false)
-        .onAppear { spin() }
-        .onChange(of: active) { _, _ in spin() }
-    }
-
-    private func spin() {
-        if active {
-            withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) {
-                angle = 360
+        .onChange(of: active) { _, isActive in
+            if isActive {
+                withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) { angle = 360 }
+            } else {
+                withAnimation(.easeOut(duration: 0.4)) { angle = 0 }
             }
-        } else {
-            withAnimation(.easeOut(duration: 0.6)) { angle = 0 }
+        }
+        .onAppear {
+            if active {
+                withAnimation(.linear(duration: 2.4).repeatForever(autoreverses: false)) { angle = 360 }
+            }
         }
     }
 }

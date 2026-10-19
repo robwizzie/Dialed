@@ -29,7 +29,7 @@ final class DataDiagnostics: ObservableObject {
 
     @Published private(set) var rows: [DataSourceStatus] = []
     @Published private(set) var checkedAt: Date?
-    @Published var fitbitError: String?
+    @Published var watchError: String?
 
     private init() {}
 

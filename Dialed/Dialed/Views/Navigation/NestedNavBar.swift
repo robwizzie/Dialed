@@ -18,7 +18,8 @@ struct NestedNavBar: View {
     @ObservedObject private var photos = ProfilePhotoStore.shared
     @Namespace private var pillSpace
 
-    static let height: CGFloat = 76
+    /// Height of the bar itself; tabs reserve this much space at the bottom.
+    static let height: CGFloat = 68
 
     private let tabs: [AppTab] = [.home, .challenge, .plan, .trends, .settings]
 
@@ -35,7 +36,7 @@ struct NestedNavBar: View {
                         #endif
                         router.select(tab)
                     } label: {
-                        avatar(tab, size: 46)
+                        avatar(tab, size: 44)
                             .matchedGeometryEffect(id: "avatar-\(tab.rawValue)", in: pillSpace)
                     }
                     .buttonStyle(.dialedScale)
@@ -43,20 +44,17 @@ struct NestedNavBar: View {
                 }
             }
         }
+        .padding(6)
+        // One contained dock, so the bar reads as its own surface instead of
+        // loose circles floating over content.
+        .background(
+            Capsule()
+                .fill(.regularMaterial)
+                .overlay(Capsule().stroke(Neka.hairline, lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+        )
         .padding(.horizontal, 12)
-        .padding(.top, 8)
         .padding(.bottom, 4)
-        .frame(height: Self.height)
-        .background(alignment: .bottom) {
-            // Soft fade so content scrolling underneath doesn't clash.
-            LinearGradient(
-                colors: [Neka.paper.opacity(0), Neka.paper.opacity(0.85)],
-                startPoint: .top, endPoint: .bottom
-            )
-            .frame(height: Self.height + 40)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-        }
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: router.tab)
     }
 
@@ -91,7 +89,6 @@ struct NestedNavBar: View {
             Capsule()
                 .fill(Color(hex: "17181B").opacity(0.94))
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                .shadow(color: .black.opacity(0.28), radius: 16, y: 8)
                 .matchedGeometryEffect(id: "pill", in: pillSpace)
         )
     }
@@ -176,7 +173,7 @@ struct NestedNavBar: View {
 
     @ViewBuilder
     private func avatar(_ tab: AppTab, size: CGFloat) -> some View {
-        if tab == .home, let photo = photos.original {
+        if tab == .home, let photo = photos.thumbnail {
             Image(uiImage: photo)
                 .resizable()
                 .scaledToFill()

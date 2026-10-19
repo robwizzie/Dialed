@@ -2,10 +2,11 @@
 //  DevicesView.swift
 //  Dialed
 //
-//  Where your gear plugs in: Pixel Watch (through your Fitbit account),
-//  smart scale and smart water bottle (through Apple Health or Fitbit).
-//  Shows what each one last reported so you can tell at a glance whether
-//  it's syncing.
+//  Where your gear plugs in: Pixel Watch (through the Google Health API —
+//  the Fitbit Web API shuts down Oct 30, 2026), smart scale (Apple Health
+//  or Google Health) and WaterH bottle (WaterH app → Apple Health). Shows
+//  what each one last reported plus a per-metric Data check, so it's
+//  obvious when something isn't syncing.
 //
 
 import SwiftUI
@@ -15,7 +16,7 @@ import SwiftData
 final class DevicesViewModel: ObservableObject {
     @Published var lastWeight: WeightReading?
     @Published var waterTodayOz: Double?
-    @Published var watchSyncedAt: Date?
+    @Published var waterApps: [String] = []
     @Published var isSyncing = false
     @Published var message: String?
 
@@ -23,40 +24,34 @@ final class DevicesViewModel: ObservableObject {
         let since = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         lastWeight = await WeightDataSource.readings(context: context, since: since).last
 
-        var water = (try? await HealthKitManager.shared.fetchWaterIntake(for: Date())) ?? 0
-        if FitbitTokenStore.isConnected,
-           let ml = try? await FitbitAPIClient.shared.water(on: Date()).summary?.water {
-            water = max(water, ml / 29.5735)
-        }
+        let today = Calendar.current.startOfDay(for: Date())
+        let water = (try? await HealthKitManager.shared.fetchWaterIntake(for: Date())) ?? 0
+        waterApps = await HealthKitManager.shared.sourceNames(.dietaryWater, since: today.addingTimeInterval(-7 * 86_400))
         waterTodayOz = water > 0 ? water : nil
     }
 
-    func connectFitbit(context: ModelContext) async {
+    func connectWatch(context: ModelContext) async {
         do {
-            try await FitbitAuthService.shared.connect()
-            message = "Connected. Pulling the last two weeks…"
-            await syncWatch(context: context, backfill: true)
+            try await GoogleHealthAuth.shared.connect()
+            message = "Connected. Pulling the last two weeks from your Pixel Watch…"
+            await syncWatch(context: context, days: 14)
         } catch {
             message = error.localizedDescription
         }
     }
 
-    func syncWatch(context: ModelContext, backfill: Bool = false) async {
+    func syncWatch(context: ModelContext, days: Int = 2) async {
         isSyncing = true
         defer { isSyncing = false }
-        let sync = FitbitSyncService(modelContext: context)
-        if backfill {
-            await sync.backfill(days: 14)
-        } else {
-            await sync.syncDay(Date())
+        let sync = GoogleHealthSyncService(modelContext: context)
+        await sync.sync(days: days)
+        DataDiagnostics.shared.watchError = sync.lastError
+        message = sync.lastError ?? "Pixel Watch synced."
+        if sync.lastError == nil {
+            UserDefaults.standard.set(Date(), forKey: "home.lastGoogleHealthSync")
+            UserDefaults.standard.set(true, forKey: "home.googleHealthBackfilled.v1")
         }
-        try? context.save()
-        if let error = sync.lastError {
-            message = error
-        } else {
-            watchSyncedAt = sync.lastSyncedAt
-            message = "Watch synced."
-        }
+        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
         await refresh(context: context)
     }
 
@@ -73,10 +68,11 @@ final class DevicesViewModel: ObservableObject {
 struct DevicesView: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel = DevicesViewModel()
-    @ObservedObject private var fitbit = FitbitAuthService.shared
+    @ObservedObject private var google = GoogleHealthAuth.shared
     @ObservedObject private var diagnostics = DataDiagnostics.shared
-    @AppStorage(FitbitConfig.clientIDDefaultsKey) private var savedClientID = ""
+    @AppStorage(GoogleHealthConfig.clientIDDefaultsKey) private var savedClientID = ""
     @State private var clientIDDraft = ""
+    @State private var showSetupSteps = false
 
     var body: some View {
         ScrollView {
@@ -101,8 +97,8 @@ struct DevicesView: View {
                 }
 
                 watchCard
-                scaleCard
                 bottleCard
+                scaleCard
                 healthCard
                 intelligenceCard
                 dataCheckCard
@@ -116,19 +112,20 @@ struct DevicesView: View {
         .task { await viewModel.refresh(context: modelContext) }
     }
 
-    // MARK: - Cards
+    // MARK: - Pixel Watch (Google Health)
 
     private var watchCard: some View {
         deviceCard(
             icon: "watch.analog",
             tint: Neka.green, fill: Neka.greenSoft,
             title: "Google Pixel Watch",
-            subtitle: "Sleep, HRV, heart rate, SpO₂, breathing, steps — via your Fitbit account.",
-            status: fitbit.isConnected ? "Connected" : "Not connected",
-            statusOK: fitbit.isConnected,
-            detail: viewModel.watchSyncedAt.map { "Synced \($0.formatted(.relative(presentation: .named)))" }
+            subtitle: "Sleep, HRV, heart rate, SpO₂, breathing and steps — through the Google Health API.",
+            status: google.isConnected ? "Connected" : "Not connected",
+            statusOK: google.isConnected,
+            detail: (UserDefaults.standard.object(forKey: "home.lastGoogleHealthSync") as? Date)
+                .map { "Synced \($0.formatted(.relative(presentation: .named)))" }
         ) {
-            if fitbit.isConnected {
+            if google.isConnected {
                 HStack(spacing: 10) {
                     Button {
                         Task { await viewModel.syncWatch(context: modelContext) }
@@ -141,16 +138,16 @@ struct DevicesView: View {
                     .buttonStyle(.nekaPrimary)
                     .disabled(viewModel.isSyncing)
 
-                    Button("Disconnect") { fitbit.disconnect() }
+                    Button("Disconnect") { google.disconnect() }
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(Neka.rose)
                         .padding(.horizontal, 12)
                 }
-            } else if FitbitConfig.clientID == nil {
+            } else if GoogleHealthConfig.clientID == nil {
                 clientIDSetup
             } else {
-                Button("Connect Fitbit account") {
-                    Task { await viewModel.connectFitbit(context: modelContext) }
+                Button("Connect with Google") {
+                    Task { await viewModel.connectWatch(context: modelContext) }
                 }
                 .buttonStyle(.nekaPrimary)
                 if !savedClientID.isEmpty {
@@ -162,23 +159,44 @@ struct DevicesView: View {
         }
     }
 
-    /// One-time: paste the Client ID of your own "Personal" Fitbit app.
+    /// One-time Google Cloud setup, then paste the iOS Client ID.
     private var clientIDSetup: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("One-time setup (2 min): at dev.fitbit.com → Register an app, choose **Personal** and **Client**, set the redirect URL to `dialed://oauth/fitbit-callback`, then paste the OAuth 2.0 Client ID here.")
-                .font(.system(size: 12))
-                .foregroundColor(Neka.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Link(destination: URL(string: "https://dev.fitbit.com/apps/new")!) {
-                Label("Open dev.fitbit.com", systemImage: "safari")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(Neka.ink)
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showSetupSteps.toggle() }
+            } label: {
+                HStack {
+                    Text("One-time setup (about 5 min)")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer()
+                    Image(systemName: showSetupSteps ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(Neka.ink)
             }
+
+            if showSetupSteps {
+                VStack(alignment: .leading, spacing: 8) {
+                    step(1, "On your phone, open the **Google Health** app (formerly Fitbit) and make sure your Pixel Watch syncs to your Google account.")
+                    step(2, "Open **console.cloud.google.com** → create a project → search for **Google Health API** → Enable.")
+                    step(3, "**Google Auth Platform → Audience:** External. Add your Google email under **Test users**.")
+                    step(4, "**Data Access → Add scopes:** search \"Google Health\" and add the read-only activity, health metrics, sleep, nutrition and profile scopes.")
+                    step(5, "**Clients → Create client → iOS**, bundle ID `org.robertwiscount.Dialed`. Copy the Client ID.")
+                    step(6, "Paste it below and tap Save, then **Connect with Google**.")
+                    step(7, "To stay connected past 7 days, set **Audience → Publishing status** to **In production** (personal use doesn't need verification; tap through the \"unverified app\" warning).")
+                }
+                Link(destination: URL(string: "https://console.cloud.google.com/apis/library/health.googleapis.com")!) {
+                    Label("Open Google Cloud console", systemImage: "safari")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+            }
+
             HStack(spacing: 8) {
-                TextField("Client ID (e.g. 23ABCD)", text: $clientIDDraft)
-                    .textInputAutocapitalization(.characters)
+                TextField("….apps.googleusercontent.com", text: $clientIDDraft)
+                    .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
-                    .font(.system(size: 15, design: .monospaced))
+                    .font(.system(size: 13, design: .monospaced))
                     .foregroundColor(Neka.ink)
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.track))
@@ -190,8 +208,88 @@ struct DevicesView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.ink))
-                .disabled(clientIDDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(GoogleHealthConfig.reversedClientID(clientIDDraft) == nil)
+                .opacity(GoogleHealthConfig.reversedClientID(clientIDDraft) == nil ? 0.4 : 1)
             }
+            if !clientIDDraft.isEmpty && GoogleHealthConfig.reversedClientID(clientIDDraft) == nil {
+                Text("That doesn't look like an iOS Client ID — it should end in .apps.googleusercontent.com.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.rose)
+            }
+        }
+    }
+
+    private func step(_ n: Int, _ text: LocalizedStringKey) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text("\(n)")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Neka.onInk)
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(Neka.ink))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    // MARK: - WaterH bottle
+
+    private var bottleCard: some View {
+        let fromWaterH = viewModel.waterApps.contains { $0.localizedCaseInsensitiveContains("waterh") }
+        return deviceCard(
+            icon: "waterbottle.fill",
+            tint: Neka.sky, fill: Neka.skySoft,
+            title: "WaterH bottle",
+            subtitle: "The WaterH app writes your sips to Apple Health; Dialed picks them up automatically.",
+            status: viewModel.waterTodayOz.map { "\(Int($0)) oz today" } ?? "Nothing synced today",
+            statusOK: fromWaterH || viewModel.waterTodayOz != nil,
+            detail: viewModel.waterApps.isEmpty ? nil : "From \(viewModel.waterApps.joined(separator: ", "))"
+        ) {
+            if !fromWaterH {
+                VStack(alignment: .leading, spacing: 8) {
+                    step(1, "Open the **WaterH** app with your bottle paired and synced.")
+                    step(2, "In WaterH's settings, turn on **Apple Health** and allow it to write **Water**.")
+                    step(3, "Double-check in the **Health** app → your profile → **Apps** → WaterH → Water is on.")
+                    step(4, "Allow Dialed to read Water below (Apple Health → Review access).")
+                }
+                Link(destination: URL(string: "x-apple-health://")!) {
+                    Label("Open the Health app", systemImage: "heart.text.square")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+            }
+        }
+    }
+
+    // MARK: - Scale, Health, AI
+
+    private var scaleCard: some View {
+        deviceCard(
+            icon: "scalemass.fill",
+            tint: Neka.orange, fill: Neka.orangeSoft,
+            title: "Smart scale",
+            subtitle: "Reads weigh-ins your scale writes to Apple Health or Google Health. Manual weigh-ins work too.",
+            status: viewModel.lastWeight.map { String(format: "%.1f lb", $0.pounds) } ?? "No readings yet",
+            statusOK: viewModel.lastWeight != nil,
+            detail: viewModel.lastWeight.map { "\($0.source.displayName) · \($0.date.formatted(.relative(presentation: .named)))" }
+        ) { EmptyView() }
+    }
+
+    private var healthCard: some View {
+        deviceCard(
+            icon: "heart.text.square.fill",
+            tint: Neka.rose, fill: Neka.roseSoft,
+            title: "Apple Health",
+            subtitle: "The bridge for WaterH, your scale, iPhone steps and food apps.",
+            status: "Permissions",
+            statusOK: true,
+            detail: nil
+        ) {
+            Button("Review Apple Health access") {
+                Task { await viewModel.requestHealth() }
+            }
+            .buttonStyle(.nekaPrimary)
         }
     }
 
@@ -214,6 +312,8 @@ struct DevicesView: View {
         }
     }
 
+    // MARK: - Data check
+
     /// Per-metric: what Home found on its last refresh and where from.
     private var dataCheckCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -228,8 +328,8 @@ struct DevicesView: View {
                         .foregroundColor(Neka.inkTertiary)
                 }
             }
-            if let error = diagnostics.fitbitError {
-                Label("Fitbit sync: \(error)", systemImage: "exclamationmark.triangle.fill")
+            if let error = diagnostics.watchError {
+                Label("Pixel Watch sync: \(error)", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 12))
                     .foregroundColor(Neka.rose)
                     .fixedSize(horizontal: false, vertical: true)
@@ -270,46 +370,7 @@ struct DevicesView: View {
         .nekaCard()
     }
 
-    private var scaleCard: some View {
-        deviceCard(
-            icon: "scalemass.fill",
-            tint: Neka.orange, fill: Neka.orangeSoft,
-            title: "Smart scale",
-            subtitle: "Reads weigh-ins your scale writes to Apple Health or Fitbit. Manual weigh-ins work too.",
-            status: viewModel.lastWeight.map { String(format: "%.1f lb", $0.pounds) } ?? "No readings yet",
-            statusOK: viewModel.lastWeight != nil,
-            detail: viewModel.lastWeight.map { "\($0.source.displayName) · \($0.date.formatted(.relative(presentation: .named)))" }
-        ) { EmptyView() }
-    }
-
-    private var bottleCard: some View {
-        deviceCard(
-            icon: "waterbottle.fill",
-            tint: Neka.sky, fill: Neka.skySoft,
-            title: "Smart water bottle",
-            subtitle: "HidrateSpark, Larq and others sync water to Apple Health; Dialed adds it to your day automatically.",
-            status: viewModel.waterTodayOz.map { "\(Int($0)) oz today" } ?? "Nothing synced today",
-            statusOK: viewModel.waterTodayOz != nil,
-            detail: nil
-        ) { EmptyView() }
-    }
-
-    private var healthCard: some View {
-        deviceCard(
-            icon: "heart.text.square.fill",
-            tint: Neka.rose, fill: Neka.roseSoft,
-            title: "Apple Health",
-            subtitle: "The bridge for your scale, bottle, iPhone steps and food apps.",
-            status: "Permissions",
-            statusOK: true,
-            detail: nil
-        ) {
-            Button("Review Apple Health access") {
-                Task { await viewModel.requestHealth() }
-            }
-            .buttonStyle(.nekaPrimary)
-        }
-    }
+    // MARK: - Card shell
 
     private func deviceCard<Actions: View>(
         icon: String,

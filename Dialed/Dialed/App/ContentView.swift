@@ -56,6 +56,14 @@ enum AppTab: Int, Hashable {
 struct MainTabView: View {
     // Shared with the bottom bar's nested menus and the tabs they drive.
     @StateObject private var router = AppRouter()
+    @State private var keyboardVisible = false
+
+    init() {
+        // The custom bar replaces the system one. Hiding it via appearance is
+        // reliable across every tab and pushed screen, unlike per-view
+        // `.toolbar(.hidden, for: .tabBar)`.
+        UITabBar.appearance().isHidden = true
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -81,10 +89,19 @@ struct MainTabView: View {
                     .tag(AppTab.settings)
             }
 
-            NestedNavBar(router: router)
-                .ignoresSafeArea(.keyboard)
+            if !keyboardVisible {
+                NestedNavBar(router: router)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .environmentObject(router)
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.2)) { keyboardVisible = true }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeOut(duration: 0.2)) { keyboardVisible = false }
+        }
         .tint(Neka.green)
         .sheet(item: $router.quickLog, onDismiss: {
             NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
@@ -126,12 +143,15 @@ struct MainTabView: View {
 }
 
 private extension View {
-    /// Hide the system tab bar (the custom bar replaces it) and keep
-    /// scrolling content clear of the floating bar.
+    /// Hide the system tab bar (the custom bar replaces it) and reserve
+    /// room at the bottom so lists, scroll views and bottom buttons on
+    /// every screen — including pushed ones — sit above the floating bar.
     func tabContent() -> some View {
         self
             .toolbar(.hidden, for: .tabBar)
-            .safeAreaPadding(.bottom, NestedNavBar.height)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: NestedNavBar.height)
+            }
     }
 }
 
