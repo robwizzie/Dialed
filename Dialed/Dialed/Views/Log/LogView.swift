@@ -8,7 +8,18 @@
 import SwiftUI
 import SwiftData
 
+/// Hands the app's shared model context to the view model. Building a
+/// throwaway container in init lets it deallocate, which resets its context
+/// and invalidates every model fetched from it.
 struct LogView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        LogContent(modelContext: modelContext)
+    }
+}
+
+private struct LogContent: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: LogViewModel
     
@@ -32,9 +43,8 @@ struct LogView: View {
             .map { $0 }
     }
     
-    init() {
-        let container = try! DialedSchema.makeContainer()
-        _viewModel = StateObject(wrappedValue: LogViewModel(modelContext: container.mainContext))
+    init(modelContext: ModelContext) {
+        _viewModel = StateObject(wrappedValue: LogViewModel(modelContext: modelContext))
     }
     
     var body: some View {
