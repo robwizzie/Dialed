@@ -91,9 +91,11 @@ struct WaterLogSheet: View {
                                         .font(.system(size: 14, weight: .semibold))
                                         .foregroundColor(Neka.ink)
                                     Button {
+                                        HealthWriteBack.remove(eventID: event.id)
                                         modelContext.delete(event)
                                         try? modelContext.save()
                                         reload()
+                                        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
                                     } label: {
                                         Image(systemName: "xmark.circle.fill")
                                             .foregroundColor(Neka.inkTertiary)
@@ -105,6 +107,14 @@ struct WaterLogSheet: View {
                         .padding(14)
                         .nekaCard()
                     }
+
+                    Label {
+                        Text("Hands-free: say “Log water in Dialed” to Siri, or put it on the Action button — Settings → Action Button → Shortcut → Dialed → Log water. The home-screen widget logs +16 oz with one tap.")
+                    } icon: {
+                        Image(systemName: "mic.fill")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
                 }
                 .padding(16)
             }
@@ -120,13 +130,11 @@ struct WaterLogSheet: View {
     }
 
     private func log(_ oz: Double) {
-        modelContext.insert(ContextEvent.water(oz))
-        try? modelContext.save()
+        QuickLogService.logWater(oz, context: modelContext)
         #if os(iOS)
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         #endif
         withAnimation { reload() }
-        NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
     }
 
     private func reload() {
