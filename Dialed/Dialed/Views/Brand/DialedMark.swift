@@ -2,20 +2,18 @@
 //  DialedMark.swift
 //  Dialed
 //
-//  The Dialed mark, drawn live: a 270° scale of tick marks, the app's
-//  green → sky → lavender → orange progress arc, a knurled glass knob
-//  whose pointer turns with the value, and a bead riding the arc's end.
-//  Same geometry as the app icon (Design/AppIcon/make_icon.py), so the
-//  splash, headers and icon all match. On iOS 26 the knob is real
-//  Liquid Glass; earlier versions get a drawn glass look.
+//  The Dialed mark, drawn live — the same three shapes as the app icon
+//  (Design/AppIcon/make_icon.py): a thick green → sky → lavender ring
+//  with an Activity-ring shadow under its end cap, a smooth glass knob
+//  with a quiet printed scale, and one pointer dot that turns with the
+//  value. On iOS 26 the knob is real Liquid Glass.
 //
 
 import SwiftUI
 
 struct DialedMark: View, Animatable {
-    /// 0…1, how far the dial is turned.
+    /// 0…1, how far the dial is turned. The icon sits at 0.74.
     var value: Double = 0.74
-    var showsTicks = true
 
     var animatableData: Double {
         get { value }
@@ -27,29 +25,19 @@ struct DialedMark: View, Animatable {
     // Geometry in icon units (the icon is 1024 wide); scaled to fit.
     private static let start = 135.0
     private static let sweep = 270.0
-    private static let outer = 452.0
+    private static let ringRadius = 318.0
+    private static let ringWidth = 104.0
+    private static let knobRadius = 206.0
+    private static let outer = ringRadius + ringWidth / 2
 
-    static let palette: [(Double, (Double, Double, Double))] = [
-        (0.00, (0x4C, 0xB8, 0x68)),   // green
-        (0.38, (0x5D, 0xB4, 0xF0)),   // sky
-        (0.70, (0xA8, 0x8B, 0xEB)),   // lavender
-        (1.00, (0xF5, 0x9A, 0x4C))    // orange
-    ]
-
-    static let arcGradient = Gradient(stops: palette.map { stop -> Gradient.Stop in
-        Gradient.Stop(color: color(at: stop.0), location: stop.0 * sweep / 360)
-    })
-
-    static func color(at t: Double) -> Color {
-        let t = min(1, max(0, t))
-        for (a, b) in zip(palette, palette.dropFirst()) where t <= b.0 {
-            let f = (t - a.0) / (b.0 - a.0)
-            return Color(red: (a.1.0 + (b.1.0 - a.1.0) * f) / 255,
-                         green: (a.1.1 + (b.1.1 - a.1.1) * f) / 255,
-                         blue: (a.1.2 + (b.1.2 - a.1.2) * f) / 255)
-        }
-        return Neka.orange
-    }
+    /// Ring colour by position on the scale: green → sky → lavender by the
+    /// icon's resting value, lavender after that.
+    static let ringGradient = Gradient(stops: [
+        .init(color: Neka.green, location: 0),
+        .init(color: Neka.sky, location: 0.40 * sweep / 360),
+        .init(color: Neka.lavender, location: 0.74 * sweep / 360),
+        .init(color: Neka.lavender, location: sweep / 360)
+    ])
 
     private var dark: Bool { scheme == .dark }
 
@@ -58,41 +46,38 @@ struct DialedMark: View, Animatable {
             let side = min(geo.size.width, geo.size.height)
             let k = side / (2 * Self.outer)          // icon units → points
             let v = min(1, max(0, value))
-            let pointer = Self.start + Self.sweep * v
+            let angle = Self.start + Self.sweep * v
+            let ring = Self.ringRadius * 2 * k
 
             ZStack {
-                if showsTicks { ticks(k: k, value: v) }
-
-                // Track, then the coloured arc (conic gradient follows the arc).
+                // Track for the rest of the scale.
                 Circle()
                     .trim(from: 0, to: Self.sweep / 360)
-                    .stroke((dark ? Color.white : Neka.ink).opacity(dark ? 0.08 : 0.07),
-                            style: StrokeStyle(lineWidth: 60 * k, lineCap: .round))
+                    .stroke((dark ? Color.white : .black).opacity(dark ? 0.10 : 0.06),
+                            style: StrokeStyle(lineWidth: Self.ringWidth * k, lineCap: .round))
                     .rotationEffect(.degrees(Self.start))
-                    .frame(width: 624 * k, height: 624 * k)
+                    .frame(width: ring, height: ring)
+
+                // Shadow under the end cap, falling onto the track.
+                Circle()
+                    .fill(.black.opacity(dark ? 0.55 : 0.30))
+                    .frame(width: (Self.ringWidth - 8) * k, height: (Self.ringWidth - 8) * k)
+                    .blur(radius: 9 * k)
+                    .offset(x: Self.ringRadius * k)
+                    .rotationEffect(.degrees(angle + 2.5))
+                    .opacity(v > 0.02 ? 1 : 0)
+
+                // The coloured arc. The circle is rotated to `start`, so the
+                // gradient is laid out from 0° in its own space.
                 Circle()
                     .trim(from: 0, to: max(0.001, Self.sweep / 360 * v))
-                    .stroke(AngularGradient(
-                                gradient: Self.arcGradient,
-                                center: .center,
-                                // The circle is rotated to `start` below, so the
-                                // gradient is laid out from 0° in its own space.
-                                startAngle: .degrees(0),
-                                endAngle: .degrees(360)),
-                            style: StrokeStyle(lineWidth: 60 * k, lineCap: .round))
+                    .stroke(AngularGradient(gradient: Self.ringGradient, center: .center,
+                                            startAngle: .degrees(0), endAngle: .degrees(360)),
+                            style: StrokeStyle(lineWidth: Self.ringWidth * k, lineCap: .round))
                     .rotationEffect(.degrees(Self.start))
-                    .frame(width: 624 * k, height: 624 * k)
-                    .shadow(color: Self.color(at: v).opacity(0.35), radius: 14 * k)
+                    .frame(width: ring, height: ring)
 
-                knob(k: k, pointer: pointer)
-
-                // Bead riding the end of the arc.
-                Circle()
-                    .fill(dark ? Color(hex: "151619") : .white)
-                    .overlay(Circle().stroke(dark ? Color(hex: "F2F2F3") : Neka.ink, lineWidth: 12 * k))
-                    .frame(width: 70 * k, height: 70 * k)
-                    .offset(x: 312 * k)
-                    .rotationEffect(.degrees(pointer))
+                knob(k: k, angle: angle)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -100,73 +85,55 @@ struct DialedMark: View, Animatable {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Pieces
-
-    private func ticks(k: CGFloat, value v: Double) -> some View {
-        Canvas { ctx, size in
-            let c = CGPoint(x: size.width / 2, y: size.height / 2)
-            let n = 18
-            for i in 0...n {
-                let f = Double(i) / Double(n)
-                let a = (Self.start + Self.sweep * f) * .pi / 180
-                let major = i % 3 == 0
-                let r0 = (major ? 400.0 : 412.0) * k, r1 = (major ? 446.0 : 438.0) * k
-                var p = Path()
-                p.move(to: CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0))
-                p.addLine(to: CGPoint(x: c.x + cos(a) * r1, y: c.y + sin(a) * r1))
-                let lit = f <= v + 0.0001
-                let color: Color = lit ? Self.color(at: f) : (dark ? .white : Neka.ink).opacity(dark ? 0.34 : 0.30)
-                ctx.stroke(p, with: .color(color), style: StrokeStyle(lineWidth: (major ? 13 : 9) * k, lineCap: .round))
-            }
-        }
-    }
-
-    private func knob(k: CGFloat, pointer: Double) -> some View {
-        let body = RadialGradient(
-            colors: dark ? [Color(hex: "3A3B42"), Color(hex: "17181C")] : [.white, Color(hex: "E9E7E1")],
-            center: UnitPoint(x: 0.38, y: 0.30), startRadius: 0, endRadius: 360 * k)
-        let rim = LinearGradient(
-            colors: [.white.opacity(dark ? 0.30 : 0.95), .white.opacity(0.05), .white.opacity(dark ? 0.15 : 0.45)],
-            startPoint: .top, endPoint: .bottom)
+    private func knob(k: CGFloat, angle: Double) -> some View {
+        let d = Self.knobRadius * 2 * k
+        let face = LinearGradient(
+            colors: dark ? [Color(hex: "4A4A4F"), Color(hex: "2A2A2E")] : [.white, Color(hex: "F1F1F3")],
+            startPoint: UnitPoint(x: 0.3, y: 0), endPoint: UnitPoint(x: 0.7, y: 1))
 
         return ZStack {
-            Circle().fill(body)
-                .glassKnob()
-            // Knurled grip round the edge.
+            Circle().fill(face).glassKnob()
+            Circle().stroke((dark ? Color.white : .black).opacity(dark ? 0.10 : 0.05), lineWidth: 3 * k)
+            Circle()
+                .fill(LinearGradient(colors: [.white.opacity(0.55), .white.opacity(0)],
+                                     startPoint: .top, endPoint: .center))
+                .padding(4 * k)
+                .opacity(dark ? 0.35 : 0.9)
+
+            // The printed scale that makes it a dial.
             Canvas { ctx, size in
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
-                for i in 0..<96 {
-                    let a = Double(i) / 96 * 2 * .pi
+                let r0 = (Self.knobRadius - 30) * k, r1 = (Self.knobRadius - 14) * k
+                for i in 0...9 {
+                    let a = (Self.start + Self.sweep * Double(i) / 9) * .pi / 180
                     var p = Path()
-                    p.move(to: CGPoint(x: c.x + cos(a) * 186 * k, y: c.y + sin(a) * 186 * k))
-                    p.addLine(to: CGPoint(x: c.x + cos(a) * 210 * k, y: c.y + sin(a) * 210 * k))
-                    ctx.stroke(p, with: .color((dark ? Color.white : Neka.ink).opacity(0.10)),
-                               style: StrokeStyle(lineWidth: 5 * k, lineCap: .round))
+                    p.move(to: CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0))
+                    p.addLine(to: CGPoint(x: c.x + cos(a) * r1, y: c.y + sin(a) * r1))
+                    ctx.stroke(p, with: .color((dark ? Color.white : .black).opacity(dark ? 0.18 : 0.14)),
+                               style: StrokeStyle(lineWidth: 9 * k, lineCap: .round))
                 }
             }
-            Circle().fill(body).frame(width: 352 * k, height: 352 * k)
-            Circle().stroke(rim, lineWidth: 5 * k).frame(width: 352 * k, height: 352 * k)
-            Circle().stroke(rim, lineWidth: 7 * k)
-            Ellipse()
-                .fill(RadialGradient(colors: [.white.opacity(0.95), .white.opacity(0)], center: .center, startRadius: 0, endRadius: 112 * k))
-                .frame(width: 224 * k, height: 124 * k)
-                .rotationEffect(.degrees(-28))
-                .offset(x: -62 * k, y: -92 * k)
-                .opacity(dark ? 0.22 : 0.55)
-            // Pointer, turning with the value.
-            Capsule()
-                .fill(dark ? Color(hex: "F2F2F3") : Neka.ink)
-                .frame(width: 88 * k, height: 30 * k)
-                .offset(x: 106 * k)
-                .rotationEffect(.degrees(pointer))
+
+            // Pointer dot, turning with the value.
+            Circle()
+                .fill(dark ? Color.white : Neka.ink)
+                .frame(width: 52 * k, height: 52 * k)
+                .offset(x: 146 * k)
+                .rotationEffect(.degrees(angle))
         }
-        .frame(width: 432 * k, height: 432 * k)
-        .shadow(color: .black.opacity(dark ? 0.55 : 0.18), radius: 26 * k, y: 30 * k)
+        .frame(width: d, height: d)
+        .background(
+            Circle()
+                .fill(.black.opacity(dark ? 0.60 : 0.20))
+                .padding(6 * k)
+                .blur(radius: 28 * k)
+                .offset(y: 30 * k)
+        )
     }
 }
 
 private extension View {
-    /// Real Liquid Glass on iOS 26, drawn glass before that.
+    /// Real Liquid Glass on iOS 26, the drawn face before that.
     @ViewBuilder
     func glassKnob() -> some View {
         if #available(iOS 26.0, *) {

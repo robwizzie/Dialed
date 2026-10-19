@@ -1,8 +1,9 @@
 # Dialed app icon — "The Dial"
 
-A real dial: a 270° scale of tick marks, the app's green → sky → lavender →
-orange progress arc, and a knurled glass knob whose pointer is turned to
-"dialed in". The same geometry is drawn live in the app by
+A real dial, drawn the way Apple draws its own icons — three shapes and
+nothing else: a thick green → sky → lavender ring (with an Activity-ring
+shadow under its end cap), a smooth glass knob with a quiet printed scale,
+and one pointer dot turned to "dialed in". The same geometry is drawn live in the app by
 `Views/Brand/DialedMark.swift` (splash, onboarding, Settings).
 
 ## Files
@@ -12,7 +13,7 @@ orange progress arc, and a knurled glass knob whose pointer is turned to
 | `make_icon.py` | Generates every SVG from one set of numbers (angles, radii, colours). |
 | `render.js` | Renders the SVGs to 1024 px PNGs with Playwright. |
 | `svg/dialed-icon-{light,dark,tinted}.svg` | Flat icons for each appearance. |
-| `svg/layer-{1-background,2-scale,3-knob}.svg` | Layers for Icon Composer. |
+| `svg/layer-{1-background,2-ring,3-knob}.svg` | Layers for Icon Composer. |
 | `png/` | Rendered PNGs (copied into `AppIcon.appiconset`). |
 
 ## Regenerating
@@ -29,9 +30,9 @@ The asset catalog icon works everywhere now (light, dark and tinted). For the
 system's live glass treatment, build a `.icon` in Icon Composer (Xcode 26 →
 Open Developer Tool → Icon Composer):
 
-1. Drag in `layer-1-background.svg`, `layer-2-scale.svg`, `layer-3-knob.svg`
+1. Drag in `layer-1-background.svg`, `layer-2-ring.svg`, `layer-3-knob.svg`
    as three groups, bottom to top.
-2. Turn **Liquid Glass** on for the knob group (and lightly for the scale);
+2. Turn **Liquid Glass** on for the knob group (and lightly for the ring);
    leave the background plain.
 3. Save as `AppIcon.icon` into the app target and set it as the app icon in
    the target's General tab. Xcode uses it on iOS 26 and the PNG set below that.
