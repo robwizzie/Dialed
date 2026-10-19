@@ -49,4 +49,13 @@ final class ChallengeSyncModelsTests: XCTestCase {
         // A second sync with nothing new changes nothing.
         XCTAssertEqual(ChallengeWire.merge(state, into: merged, calendar: calendar), merged)
     }
+
+    func testWorkoutCountsThisWeekAndTotal() {
+        // Wed Oct 21 2026; week starts Mon Oct 19.
+        let now = at(21, 18)
+        let counts = ChallengeWire.workoutCounts(doneDays: ["2026-10-16", "2026-10-19", "2026-10-21", "2026-10-21"],
+                                                 now: now, calendar: calendar)
+        XCTAssertEqual(counts.week, 2)  // a day logged twice counts once
+        XCTAssertEqual(counts.total, 3)
+    }
 }

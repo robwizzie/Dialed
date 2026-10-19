@@ -58,6 +58,28 @@ enum ChallengeWire {
 
     struct WeighInBatch: Encodable {
         let weighins: [WeighIn]
+        var source: String = "app"
+    }
+
+    /// Your stats card on the shared page (what your friend sees).
+    struct OwnerStats: Encodable, Equatable {
+        var goalLossLbs: Double?
+        var scoring: String?
+        var stepsAvg7: Double?
+        var stepsToday: Double?
+        var workoutsWeek: Int?
+        var workoutsTotal: Int?
+        var goalDayName: String?
+        var goalDayDate: String?
+    }
+
+    /// Workouts done this week (Mon–Sun) and in total, from "yyyy-MM-dd" keys.
+    static func workoutCounts(doneDays: [String], now: Date = Date(), calendar: Calendar = .current) -> (week: Int, total: Int) {
+        var cal = calendar
+        cal.firstWeekday = 2
+        let weekStart = cal.dateInterval(of: .weekOfYear, for: now)?.start ?? cal.startOfDay(for: now)
+        let week = Set(doneDays).compactMap { date(fromKey: $0, calendar: calendar) }.filter { $0 >= weekStart && $0 <= now }.count
+        return (week, Set(doneDays).count)
     }
 
     // MARK: - Day keys
