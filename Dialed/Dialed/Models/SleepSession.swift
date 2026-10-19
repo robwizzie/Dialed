@@ -110,6 +110,7 @@ final class SleepSession {
 extension SleepSession {
     enum Source: String, Codable {
         case fitbit
+        case googleHealth
         case healthkit
         case manual
     }

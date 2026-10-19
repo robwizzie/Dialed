@@ -27,6 +27,10 @@ final class ProfilePhotoStore: ObservableObject {
     @Published private(set) var cutout: UIImage?
     @Published private(set) var isProcessing = false
 
+    /// Pre-scaled copies so views never draw the 1600px original per frame.
+    @Published private(set) var thumbnail: UIImage?
+    @Published private(set) var heroDisplay: UIImage?
+
     /// Hero framing, tweakable from the profile sheet because every photo
     /// is cropped differently.
     @Published var heroScale: Double {
@@ -47,10 +51,11 @@ final class ProfilePhotoStore: ObservableObject {
         heroOffsetY = defaults.object(forKey: Keys.offsetY) as? Double ?? 0
         original = Self.loadImage(Self.originalURL)
         cutout = Self.loadImage(Self.cutoutURL)
+        rebuildDerived()
     }
 
     /// Hero prefers the cutout; avatar prefers the original.
-    var heroImage: UIImage? { cutout ?? original }
+    var heroImage: UIImage? { heroDisplay }
     var hasCutout: Bool { cutout != nil }
 
     // MARK: - Update
@@ -78,13 +83,36 @@ final class ProfilePhotoStore: ObservableObject {
         }
         heroScale = 1.0
         heroOffsetY = 0
+        rebuildDerived()
     }
 
     func removePhoto() {
         original = nil
         cutout = nil
+        rebuildDerived()
         try? FileManager.default.removeItem(at: Self.originalURL)
         try? FileManager.default.removeItem(at: Self.cutoutURL)
+    }
+
+    private func rebuildDerived() {
+        thumbnail = original.map { Self.scaled($0, maxDimension: 160, opaque: true) }
+        heroDisplay = (cutout ?? original).map { Self.scaled($0, maxDimension: 900, opaque: cutout == nil) }
+    }
+
+    /// Downscale so the longest side is `maxDimension` pixels.
+    private static func scaled(_ image: UIImage, maxDimension: CGFloat, opaque: Bool) -> UIImage {
+        let pixelW = image.size.width * image.scale
+        let pixelH = image.size.height * image.scale
+        let longest = max(pixelW, pixelH)
+        guard longest > maxDimension else { return image }
+        let ratio = maxDimension / longest
+        let size = CGSize(width: (pixelW * ratio).rounded(), height: (pixelH * ratio).rounded())
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = opaque
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     // MARK: - Vision

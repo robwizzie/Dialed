@@ -39,7 +39,7 @@ enum WhatsNew {
             pillar: .recovery,
             icon: "dot.radiowaves.left.and.right",
             title: "Watch, scale and bottle",
-            blurb: "Pixel Watch data through Fitbit, weigh-ins from your smart scale, and water from your smart bottle all land on Home automatically."
+            blurb: "Pixel Watch data through Google Health, weigh-ins from your smart scale, and water from your smart bottle all land on Home automatically."
         ),
         Feature(
             pillar: .readiness,

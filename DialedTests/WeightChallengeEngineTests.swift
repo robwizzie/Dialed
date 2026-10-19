@@ -50,7 +50,7 @@ final class WeightChallengeEngineTests: XCTestCase {
         let readings = [
             WeightReading(date: day(0, hour: 21, from: start), pounds: 192, source: .healthKit),
             WeightReading(date: day(0, hour: 7, from: start), pounds: 190, source: .healthKit),
-            WeightReading(date: day(1, hour: 7, from: start), pounds: 189.6, source: .fitbit)
+            WeightReading(date: day(1, hour: 7, from: start), pounds: 189.6, source: .googleHealth)
         ]
         let series = WeightChallengeEngine.dailySeries(readings, calendar: calendar)
         XCTAssertEqual(series.count, 2)
@@ -179,7 +179,7 @@ final class WeightChallengeEngineTests: XCTestCase {
         let t = day(0, from: start)
         let merged = WeightChallengeEngine.merge([
             [WeightReading(date: t, pounds: 190.2, source: .healthKit)],
-            [WeightReading(date: t.addingTimeInterval(120), pounds: 190.1, source: .fitbit)],
+            [WeightReading(date: t.addingTimeInterval(120), pounds: 190.1, source: .googleHealth)],
             [WeightReading(date: t.addingTimeInterval(3600 * 5), pounds: 191, source: .manual)]
         ])
         XCTAssertEqual(merged.count, 2)

@@ -90,10 +90,10 @@ struct HomeView: View {
             }
             .refreshable { await refreshAll(force: true) }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
-                Task { await refreshAll() }
+                Task { await refreshAll(force: true) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
-                Task { await refreshAll() }
+                Task { await refreshAll(force: true) }
             }
             // Requests from the bottom bar's nested menu.
             .onChange(of: router.homeSheet) { _, request in
@@ -118,14 +118,15 @@ struct HomeView: View {
                     DevicesView()
                 }
             }
-            .sheet(item: $sheet, onDismiss: { Task { await refreshAll() } }) { sheet in
+            .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
                 sheetContent(sheet)
             }
         }
     }
 
     private func refreshAll(force: Bool = false) async {
-        await viewModel.refresh(context: modelContext, force: force)
+        // Skipped refreshes (tab re-appear within a minute) do nothing else.
+        guard await viewModel.refresh(context: modelContext, force: force) else { return }
         await stateModel.refresh(context: modelContext)
         aiAvailability = DialedAI.availability
         await briefModel.refreshIfStale(viewModel.snapshot)
@@ -193,7 +194,7 @@ struct HomeView: View {
     private var avatar: some View {
         ZStack(alignment: .bottomTrailing) {
             Group {
-                if let image = photos.original {
+                if let image = photos.thumbnail {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
@@ -209,7 +210,7 @@ struct HomeView: View {
             .shadow(color: .black.opacity(0.08), radius: 6, y: 3)
 
             Circle()
-                .fill(FitbitTokenStore.isConnected ? Neka.green : Neka.inkTertiary)
+                .fill(GoogleHealthTokenStore.isConnected ? Neka.green : Neka.inkTertiary)
                 .frame(width: 11, height: 11)
                 .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
         }
