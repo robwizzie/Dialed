@@ -36,7 +36,10 @@ POINTER = START + SWEEP * VALUE
 RING_R, RING_W = 316, 92     # the colour ring
 KNOB_R = 200                 # the glass knob
 LENS_R = 70                  # glass lens on the ring
-DOT_R, DOT_AT = 24, 140      # pointer dot size, distance from centre
+PTR = (64, 168, 26)          # pointer line: from, to, width
+KNURL = (KNOB_R - 24, KNOB_R - 6, 72)   # grip ridges: from, to, count
+SCALE_R = (220, 250)         # graduations between knob and ring
+SCALE_N = 27                 # 28 marks; every 3rd is major
 
 
 def pt(r, deg, c=C):
@@ -108,13 +111,16 @@ def arc_path(r, a0, a1):
 def theme(name):
     if name == "light":
         return dict(name=name, bg0="#FFFFFF", bg1="#EDEDF2", bloomA=0.35, glass="#FFFFFF", glassA=0.62,
-                    spec=1.0, edgeA=0.10, dot="#151619", shadowA=0.18, col=lambda c: c)
+                    spec=1.0, edgeA=0.10, dot="#151619", shadowA=0.18, col=lambda c: c,
+                    dim="#000000", dimA=0.16, ridge="#000000", ridgeA=0.07)
     if name == "dark":
         return dict(name=name, bg0="#202024", bg1="#050506", bloomA=0.45, glass="#FFFFFF", glassA=0.14,
-                    spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=lambda c: c)
+                    spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=lambda c: c,
+                    dim="#FFFFFF", dimA=0.22, ridge="#FFFFFF", ridgeA=0.10)
     # tinted: iOS turns this into the user's tint colour, so it's drawn in luminance only
     return dict(name=name, bg0="#141414", bg1="#000000", bloomA=0.30, glass="#FFFFFF", glassA=0.14,
-                spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=gray)
+                spec=0.55, edgeA=0.25, dot="#FFFFFF", shadowA=0.55, col=gray,
+                dim="#FFFFFF", dimA=0.25, ridge="#FFFFFF", ridgeA=0.12)
 
 
 def defs(t):
@@ -182,6 +188,23 @@ def ring(t):
     return "".join(out)
 
 
+def scale(t):
+    # the graduated scale printed between knob and ring — lit up to the value
+    out = []
+    for i in range(SCALE_N + 1):
+        f = i / SCALE_N
+        a = START + SWEEP * f
+        major = i % 3 == 0
+        r0 = SCALE_R[0] if major else SCALE_R[0] + 9
+        x0, y0 = pt(r0, a)
+        x1, y1 = pt(SCALE_R[1], a)
+        lit = f <= VALUE + 1e-6
+        col = t["col"](grad(f)) if lit else t["dim"]
+        out.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{col}" '
+                   f'stroke-opacity="{1 if lit else t["dimA"]}" stroke-width="{11 if major else 7}" stroke-linecap="round"/>')
+    return "".join(out)
+
+
 def knob(t):
     cx, cy = C
     out = []
@@ -193,10 +216,22 @@ def knob(t):
     # specular rim + a faint dark edge so it sits off the background
     out.append(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R - 0.5}" fill="none" stroke="#000000" stroke-opacity="{t["edgeA"] * 0.5:.2f}" stroke-width="1.5"/>')
     out.append(f'<circle cx="{cx}" cy="{cy}" r="{KNOB_R - 4}" fill="none" stroke="url(#spec)" stroke-width="7"/>')
-    # pointer dot
-    x, y = pt(DOT_AT, POINTER)
-    out.append(f'<circle cx="{x:.1f}" cy="{y + 4:.1f}" r="{DOT_R}" fill="#000000" opacity="0.18" filter="url(#tiny)"/>')
-    out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{DOT_R}" fill="{t["dot"]}"/>')
+    # knurled grip round the edge
+    ridges = []
+    for i in range(KNURL[2]):
+        a = 360 * i / KNURL[2]
+        x0, y0 = pt(KNURL[0], a)
+        x1, y1 = pt(KNURL[1], a)
+        ridges.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}"/>')
+    out.append(f'<g stroke="{t["ridge"]}" stroke-opacity="{t["ridgeA"]}" stroke-width="6" stroke-linecap="round" '
+               f'clip-path="url(#knobClip)">' + "".join(ridges) + '</g>')
+    # pointer: a recessed line from the centre out to the edge, aimed at the value
+    x0, y0 = pt(PTR[0], POINTER)
+    x1, y1 = pt(PTR[1], POINTER)
+    out.append(f'<line x1="{x0:.1f}" y1="{y0 + 3:.1f}" x2="{x1:.1f}" y2="{y1 + 3:.1f}" stroke="#FFFFFF" '
+               f'stroke-opacity="{0.8 * t["spec"]:.2f}" stroke-width="{PTR[2]}" stroke-linecap="round"/>')
+    out.append(f'<line x1="{x0:.1f}" y1="{y0:.1f}" x2="{x1:.1f}" y2="{y1:.1f}" stroke="{t["dot"]}" '
+               f'stroke-width="{PTR[2]}" stroke-linecap="round"/>')
     return "".join(out)
 
 
@@ -223,11 +258,11 @@ def svg(body, t):
 for name in ("light", "dark", "tinted"):
     t = theme(name)
     open(os.path.join(OUT, f"dialed-icon-{name}.svg"), "w").write(
-        svg(background(t) + ring(t) + knob(t) + lens(t), t))
+        svg(background(t) + ring(t) + scale(t) + knob(t) + lens(t), t))
 
 # Icon Composer layers (light geometry; Icon Composer adds its own glass)
 t = theme("light")
 open(os.path.join(OUT, "layer-1-background.svg"), "w").write(svg(background(t), t))
-open(os.path.join(OUT, "layer-2-ring.svg"), "w").write(svg(ring(t), t))
+open(os.path.join(OUT, "layer-2-ring.svg"), "w").write(svg(ring(t) + scale(t), t))
 open(os.path.join(OUT, "layer-3-knob.svg"), "w").write(svg(knob(t) + lens(t), t))
 print("wrote", sorted(os.listdir(OUT)))
