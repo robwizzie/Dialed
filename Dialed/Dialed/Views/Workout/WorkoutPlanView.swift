@@ -35,8 +35,42 @@ enum WorkoutPlanStore {
         return String(format: "%04d-%02d-%02d", c.year ?? 0, c.month ?? 0, c.day ?? 0)
     }
 
+    /// The session for a day, after any swaps you made by training
+    /// something else (see WeekPlanAdjuster).
     static func session(on date: Date) -> WorkoutProgram.Session {
-        WorkoutProgram.session(on: date, start: startDate, goal: goalDate)
+        WorkoutProgram.session(on: source(for: date), start: startDate, goal: goalDate)
+    }
+
+    // MARK: Swaps
+
+    private static let swapsKey = "workout.swaps"
+
+    /// dayKey → the day whose plan it now runs.
+    static var swaps: [String: String] {
+        get { (UserDefaults.standard.dictionary(forKey: swapsKey) as? [String: String]) ?? [:] }
+        set { UserDefaults.standard.set(newValue, forKey: swapsKey) }
+    }
+
+    static func source(for day: Date) -> Date {
+        guard let sourceKey = swaps[Self.key(day)], let d = Self.day(fromKey: sourceKey) else { return day }
+        return d
+    }
+
+    static func isSwapped(_ day: Date) -> Bool { swaps[Self.key(day)] != nil }
+
+    /// Trade two days' sessions.
+    static func swap(_ a: Date, _ b: Date) {
+        var all = swaps
+        let sa = Self.key(source(for: a)), sb = Self.key(source(for: b))
+        all[Self.key(a)] = sb == Self.key(a) ? nil : sb
+        all[Self.key(b)] = sa == Self.key(b) ? nil : sa
+        swaps = all
+    }
+
+    static func day(fromKey text: String) -> Date? {
+        let p = text.split(separator: "-").compactMap { Int($0) }
+        guard p.count == 3 else { return nil }
+        return Calendar.current.date(from: DateComponents(year: p[0], month: p[1], day: p[2]))
     }
 }
 
@@ -44,6 +78,8 @@ struct WorkoutPlanView: View {
     @AppStorage(WorkoutPlanStore.doneKey) private var doneRaw = ""
     @State private var selected = Calendar.current.startOfDay(for: Date())
     @State private var logging: LogTarget?
+    /// Bumped when a save swaps days, so the week redraws.
+    @State private var planVersion = 0
     @Query(sort: \PlanWorkoutLog.date, order: .reverse) private var logs: [PlanWorkoutLog]
 
     /// The plan day the logger sheet is open for.
@@ -62,8 +98,8 @@ struct WorkoutPlanView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
-                weekStrip
-                sessionCard(for: selected)
+                weekStrip.id(planVersion)
+                sessionCard(for: selected).id("\(planVersion)-\(WorkoutPlanStore.key(selected))")
                 progressLinks
                 guide
             }
@@ -74,7 +110,8 @@ struct WorkoutPlanView: View {
         .navigationTitle("Workout plan")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $logging) { target in
-            WorkoutLoggerView(day: target.day, session: WorkoutPlanStore.session(on: target.day))
+            WorkoutLoggerView(day: target.day, session: WorkoutPlanStore.session(on: target.day),
+                              onSaved: { planVersion += 1 })
         }
     }
 
@@ -225,6 +262,11 @@ struct WorkoutPlanView: View {
                     Text(s.title)
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(Neka.ink)
+                    if WorkoutPlanStore.isSwapped(day) {
+                        Label("Moved here to fit what you trained", systemImage: "arrow.left.arrow.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Neka.lavenderText)
+                    }
                 }
                 Spacer()
                 if s.minutes > 0 {

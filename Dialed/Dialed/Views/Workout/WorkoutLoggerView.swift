@@ -6,8 +6,10 @@
 //  prescription, rows of sets (lb × reps) pre-filled from last time's
 //  progression suggestion, quick +/- steppers, tap a set's number to
 //  finish it (starts the optional 60/90 s rest timer), add/remove sets
-//  and notes. Bike / walk days log duration and distance. Saving stores
-//  the sets in SwiftData and checks the day off in the plan.
+//  and notes. Bike / walk days log duration and distance. Or just type
+//  what you did ("bench 185x8x4, squat 225 5x5") and the sets fill in.
+//  Saving stores the sets in SwiftData, checks the day off, and adjusts
+//  the rest of the week if you trained a different day's workout.
 //
 
 import SwiftUI
@@ -30,6 +32,11 @@ struct WorkoutLoggerView: View {
     @State private var loaded = false
     @State private var hasExistingLog = false
     @State private var confirmDelete = false
+    @State private var typed = ""
+    @State private var reading = false
+    @State private var typedResult: String?
+    @State private var summary: [String]?
+    @FocusState private var typing: Bool
 
     private var isCardio: Bool { session.kind == .bike || session.kind == .walk }
     private var dayKey: String { WorkoutPlanStore.key(day) }
@@ -62,13 +69,14 @@ struct WorkoutLoggerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
+                    typeCard
                     if isCardio {
                         cardioCard
                     } else {
                         restCard
-                        ForEach($exercises) { $exercise in
-                            exerciseCard($exercise)
-                        }
+                    }
+                    ForEach($exercises) { $exercise in
+                        exerciseCard($exercise)
                     }
                     notesCard
                     if hasExistingLog {
@@ -108,8 +116,133 @@ struct WorkoutLoggerView: View {
                 Text("The sets are removed and the day is unchecked in your plan.")
             }
             .onAppear(perform: loadIfNeeded)
+            .alert("Saved", isPresented: Binding(get: { summary != nil }, set: { if !$0 { finish() } })) {
+                Button("Nice", role: .cancel) {}
+            } message: {
+                Text((summary ?? []).joined(separator: "\n"))
+            }
         }
     }
+
+    // MARK: - Type it
+
+    /// Type (or dictate) what you did; the sets fill in below.
+    private var typeCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Type what you did", systemImage: "keyboard")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Neka.ink)
+            TextField("bench 185x8x4, squat 225 5x5, lat pulldown 120 3x10", text: $typed, axis: .vertical)
+                .lineLimit(2...6)
+                .font(.system(size: 15))
+                .focused($typing)
+                .padding(12)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
+            HStack(spacing: 10) {
+                Button {
+                    Task { await fillFromText() }
+                } label: {
+                    HStack(spacing: 6) {
+                        if reading { ProgressView().tint(Neka.onInk) } else { Image(systemName: "wand.and.stars") }
+                        Text(reading ? "Reading…" : "Fill in sets")
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.onInk)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Neka.ink))
+                }
+                .buttonStyle(.dialedScale)
+                .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty || reading)
+                Spacer()
+                Text("weight × reps × sets, or sets × reps @ weight")
+                    .font(.system(size: 10))
+                    .foregroundColor(Neka.inkTertiary)
+                    .multilineTextAlignment(.trailing)
+            }
+            if let typedResult {
+                Label(typedResult, systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Neka.greenText)
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private func fillFromText() async {
+        typing = false
+        reading = true
+        defer { reading = false }
+        let known = exercises.map(\.name) + Self.allPlanExercises
+        var parsed = WorkoutTextParser.parse(typed, known: known)
+        if parsed.isEmpty, let ai = await DialedAI.parseWorkout(typed) {
+            parsed = ai.map { e in
+                var e = e
+                e.name = WorkoutTextParser.canonical(e.name, known: known)
+                return e
+            }
+        }
+        guard !parsed.isEmpty else {
+            typedResult = nil
+            withAnimation { typedResult = "Couldn't read that — try \"bench 185x8x4\"." }
+            return
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { apply(parsed) }
+        let setCount = parsed.reduce(0) { $0 + $1.sets.count }
+        typedResult = "Filled \(parsed.count) exercise\(parsed.count == 1 ? "" : "s")\(setCount > 0 ? ", \(setCount) sets" : "") — check and save."
+        #if os(iOS)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        #endif
+    }
+
+    /// Typed sets replace that exercise's rows (marked done); new exercises
+    /// are added at the end; cardio fills duration and distance.
+    private func apply(_ parsed: [WorkoutTextParser.ParsedExercise]) {
+        for p in parsed {
+            if p.sets.isEmpty {
+                if isCardio || WeekPlanAdjuster.focus(of: p.name).contains(.cardio) {
+                    if let m = p.minutes { durationMinutes = m }
+                    if let mi = p.miles { distanceMiles = mi }
+                    if !isCardio { notes = [notes, describe(p)].filter { !$0.isEmpty }.joined(separator: "\n") }
+                    continue
+                }
+                if let i = exercises.firstIndex(where: { $0.name == p.name }) {
+                    for j in exercises[i].sets.indices { exercises[i].sets[j].done = true }
+                } else {
+                    notes = [notes, describe(p)].filter { !$0.isEmpty }.joined(separator: "\n")
+                }
+                continue
+            }
+            let sets = p.sets.map { SetDraft(weight: $0.weight, reps: $0.reps, done: true) }
+            if let i = exercises.firstIndex(where: { $0.name == p.name }) {
+                exercises[i].sets = sets
+            } else {
+                let equipment = StrengthProgression.equipment(for: p.name)
+                exercises.append(ExerciseDraft(
+                    order: (exercises.map(\.order).max() ?? -1) + 1, name: p.name,
+                    prescriptionText: "\(p.sets.count) × \(p.sets.first?.reps ?? 0)",
+                    prescription: .setsReps(sets: p.sets.count, reps: p.sets.map(\.reps).max() ?? 0, perSide: false),
+                    equipment: equipment, suggestion: nil, lastSummary: nil,
+                    checkOnly: false, sets: sets))
+            }
+        }
+    }
+
+    private func describe(_ p: WorkoutTextParser.ParsedExercise) -> String {
+        var parts = [p.name]
+        if let m = p.minutes { parts.append(m < 1 ? "\(Int(m * 60)) s" : "\(formatPounds(m)) min") }
+        if let mi = p.miles { parts.append(String(format: "%.1f mi", mi)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// Every exercise in the plan, for matching typed names.
+    static let allPlanExercises: [String] = {
+        let sessions = [WorkoutProgram.strengthA, WorkoutProgram.strengthB, WorkoutProgram.strengthC(rounds: 3),
+                        WorkoutProgram.light, WorkoutProgram.bike(week: 1, withLongWalk: false)]
+        var seen = Set<String>()
+        return sessions.flatMap { $0.exercises.map(\.name) }.filter { seen.insert($0).inserted }
+    }()
 
     // MARK: - Header
 
@@ -506,6 +639,7 @@ struct WorkoutLoggerView: View {
 
     private func save() {
         let date = Calendar.current.startOfDay(for: day)
+        let notesSummary = adjustWeek()
         let log: PlanWorkoutLog
         if let existing = PlanWorkoutLogStore.log(for: dayKey, context: context) {
             log = existing
@@ -514,14 +648,15 @@ struct WorkoutLoggerView: View {
             log = PlanWorkoutLog(dayKey: dayKey, date: date, title: session.title, kindRaw: session.kind.rawValue)
             context.insert(log)
         }
-        log.title = session.title
-        log.kindRaw = session.kind.rawValue
+        let ran = WorkoutPlanStore.session(on: day)
+        log.title = ran.title
+        log.kindRaw = ran.kind.rawValue
         log.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         log.durationMinutes = isCardio ? durationMinutes : nil
         log.distanceMiles = isCardio ? distanceMiles : nil
         log.savedAt = Date()
 
-        if !isCardio {
+        do {
             for ex in exercises {
                 for (i, s) in ex.sets.enumerated() {
                     context.insert(PlanSetLog(
@@ -539,8 +674,60 @@ struct WorkoutLoggerView: View {
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
+        let lines = notesSummary + nextTimeLines()
+        if lines.isEmpty {
+            finish()
+        } else {
+            summary = lines
+        }
+    }
+
+    private func finish() {
+        summary = nil
         onSaved()
         dismiss()
+    }
+
+    /// If you trained a later day's workout today, swap the two days so the
+    /// rest of the week still covers everything. Returns what changed.
+    private func adjustWeek() -> [String] {
+        let calendar = Calendar.current
+        let logged = exercises.filter { $0.sets.contains(where: \.done) }.map(\.name)
+        let start = calendar.startOfDay(for: day)
+        // The rest of this week (through Sunday), not yet done.
+        let doneKeys = Set((UserDefaults.standard.string(forKey: WorkoutPlanStore.doneKey) ?? "").split(separator: ",").map(String.init))
+        var upcoming: [(date: Date, session: WorkoutProgram.Session)] = []
+        var d = calendar.date(byAdding: .day, value: 1, to: start) ?? start
+        while calendar.component(.weekday, from: d) != 2, upcoming.count < 6 {   // stop at Monday
+            if !doneKeys.contains(WorkoutPlanStore.key(d)) {
+                upcoming.append((d, WorkoutPlanStore.session(on: d)))
+            }
+            d = calendar.date(byAdding: .day, value: 1, to: d) ?? d
+        }
+        guard let target = WeekPlanAdjuster.swapTarget(logged: logged, todayPlan: WorkoutPlanStore.session(on: day),
+                                                       upcoming: upcoming) else { return [] }
+        let todayPlan = WorkoutPlanStore.session(on: day)
+        let targetPlan = WorkoutPlanStore.session(on: target)
+        WorkoutPlanStore.swap(day, target)
+        let weekday = target.formatted(.dateTime.weekday(.wide))
+        return ["You did \(targetPlan.title) today, so \(weekday) is now \(todayPlan.title)."]
+    }
+
+    /// "Bench press: go up to 190 lb next time."
+    private func nextTimeLines() -> [String] {
+        exercises.compactMap { ex -> String? in
+            guard ex.tracksWeight else { return nil }
+            let done = ex.sets.filter(\.done)
+            guard !done.isEmpty else { return nil }
+            let logged = done.map { StrengthProgression.LoggedSet(weight: $0.weight ?? 0, reps: $0.reps, completed: true) }
+            guard let s = StrengthProgression.suggest(exerciseName: ex.name, prescription: ex.prescription, lastSession: logged)
+            else { return nil }
+            switch s.kind {
+            case .increase:     return "\(ex.name): go up to \(formatPounds(s.weight)) lb next time."
+            case .repeatWeight: return "\(ex.name): stay at \(formatPounds(s.weight)) lb and own every rep."
+            case .deload:       return "\(ex.name): drop to \(formatPounds(s.weight)) lb and rebuild."
+            }
+        }
     }
 
     private func deleteLog() {

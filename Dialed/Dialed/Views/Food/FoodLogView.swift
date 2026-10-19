@@ -2,9 +2,10 @@
 //  FoodLogView.swift
 //  Dialed
 //
-//  Your food for the day at a glance: totals against your targets, quick
-//  ways to add (describe or snap, quick add, favorites, recents), and the
-//  list of everything logged. Tap an item to edit it, swipe to delete.
+//  Your food for the day at a glance: totals against your targets, Add
+//  food (the same sheet as everywhere else — snap, scan, describe or type
+//  it) with one-tap shortcuts, favorites and recents, and the list of
+//  everything logged. Tap an item to edit it, swipe to delete.
 //
 
 import SwiftUI
@@ -17,14 +18,18 @@ struct FoodLogView: View {
     @State private var recents: [FoodDraft] = []
     @State private var favorites: [SavedMeal] = SavedMealsManager.load()
     @State private var editing: EditTarget?
-    @State private var showAIMeal = false
-    @State private var showScanner = false
-    @State private var scannedDraft: FoodDraft?
+    /// Add food, optionally jumping straight into a method.
+    @State private var adding: AddRequest?
     @State private var justLogged: String?
     @AppStorage(HealthWriteBack.defaultsKey) private var writeBack = true
 
     private let calendar = Calendar.current
     private var settings: UserSettings { UserSettings.load() }
+
+    struct AddRequest: Identifiable {
+        let method: AddFoodSheet.Method?
+        var id: String { method?.rawValue ?? "pick" }
+    }
 
     /// What the edit sheet is open for.
     enum EditTarget: Identifiable {
@@ -120,18 +125,12 @@ struct FoodLogView: View {
             })
             .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $showAIMeal, onDismiss: reload) {
-            AIMealSheet().presentationDetents([.large])
-        }
-        .sheet(isPresented: $showScanner, onDismiss: {
-            // Review the scanned food in the usual editor once the scanner is gone.
-            guard var d = scannedDraft else { return }
-            scannedDraft = nil
-            d.time = calendar.isDateInToday(day) ? Date() : (calendar.date(byAdding: .hour, value: 12, to: day) ?? day)
-            editing = .new(d)
-        }) {
-            BarcodeScanSheet { draft in scannedDraft = draft }
-                .presentationDetents([.large])
+        .sheet(item: $adding, onDismiss: reload) { request in
+            AddFoodSheet(start: request.method, day: day) { draft in
+                withAnimation { justLogged = draft.name.isEmpty ? "meal" : draft.name }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { withAnimation { justLogged = nil } }
+            }
+            .presentationDetents([.large])
         }
         .overlay(alignment: .bottom) {
             if let justLogged {
@@ -230,36 +229,17 @@ struct FoodLogView: View {
 
     private var quickAdd: some View {
         VStack(alignment: .leading, spacing: 12) {
+            // One button to add food, plus one-tap shortcuts into each way —
+            // the same sheet you get from Home and the + menu.
             HStack(spacing: 10) {
-                Button { showAIMeal = true } label: {
-                    Label("Describe or snap", systemImage: "sparkles")
+                Button { adding = AddRequest(method: nil) } label: {
+                    Label("Add food", systemImage: "plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.nekaPrimary)
-                Button {
-                    var d = FoodDraft()
-                    d.time = calendar.isDateInToday(day) ? Date() : (calendar.date(byAdding: .hour, value: 12, to: day) ?? day)
-                    editing = .new(d)
-                } label: {
-                    Label("Quick add", systemImage: "plus")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Capsule().fill(Neka.surface))
-                        .overlay(Capsule().stroke(Neka.hairline, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                Button { showScanner = true } label: {
-                    Image(systemName: "barcode.viewfinder")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .frame(width: 50, height: 50)
-                        .background(Circle().fill(Neka.surface))
-                        .overlay(Circle().stroke(Neka.hairline, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Scan a barcode")
+                shortcut("camera.fill", "Snap a meal", .photo)
+                shortcut("barcode.viewfinder", "Scan a barcode", .scan)
+                shortcut("text.bubble.fill", "Describe a meal", .describe)
             }
             if !favorites.isEmpty {
                 chips(title: "Favorites", items: favorites.map(FoodDraft.init), icon: "star.fill")
@@ -268,6 +248,19 @@ struct FoodLogView: View {
                 chips(title: "Recent", items: recents, icon: "clock.arrow.circlepath")
             }
         }
+    }
+
+    private func shortcut(_ icon: String, _ label: String, _ method: AddFoodSheet.Method) -> some View {
+        Button { adding = AddRequest(method: method) } label: {
+            Image(systemName: icon)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(Neka.ink)
+                .frame(width: 50, height: 50)
+                .background(Circle().fill(Neka.surface))
+                .overlay(Circle().stroke(Neka.hairline, lineWidth: 1))
+        }
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel(label)
     }
 
     private func chips(title: String, items: [FoodDraft], icon: String) -> some View {
