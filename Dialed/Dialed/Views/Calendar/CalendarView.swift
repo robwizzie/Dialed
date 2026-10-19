@@ -8,7 +8,18 @@
 import SwiftUI
 import SwiftData
 
+/// Hands the app's shared model context to the view model. Building a
+/// throwaway container in init lets it deallocate, which resets its context
+/// and invalidates every model fetched from it.
 struct CalendarView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    var body: some View {
+        CalendarContent(modelContext: modelContext)
+    }
+}
+
+private struct CalendarContent: View {
     @Environment(\.modelContext) private var modelContext
     @StateObject private var viewModel: CalendarViewModel
     
@@ -17,9 +28,8 @@ struct CalendarView: View {
     private let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     
-    init() {
-        let container = try! DialedSchema.makeContainer()
-        _viewModel = StateObject(wrappedValue: CalendarViewModel(modelContext: container.mainContext))
+    init(modelContext: ModelContext) {
+        _viewModel = StateObject(wrappedValue: CalendarViewModel(modelContext: modelContext))
     }
     
     var body: some View {
