@@ -28,7 +28,7 @@ final class WorkoutProgramTests: XCTestCase {
         XCTAssertEqual(session(10, 21).title, WorkoutProgram.strengthB.title)  // Wed
         XCTAssertEqual(session(10, 22).kind, .walk)                            // Thu
         XCTAssertEqual(session(10, 23).notes.first?.hasPrefix("3 rounds"), true) // Fri, base week
-        XCTAssertEqual(session(10, 24).walk, "45-min long walk with Peaches")  // Sat
+        XCTAssertEqual(session(10, 24).walk, "Daily mile + 45-min long walk")  // Sat
         XCTAssertEqual(session(10, 25).kind, .rest)                            // Sun
         XCTAssertEqual(session(10, 30).notes.first?.hasPrefix("4 rounds"), true) // Fri, build
     }

@@ -35,7 +35,7 @@ enum ReminderKind: String, CaseIterable, Codable, Identifiable {
         case .water:        return "11 AM, 2, 5 and 7:30 PM — only if you're behind"
         case .protein:      return "1 and 6 PM, plus a nudge if nothing's logged since noon"
         case .weighIn:      return "7:30 AM, if you haven't stepped on the scale"
-        case .steps:        return "6 PM, if you're short on steps — Peaches approves"
+        case .steps:        return "6 PM, if you're short on steps"
         case .weeklyReview: return "Sundays at 6 PM: your week in one screen"
         }
     }
@@ -229,11 +229,11 @@ enum ReminderPlanner {
             let goal = Double(inputs.stepGoal) * pace(at: t, calendar: calendar)
             if Double(inputs.steps) < goal * tolerance {
                 let short = max(0, inputs.stepGoal - inputs.steps)
-                // ~110 steps a minute at an easy dog-walk pace, rounded to 5 min.
+                // ~110 steps a minute at an easy walking pace, rounded to 5 min.
                 let minutes = max(10, min(60, Int((Double(short) / 110 / 5).rounded()) * 5))
                 candidates.append(Reminder(
                     id: id(.steps, t), kind: .steps, fireDate: t,
-                    title: "Walk with Peaches? 🐕",
+                    title: "Time for a walk? 🚶",
                     body: "\(inputs.steps.formatted()) steps so far. A \(minutes)-min walk adds ~\((minutes * 110).formatted()) and gets you close to \(inputs.stepGoal.formatted()).",
                     route: .home))
             }

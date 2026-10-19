@@ -61,7 +61,14 @@ struct HomeView: View {
                         proteinTarget: viewModel.proteinTarget,
                         calories: viewModel.caloriesIn,
                         calorieTarget: viewModel.calorieTarget,
+                        miles: viewModel.milesToday,
                         onLogWater: { sheet = .water }
+                    )
+                    HomeMileCard(
+                        miles: viewModel.milesToday,
+                        week: viewModel.milesWeek,
+                        streak: viewModel.mileStreak,
+                        ran: viewModel.ranToday
                     )
                     HomeChallengeCard(
                         challenge: viewModel.challenge,

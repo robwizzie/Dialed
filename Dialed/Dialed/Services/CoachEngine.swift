@@ -172,7 +172,7 @@ enum CoachEngine {
                 ))
             } else if behind >= 1_500 {
                 // ~100 steps/min; a single walk suggestion tops out at 45
-                // min (20 late at night — a short Peaches loop, not a hike).
+                // min (20 late at night — a short loop, not a hike).
                 let cap: Double = isLate ? 20 : 45
                 let minutes = max(10, Int(roundTo(min(behind / 100, cap), 5)))
                 out.append(CoachInsight(

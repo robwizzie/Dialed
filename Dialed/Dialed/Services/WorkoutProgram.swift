@@ -2,9 +2,9 @@
 //  WorkoutProgram.swift
 //  Dialed
 //
-//  The basement + Peaches plan for the run-up to the goal day: three
-//  strength days (barbell, bench, cable, dumbbells), two bike-interval
-//  days, daily walks with Peaches and a long walk/run on Thursdays.
+//  The basement plan for the run-up to the goal day: three strength days
+//  (barbell, bench, cable, dumbbells), two bike-interval days, a mile
+//  walked or run every single day, and a long walk/run on Thursdays.
 //  Phases (base → build → peak → event week) are counted back from the
 //  goal day, so moving the date moves the plan. Pure Foundation, tested.
 //
@@ -24,7 +24,7 @@ enum WorkoutProgram {
         let title: String
         let minutes: Int
         let exercises: [Exercise]
-        /// The walk with Peaches that goes with it, if any.
+        /// The day's mile (walk or run) and any extra walking.
         let walk: String?
         let notes: [String]
 
@@ -76,7 +76,7 @@ enum WorkoutProgram {
             Exercise(name: "Dumbbell shoulder press", prescription: "3 × 10"),
             Exercise(name: "Cable woodchop + 1-min plank", prescription: "3 × 12 / side")
         ],
-        walk: "30-min walk with Peaches",
+        walk: "Daily mile · walk or run",
         notes: ["Rest 60–90 s. Last 2 reps hard but clean."]
     )
 
@@ -90,7 +90,7 @@ enum WorkoutProgram {
             Exercise(name: "Dumbbell goblet squat", prescription: "3 × 12"),
             Exercise(name: "Cable curl + rope pushdown superset", prescription: "3 × 12 each")
         ],
-        walk: "30-min walk with Peaches",
+        walk: "Daily mile · walk or run",
         notes: ["Rest 60–90 s. Last 2 reps hard but clean."]
     )
 
@@ -105,7 +105,7 @@ enum WorkoutProgram {
                 Exercise(name: "Kettlebell / dumbbell swing", prescription: "45 s"),
                 Exercise(name: "Mountain climbers", prescription: "45 s")
             ],
-            walk: "30-min walk with Peaches",
+            walk: "Daily mile · walk or run",
             notes: ["\(rounds) rounds · 45 s on, 15 s off · 90 s between rounds."]
         )
     }
@@ -121,27 +121,27 @@ enum WorkoutProgram {
                 Exercise(name: "Intervals", prescription: intervals),
                 Exercise(name: "Cool-down", prescription: "5 min")
             ],
-            walk: withLongWalk ? "45-min long walk with Peaches" : "30-min walk with Peaches",
+            walk: withLongWalk ? "Daily mile + 45-min long walk" : "Daily mile · walk or run",
             notes: ["Hard = you can't talk. Easy = full recovery."]
         )
     }
 
     static func longWalk(week: Int) -> Session {
         Session(
-            kind: .walk, title: week <= 1 ? "Long walk with Peaches" : "Walk / run with Peaches",
+            kind: .walk, title: week <= 1 ? "Long walk" : "Walk / run",
             minutes: 50,
             exercises: week <= 1
                 ? [Exercise(name: "Brisk walk (can talk, can't sing)", prescription: "45–60 min")]
                 : [Exercise(name: "Jog 2 min / walk 3 min", prescription: "× 6–8"),
                    Exercise(name: "Easy walk home", prescription: "10 min")],
-            walk: nil,
-            notes: ["Build Peaches up gradually too: skip hot pavement, no running right after she eats."]
+            walk: "Counts as your daily mile",
+            notes: ["Run what feels easy, walk the rest — every step counts toward the mile."]
         )
     }
 
     static let rest = Session(
         kind: .rest, title: "Rest day", minutes: 0, exercises: [],
-        walk: "Easy walk with Peaches (optional)",
+        walk: "Daily mile · easy walk",
         notes: ["Recovery is where the work turns into results. Sleep 7.5+ hours."]
     )
 
@@ -153,13 +153,13 @@ enum WorkoutProgram {
             Exercise(name: "Cable row", prescription: "2 × 12"),
             Exercise(name: "Dumbbell RDL", prescription: "2 × 10")
         ],
-        walk: "30-min walk with Peaches",
+        walk: "Daily mile · walk or run",
         notes: ["Keep it easy — you want to feel fresh, not sore. No new foods this week."]
     )
 
     static let eventDay = Session(
         kind: .event, title: "The big day", minutes: 0, exercises: [],
-        walk: "Morning walk with Peaches",
+        walk: "Morning mile · easy walk",
         notes: ["Normal breakfast, normal water. Go enjoy it."]
     )
 

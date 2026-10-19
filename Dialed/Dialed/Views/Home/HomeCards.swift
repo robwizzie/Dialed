@@ -693,7 +693,7 @@ struct HomePathsCard: View {
 // MARK: - Dialed today
 
 /// Today's Dialed score on the same dial as the app icon: the knob turns
-/// as water, protein and calories come in. Same score the widget shows.
+/// as water, protein, calories and your daily mile come in. Same score the widget shows.
 struct HomeDialedTodayCard: View {
     let waterOz: Double
     let waterTarget: Double
@@ -701,6 +701,7 @@ struct HomeDialedTodayCard: View {
     let proteinTarget: Double
     let calories: Double
     let calorieTarget: Double
+    var miles: Double = 0
     var onLogWater: () -> Void
 
     @Environment(\.colorScheme) private var scheme
@@ -708,7 +709,8 @@ struct HomeDialedTodayCard: View {
 
     private var score: Int {
         DialedScore.compute(waterOz: waterOz, waterTargetOz: waterTarget, protein: protein,
-                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget)
+                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget,
+                            miles: miles)
     }
 
     var body: some View {
@@ -729,6 +731,8 @@ struct HomeDialedTodayCard: View {
                 part("flame.fill", "Calories",
                      calories > calorieTarget ? "\(Int(calories - calorieTarget)) over" : "\(Int(max(0, calorieTarget - calories))) left",
                      done: calories > 0 && calories <= calorieTarget, tint: Neka.orange)
+                part("figure.walk", "Mile", String(format: "%.2f / 1 mi", miles),
+                     done: MileADay.isDone(miles), tint: Neka.lavender)
                 Button(action: onLogWater) {
                     Label("Turn up water", systemImage: "dial.medium")
                         .font(.system(size: 12, weight: .semibold))
@@ -761,6 +765,163 @@ struct HomeDialedTodayCard: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Neka.ink)
                 .monospacedDigit()
+        }
+    }
+}
+
+// MARK: - Mile a day
+
+/// The daily mile, walked or run: a little road you travel along as the
+/// distance comes in from Apple Health, a finish flag, your streak, and
+/// the week as a row of medals.
+struct HomeMileCard: View {
+    let miles: Double
+    let week: [Double]
+    let streak: Int
+    let ran: Bool
+
+    @State private var shown: Double = 0
+    @State private var cheer = false
+
+    private var done: Bool { MileADay.isDone(miles) }
+    private var progress: Double { min(1, miles / MileADay.goal) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Mile a day")
+                    .font(Neka.label)
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                if streak > 0 {
+                    Label("\(streak) day\(streak == 1 ? "" : "s")", systemImage: "flame.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Neka.orange)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Neka.orangeSoft))
+                        .scaleEffect(cheer ? 1.12 : 1)
+                }
+            }
+
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(String(format: "%.2f", miles))
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundColor(Neka.ink)
+                    .contentTransition(.numericText(value: miles))
+                Text("/ 1 mi")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+                Spacer()
+                if done {
+                    Image(systemName: ran ? "figure.run" : "figure.walk")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(7)
+                        .background(Circle().fill(Neka.green))
+                        .accessibilityLabel(ran ? "Ran" : "Walked")
+                }
+            }
+
+            road
+
+            Text(MileADay.message(miles: miles, streak: streak, ran: ran))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Neka.inkSecondary)
+
+            weekRow
+        }
+        .padding(16)
+        .nekaCard()
+        .accessibilityElement(children: .combine)
+        .onAppear {
+            withAnimation(.spring(response: 1.0, dampingFraction: 0.8).delay(0.2)) { shown = progress }
+            if done { celebrate() }
+        }
+        .onChange(of: progress) { old, new in
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) { shown = new }
+            if new >= 1, old < 1 { celebrate() }
+        }
+    }
+
+    /// A road with a dashed centre line; you ride the front edge toward a
+    /// finish flag.
+    private var road: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let x = 14 + (w - 28) * shown
+            ZStack(alignment: .leading) {
+                Capsule().fill(Neka.track).frame(height: 16)
+                Capsule()
+                    .fill(LinearGradient(colors: [Neka.green, Neka.sky], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: max(16, x + 8), height: 16)
+                // Lane markings.
+                Path { p in
+                    p.move(to: CGPoint(x: 10, y: 8))
+                    p.addLine(to: CGPoint(x: w - 10, y: 8))
+                }
+                .stroke(.white.opacity(0.7), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [5, 7]))
+                .frame(height: 16)
+
+                Image(systemName: "flag.checkered")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(done ? Neka.green : Neka.inkTertiary)
+                    .offset(x: w - 22, y: -18)
+
+                Image(systemName: ran ? "figure.run" : "figure.walk")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(done ? Neka.green : Neka.ink))
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
+                    .scaleEffect(cheer ? 1.18 : 1)
+                    .offset(x: x - 15)
+            }
+            .frame(height: 30)
+        }
+        .frame(height: 34)
+        .padding(.top, 10)
+    }
+
+    private var weekRow: some View {
+        let symbols = Calendar.current.veryShortWeekdaySymbols
+        let todayIndex = Calendar.current.component(.weekday, from: Date()) - 1
+        return HStack(spacing: 0) {
+            ForEach(Array(week.enumerated()), id: \.offset) { i, m in
+                let dayIndex = (todayIndex - (week.count - 1 - i) + 7 * 2) % 7
+                let isToday = i == week.count - 1
+                VStack(spacing: 5) {
+                    ZStack {
+                        Circle().stroke(Neka.track, lineWidth: 3)
+                        if MileADay.isDone(m) {
+                            Circle().fill(Neka.green)
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .heavy))
+                                .foregroundColor(.white)
+                        } else {
+                            Circle()
+                                .trim(from: 0, to: min(1, m))
+                                .stroke(Neka.sky, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                        }
+                    }
+                    .frame(width: 24, height: 24)
+                    .overlay(Circle().stroke(isToday ? Neka.ink.opacity(0.5) : .clear, lineWidth: 1).padding(-3))
+                    Text(symbols[dayIndex])
+                        .font(.system(size: 10, weight: isToday ? .bold : .medium))
+                        .foregroundColor(isToday ? Neka.ink : Neka.inkTertiary)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(symbols[dayIndex]): \(String(format: "%.1f", m)) miles")
+            }
+        }
+    }
+
+    private func celebrate() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { cheer = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) { cheer = false }
         }
     }
 }

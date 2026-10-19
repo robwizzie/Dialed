@@ -141,7 +141,7 @@ struct HealthBodyPage: View {
                     legend(Neka.green, "Burn \(Int(burn).formatted())")
                 }
             }
-            Text(net <= 0 ? "In a deficit — this is the direction you want." : "In a surplus so far. A walk with Peaches closes ~300 kcal.")
+            Text(net <= 0 ? "In a deficit — this is the direction you want." : "In a surplus so far. An hour-long walk closes ~300 kcal.")
                 .font(.system(size: 12))
                 .foregroundColor(net <= 0 ? Neka.greenText : Neka.orangeText)
 
