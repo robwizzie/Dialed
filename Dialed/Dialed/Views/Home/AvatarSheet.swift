@@ -3,10 +3,12 @@
 //  Dialed
 //
 //  Your avatar, today's mood and what would move it up, the four mood
-//  looks, and "future you" on your goal day.
+//  looks, and "future you" on your goal day. Tap any look to redo it or
+//  draw it from a different photo.
 //
 
 import SwiftUI
+import PhotosUI
 
 struct AvatarSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -21,6 +23,12 @@ struct AvatarSheet: View {
     @State private var hasEvent: Bool
     @State private var eventName: String
     @State private var eventDate: Date
+
+    /// Which look the photo picker is choosing a reference for.
+    private enum PickTarget: Equatable { case look(String), all }
+    @State private var pickTarget: PickTarget?
+    @State private var showPicker = false
+    @State private var pickerItem: PhotosPickerItem?
 
     init(reading: AvatarMood.Reading, projection: WeightChallengeEngine.Projection?, onGoalChanged: @escaping () -> Void = {}) {
         self.reading = reading
@@ -75,7 +83,80 @@ struct AvatarSheet: View {
                 }
             }
             .avatarPlaygroundSheet()
+            .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
+            .onChange(of: pickerItem) { _, item in
+                guard let item, let target = pickTarget else { return }
+                pickerItem = nil
+                Task {
+                    guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+                    switch target {
+                    case .look(let key): await studio.setReference(data, for: key)
+                    case .all:           await studio.setReference(data, for: nil)
+                    }
+                }
+            }
         }
+    }
+
+    // MARK: - Look actions
+
+    private func pick(_ target: PickTarget) {
+        if target == .look(AvatarStudio.futureKey) { saveGoal() }
+        pickTarget = target
+        showPicker = true
+    }
+
+    private func redo(_ key: String) {
+        if key == AvatarStudio.futureKey { saveGoal() }
+        Task { await studio.regenerate(key: key) }
+    }
+
+    /// Redo / different photo / back to profile photo / remove.
+    @ViewBuilder
+    private func lookMenu(_ key: String) -> some View {
+        if studio.canGenerate {
+            Button { redo(key) } label: {
+                Label(studio.images[key] == nil ? "Create this look" : "Redo this look", systemImage: "wand.and.sparkles")
+            }
+            .disabled(studio.referencePhoto(for: key) == nil || studio.inProgress.contains(key))
+        }
+        Button { pick(.look(key)) } label: {
+            Label("Use a different photo…", systemImage: "photo.on.rectangle")
+        }
+        if studio.hasCustomReference(key) {
+            Button { Task { await studio.clearReference(for: key) } } label: {
+                Label("Back to my profile photo", systemImage: "person.crop.circle")
+            }
+        }
+        if studio.images[key] != nil {
+            Divider()
+            Button(role: .destructive) { studio.removeImage(key) } label: {
+                Label("Remove this look", systemImage: "trash")
+            }
+        }
+    }
+
+    /// Small round thumbnail of a look's own reference photo, if it has one.
+    @ViewBuilder
+    private func referenceBadge(_ key: String, size: CGFloat = 28) -> some View {
+        if let ref = studio.references[key] {
+            Image(uiImage: ref)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(Neka.surface, lineWidth: 2))
+                .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+                .accessibilityLabel("Uses its own photo")
+        }
+    }
+
+    private var menuDot: some View {
+        Image(systemName: "ellipsis")
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(Neka.ink)
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(Neka.surface.opacity(0.9)))
     }
 
     // MARK: - Header
@@ -116,6 +197,8 @@ struct AvatarSheet: View {
                     .background(Circle().fill(accent))
                     .overlay(Circle().stroke(Neka.surface, lineWidth: 3))
                     .offset(x: 76, y: 76)
+                referenceBadge(mood.rawValue, size: 40)
+                    .offset(x: -76, y: 76)
             }
             .padding(.top, 8)
 
@@ -129,7 +212,20 @@ struct AvatarSheet: View {
                     .multilineTextAlignment(.center)
             }
 
-            if studio.image(for: mood) == nil {
+            if studio.image(for: mood) != nil {
+                HStack(spacing: 10) {
+                    if studio.canGenerate {
+                        Button { redo(mood.rawValue) } label: {
+                            Label("Redo", systemImage: "wand.and.sparkles")
+                        }
+                        .disabled(studio.inProgress.contains(mood.rawValue))
+                    }
+                    Button { pick(.look(mood.rawValue)) } label: {
+                        Label("Different photo", systemImage: "photo.on.rectangle")
+                    }
+                }
+                .buttonStyle(AvatarChipButtonStyle())
+            } else {
                 if studio.canGenerate {
                     Button {
                         Task { await studio.generate(mood: mood) }
@@ -137,8 +233,13 @@ struct AvatarSheet: View {
                         Label(studio.isEnabled ? "Create this look" : "Create my avatar", systemImage: "wand.and.sparkles")
                     }
                     .buttonStyle(.nekaPrimary)
-                    .disabled(photos.original == nil || studio.inProgress.contains(mood.rawValue))
-                    if photos.original == nil {
+                    .disabled(studio.referencePhoto(for: mood.rawValue) == nil || studio.inProgress.contains(mood.rawValue))
+                    Button { pick(.look(mood.rawValue)) } label: {
+                        Text("Use a different photo for this look")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                    }
+                    if studio.referencePhoto(for: mood.rawValue) == nil {
                         Text("Add a photo of yourself first — tap your picture on Home.")
                             .font(.system(size: 12))
                             .foregroundColor(Neka.inkSecondary)
@@ -228,6 +329,17 @@ struct AvatarSheet: View {
                     moodTile(m)
                 }
             }
+            HStack(alignment: .firstTextBaseline) {
+                Text("Tap a look to redo it or draw it from a different photo.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
+                Spacer(minLength: 8)
+                Button { pick(.all) } label: {
+                    Text("New photo for all")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+            }
         }
         .padding(16)
         .nekaCard()
@@ -236,31 +348,35 @@ struct AvatarSheet: View {
     private func moodTile(_ m: AvatarMood) -> some View {
         let tint = Color(hex: m.accentHex)
         return VStack(spacing: 8) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(tint.opacity(0.12))
-                if let image = studio.image(for: m) {
-                    FocusedImage(image: image)
-                } else if studio.inProgress.contains(m.rawValue) {
-                    ProgressView().tint(tint)
-                } else if studio.canGenerate && photos.original != nil {
-                    Button {
-                        Task { await studio.generate(mood: m) }
-                    } label: {
+            Menu {
+                lookMenu(m.rawValue)
+            } label: {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(tint.opacity(0.12))
+                    if let image = studio.image(for: m) {
+                        FocusedImage(image: image)
+                    } else if studio.inProgress.contains(m.rawValue) {
+                        ProgressView().tint(tint)
+                    } else if studio.canGenerate && studio.referencePhoto(for: m.rawValue) != nil {
                         Label("Create", systemImage: "wand.and.sparkles")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(tint)
+                    } else {
+                        Text(m.emoji).font(.system(size: 40))
                     }
-                } else {
-                    Text(m.emoji).font(.system(size: 40))
                 }
+                .frame(height: 140)
+                .overlay(alignment: .topTrailing) { menuDot.padding(8) }
+                .overlay(alignment: .bottomLeading) { referenceBadge(m.rawValue).padding(8) }
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(m == mood ? tint : Color.clear, lineWidth: 2)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .frame(height: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(m == mood ? tint : Color.clear, lineWidth: 2)
-            )
+            .accessibilityLabel("\(m.title) look. Options.")
             Text("\(m.emoji) \(m.title)")
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(Neka.ink)
@@ -293,18 +409,26 @@ struct AvatarSheet: View {
             }
 
             HStack(alignment: .top, spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Neka.lavenderSoft)
-                    if let image = studio.futureImage {
-                        FocusedImage(image: image)
-                    } else if studio.inProgress.contains(AvatarStudio.futureKey) {
-                        ProgressView().tint(Neka.lavender)
-                    } else {
-                        Image(systemName: "tshirt.fill").font(.system(size: 30)).foregroundColor(Neka.lavender)
+                Menu {
+                    lookMenu(AvatarStudio.futureKey)
+                } label: {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Neka.lavenderSoft)
+                        if let image = studio.futureImage {
+                            FocusedImage(image: image)
+                        } else if studio.inProgress.contains(AvatarStudio.futureKey) {
+                            ProgressView().tint(Neka.lavender)
+                        } else {
+                            Image(systemName: "tshirt.fill").font(.system(size: 30)).foregroundColor(Neka.lavender)
+                        }
                     }
+                    .frame(width: 110, height: 110)
+                    .overlay(alignment: .topTrailing) { menuDot.padding(6) }
+                    .overlay(alignment: .bottomLeading) { referenceBadge(AvatarStudio.futureKey, size: 24).padding(6) }
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 }
-                .frame(width: 110, height: 110)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .accessibilityLabel("Future you look. Options.")
 
                 VStack(alignment: .leading, spacing: 6) {
                     if let p = projection {
@@ -325,7 +449,7 @@ struct AvatarSheet: View {
                             .foregroundColor(Neka.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    if studio.canGenerate && photos.original != nil {
+                    if studio.canGenerate && studio.referencePhoto(for: AvatarStudio.futureKey) != nil {
                         Button {
                             saveGoal()
                             Task { await studio.generateFuture(event: hasEvent ? GoalEvent(name: eventName, date: eventDate) : nil) }
@@ -351,5 +475,19 @@ struct AvatarSheet: View {
             GoalEvent.clear()
         }
         onGoalChanged()
+    }
+}
+
+/// Small outlined capsule button for the avatar's quick actions.
+private struct AvatarChipButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundColor(Neka.ink)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Capsule().fill(Neka.surface))
+            .overlay(Capsule().stroke(Neka.hairline, lineWidth: 1))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

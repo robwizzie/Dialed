@@ -167,6 +167,9 @@ struct NestedNavBar: View {
 
         case .plan, .trends, .settings:
             logMenu
+            Button { router.openHome(.workout) } label: {
+                Label("Workout plan", systemImage: "dumbbell.fill")
+            }
             Menu {
                 Button { router.openHome(.ask) } label: {
                     Label("Ask Dialed", systemImage: "sparkles")
