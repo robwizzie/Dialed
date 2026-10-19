@@ -238,6 +238,8 @@ struct HomeFuelCard: View {
     var onLogMeal: () -> Void
     /// Opens the food log (see and edit everything eaten today).
     var onOpenLog: () -> Void = {}
+    /// "Eating out?" — an order that fits what's left today.
+    var onEatingOut: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -280,6 +282,28 @@ struct HomeFuelCard: View {
             Text(calorieNote)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
+            Button(action: onEatingOut) {
+                HStack(spacing: 10) {
+                    Text("🍽️").font(.system(size: 18))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Eating out?")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Get an order that fits the rest of today")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing)))
+            }
+            .buttonStyle(.dialedScale)
         }
         .padding(16)
         .nekaCard()
