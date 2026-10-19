@@ -18,6 +18,8 @@ struct FoodLogView: View {
     @State private var favorites: [SavedMeal] = SavedMealsManager.load()
     @State private var editing: EditTarget?
     @State private var showAIMeal = false
+    @State private var showScanner = false
+    @State private var scannedDraft: FoodDraft?
     @State private var justLogged: String?
     @AppStorage(HealthWriteBack.defaultsKey) private var writeBack = true
 
@@ -120,6 +122,16 @@ struct FoodLogView: View {
         }
         .sheet(isPresented: $showAIMeal, onDismiss: reload) {
             AIMealSheet().presentationDetents([.large])
+        }
+        .sheet(isPresented: $showScanner, onDismiss: {
+            // Review the scanned food in the usual editor once the scanner is gone.
+            guard var d = scannedDraft else { return }
+            scannedDraft = nil
+            d.time = calendar.isDateInToday(day) ? Date() : (calendar.date(byAdding: .hour, value: 12, to: day) ?? day)
+            editing = .new(d)
+        }) {
+            BarcodeScanSheet { draft in scannedDraft = draft }
+                .presentationDetents([.large])
         }
         .overlay(alignment: .bottom) {
             if let justLogged {
@@ -238,6 +250,16 @@ struct FoodLogView: View {
                         .overlay(Capsule().stroke(Neka.hairline, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                Button { showScanner = true } label: {
+                    Image(systemName: "barcode.viewfinder")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .frame(width: 50, height: 50)
+                        .background(Circle().fill(Neka.surface))
+                        .overlay(Circle().stroke(Neka.hairline, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Scan a barcode")
             }
             if !favorites.isEmpty {
                 chips(title: "Favorites", items: favorites.map(FoodDraft.init), icon: "star.fill")
