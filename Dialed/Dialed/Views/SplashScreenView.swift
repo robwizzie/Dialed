@@ -115,7 +115,6 @@ struct SplashScreenView: View {
     private var dial: some View {
         DialedMark(value: 0.74 * Double(progress))
             .scaleEffect(settled ? 1 : 0.965)
-            .motionTilt(8)
     }
 
     // MARK: - Choreography

@@ -731,7 +731,7 @@ struct HomeDialedTodayCard: View {
                 part("flame.fill", "Calories",
                      calories > calorieTarget ? "\(Int(calories - calorieTarget)) over" : "\(Int(max(0, calorieTarget - calories))) left",
                      done: calories > 0 && calories <= calorieTarget, tint: Neka.orange)
-                part("figure.walk", "Mile", String(format: "%.2f / 1 mi", miles),
+                part("figure.walk", "Mile", String(format: "%.2f / ", miles) + MileADay.format(MileADay.goal),
                      done: MileADay.isDone(miles), tint: Neka.lavender)
                 Button(action: onLogWater) {
                     Label("Turn up water", systemImage: "dial.medium")
@@ -779,17 +779,18 @@ struct HomeMileCard: View {
     let week: [Double]
     let streak: Int
     let ran: Bool
+    var goal: Double = MileADay.goal
 
     @State private var shown: Double = 0
     @State private var cheer = false
 
-    private var done: Bool { MileADay.isDone(miles) }
-    private var progress: Double { min(1, miles / MileADay.goal) }
+    private var done: Bool { MileADay.isDone(miles, goal: goal) }
+    private var progress: Double { min(1, miles / max(0.1, goal)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Mile a day")
+                Text(goal == 1 ? "Mile a day" : "\(MileADay.format(goal)) a day")
                     .font(Neka.label)
                     .foregroundColor(Neka.ink)
                 Spacer()
@@ -809,7 +810,7 @@ struct HomeMileCard: View {
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .foregroundColor(Neka.ink)
                     .contentTransition(.numericText(value: miles))
-                Text("/ 1 mi")
+                Text("/ \(MileADay.format(goal))")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Neka.inkSecondary)
                 Spacer()
@@ -825,7 +826,7 @@ struct HomeMileCard: View {
 
             road
 
-            Text(MileADay.message(miles: miles, streak: streak, ran: ran))
+            Text(MileADay.message(miles: miles, streak: streak, ran: ran, goal: goal))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
 
@@ -893,14 +894,14 @@ struct HomeMileCard: View {
                 VStack(spacing: 5) {
                     ZStack {
                         Circle().stroke(Neka.track, lineWidth: 3)
-                        if MileADay.isDone(m) {
+                        if MileADay.isDone(m, goal: goal) {
                             Circle().fill(Neka.green)
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .heavy))
                                 .foregroundColor(.white)
                         } else {
                             Circle()
-                                .trim(from: 0, to: min(1, m))
+                                .trim(from: 0, to: min(1, m / max(0.1, goal)))
                                 .stroke(Neka.sky, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                                 .rotationEffect(.degrees(-90))
                         }

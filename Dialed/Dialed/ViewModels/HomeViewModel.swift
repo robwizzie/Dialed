@@ -87,6 +87,9 @@ final class HomeViewModel: ObservableObject {
     @Published var milesWeek: [Double] = []
     @Published var mileStreak: Int = 0
     @Published var ranToday = false
+    @Published var mileGoal: Double = 1
+    /// Steps per mile used for step-only days (manual, learned or default).
+    @Published var stepsPerMileInUse: Double = MileSettings.defaultStepsPerMile
     let stepGoal = 10_000
 
     @Published var proteinGrams: Double = 0
@@ -259,16 +262,29 @@ final class HomeViewModel: ObservableObject {
         steps = stepsSeries.last ?? 0
 
         // ---- Mile a day (walked or run)
+        // Learn your stride from days Health has both steps and distance,
+        // so step-only days (Pixel Watch) are estimated the way you walk.
+        var mileSettings = MileSettings.load()
+        let learned = MileADay.learnStride(hkMilesByDay.compactMap { day, miles in
+            hkStepsByDay[day].map { (steps: $0, miles: miles) }
+        })
+        if let learned, learned != mileSettings.learnedStepsPerMile {
+            mileSettings.learnedStepsPerMile = learned
+            mileSettings.save()
+        }
+        stepsPerMileInUse = mileSettings.stepsPerMile
         var milesByDay: [Date: Double] = [:]
         for offset in 0..<60 {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
             let log = dayLogs.first { calendar.isDate($0.date, inSameDayAs: day) }
             let daySteps = Int(max(hkStepsByDay[day] ?? 0, watchSteps[day] ?? 0, Double(log?.steps ?? 0)))
-            milesByDay[day] = MileADay.miles(distance: hkMilesByDay[day], steps: daySteps)
+            milesByDay[day] = MileADay.miles(distance: hkMilesByDay[day], steps: daySteps,
+                                             stepsPerMile: mileSettings.stepsPerMile)
         }
         milesToday = milesByDay[today] ?? 0
         milesWeek = lastDays(7, today: today).map { milesByDay[$0] ?? 0 }
-        mileStreak = MileADay.streak(milesByDay: milesByDay, today: now, calendar: calendar)
+        mileGoal = mileSettings.goalMiles
+        mileStreak = MileADay.streak(milesByDay: milesByDay, today: now, goal: mileGoal, calendar: calendar)
         ranToday = workoutsToday.contains { $0.workoutType == .running }
 
         // ---- Fuel

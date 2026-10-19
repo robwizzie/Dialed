@@ -4,34 +4,84 @@
 //
 //  The daily mile: walked or run, every day. Distance comes from Apple
 //  Health's walking + running distance; when that's missing (e.g. the
-//  steps only came from the Pixel Watch) it's estimated from steps.
+//  steps only came from the Pixel Watch) it's estimated from steps using
+//  your own stride — learned from days where Health has both, or set by
+//  hand in Settings → Mile a day. The daily goal is adjustable there too.
 //  Pure Foundation, tested.
 //
 
 import Foundation
 
-enum MileADay {
-    static let goal = 1.0
-    /// Average steps per mile at a walking stride.
-    static let stepsPerMile = 2_100.0
+/// How the daily mile is measured. Lives in the App Group so the widgets
+/// score it the same way.
+struct MileSettings: Codable, Equatable {
+    /// Daily distance goal, in miles.
+    var goalMiles: Double = 1
+    /// Set by hand; wins over the learned stride.
+    var manualStepsPerMile: Double?
+    /// Learned from your Apple Health history (steps ÷ distance).
+    var learnedStepsPerMile: Double?
 
-    /// Today's miles: measured distance if there is any, else estimated
-    /// from steps.
-    static func miles(distance: Double?, steps: Int) -> Double {
-        if let distance, distance > 0.01 { return distance }
-        return Double(max(0, steps)) / stepsPerMile
+    static let defaultStepsPerMile = 2_100.0
+    static let didChange = Notification.Name("MileSettings.didChange")
+    private static let key = "mile.settings.v1"
+    private static var store: UserDefaults {
+        UserDefaults(suiteName: WidgetBridge.appGroupID) ?? .standard
     }
 
-    static func isDone(_ miles: Double) -> Bool { miles >= goal - 0.005 }
+    var stepsPerMile: Double { manualStepsPerMile ?? learnedStepsPerMile ?? Self.defaultStepsPerMile }
 
-    /// Days in a row with a mile done, counting back from today. Today
+    static func load() -> MileSettings {
+        guard let data = store.data(forKey: key),
+              let s = try? JSONDecoder().decode(MileSettings.self, from: data) else { return MileSettings() }
+        return s
+    }
+
+    func save() {
+        guard let data = try? JSONEncoder().encode(self) else { return }
+        Self.store.set(data, forKey: Self.key)
+        NotificationCenter.default.post(name: Self.didChange, object: nil)
+    }
+}
+
+enum MileADay {
+    /// Today's goal in miles (1 unless changed in Settings).
+    static var goal: Double { MileSettings.load().goalMiles }
+
+    /// Today's miles: measured distance if there is any, else estimated
+    /// from steps with your stride.
+    static func miles(distance: Double?, steps: Int,
+                      stepsPerMile: Double = MileSettings.load().stepsPerMile) -> Double {
+        if let distance, distance > 0.01 { return distance }
+        return Double(max(0, steps)) / max(500, stepsPerMile)
+    }
+
+    static func isDone(_ miles: Double, goal: Double = MileADay.goal) -> Bool { miles >= goal - 0.005 }
+
+    /// Your steps per mile from days Apple Health has both a real walk's
+    /// distance and its steps: the median, so one odd day doesn't skew it.
+    /// Nil until there are 3 usable days.
+    static func learnStride(_ days: [(steps: Double, miles: Double)]) -> Double? {
+        let ratios = days
+            .filter { $0.miles >= 0.5 && $0.steps >= 1_000 }
+            .map { $0.steps / $0.miles }
+            .filter { (1_200...3_500).contains($0) }
+            .sorted()
+        guard ratios.count >= 3 else { return nil }
+        let mid = ratios.count / 2
+        let median = ratios.count % 2 == 1 ? ratios[mid] : (ratios[mid - 1] + ratios[mid]) / 2
+        return (median / 10).rounded() * 10
+    }
+
+    /// Days in a row with the goal done, counting back from today. Today
     /// only breaks the streak once it's over, so a morning with 0.2 mi
     /// still shows yesterday's streak.
-    static func streak(milesByDay: [Date: Double], today: Date, calendar: Calendar = .current) -> Int {
+    static func streak(milesByDay: [Date: Double], today: Date, goal: Double = MileADay.goal,
+                       calendar: Calendar = .current) -> Int {
         let start = calendar.startOfDay(for: today)
-        var day = isDone(milesByDay[start] ?? 0) ? start : (calendar.date(byAdding: .day, value: -1, to: start) ?? start)
+        var day = isDone(milesByDay[start] ?? 0, goal: goal) ? start : (calendar.date(byAdding: .day, value: -1, to: start) ?? start)
         var count = 0
-        while isDone(milesByDay[day] ?? 0) {
+        while isDone(milesByDay[day] ?? 0, goal: goal) {
             count += 1
             guard let prev = calendar.date(byAdding: .day, value: -1, to: day) else { break }
             day = prev
@@ -39,17 +89,27 @@ enum MileADay {
         return count
     }
 
+    /// "1 mi", "1.5 mi".
+    static func format(_ miles: Double) -> String {
+        let s = miles == miles.rounded() ? String(format: "%.0f", miles) : String(format: "%g", (miles * 100).rounded() / 100)
+        return "\(s) mi"
+    }
+
     /// A short, upbeat line for where you are today.
-    static func message(miles: Double, streak: Int, ran: Bool) -> String {
-        if isDone(miles) {
+    static func message(miles: Double, streak: Int, ran: Bool, goal: Double = MileADay.goal) -> String {
+        if isDone(miles, goal: goal) {
             let how = ran ? "Ran it" : "Walked it"
-            if miles >= 3 { return "\(how) — \(String(format: "%.1f", miles)) miles. Overachiever." }
-            return streak > 1 ? "\(how). \(streak) days in a row 🔥" : "\(how). Mile done ✓"
+            if miles >= max(3, goal * 2) { return "\(how) — \(String(format: "%.1f", miles)) miles. Overachiever." }
+            return streak > 1 ? "\(how). \(streak) days in a row 🔥" : "\(how). Goal done ✓"
         }
         let left = goal - miles
-        if miles < 0.05 { return streak > 0 ? "Keep the \(streak)-day streak alive — 20 easy minutes does it." : "One mile today. About 20 minutes of walking." }
-        if left <= 0.25 { return "\(String(format: "%.2f", left)) mi to go — a lap of the block." }
         let minutes = Int((left * 20).rounded())
+        if miles < 0.05 {
+            return streak > 0
+                ? "Keep the \(streak)-day streak alive — about \(minutes) easy minutes does it."
+                : "\(format(goal)) today. About \(minutes) minutes of walking."
+        }
+        if left <= 0.25 { return "\(String(format: "%.2f", left)) mi to go — a lap of the block." }
         return "\(String(format: "%.2f", left)) mi to go — about \(minutes) min of walking."
     }
 }
