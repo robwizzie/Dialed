@@ -1,0 +1,88 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.95000,0.95000,0.96500,1.00000"
+  },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": {
+        "automatic-gradient": "extended-srgb:0.09000,0.09000,0.10000,1.00000"
+      }
+    }
+  ],
+  "groups": [
+    {
+      "name": "Knob",
+      "layers": [
+        {
+          "image-name": "pointer.svg",
+          "name": "pointer",
+          "glass": false
+        },
+        {
+          "image-name": "knob.svg",
+          "name": "knob",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.6
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.35
+      },
+      "specular": true
+    },
+    {
+      "name": "Bead",
+      "layers": [
+        {
+          "image-name": "bead.svg",
+          "name": "bead",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.25
+      },
+      "specular": true
+    },
+    {
+      "name": "Scale",
+      "layers": [
+        {
+          "image-name": "scale.svg",
+          "name": "scale",
+          "glass": false
+        },
+        {
+          "image-name": "ring.svg",
+          "name": "ring",
+          "glass": true
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.4
+      },
+      "translucency": {
+        "enabled": true,
+        "value": 0.2
+      },
+      "specular": true
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}
