@@ -65,6 +65,10 @@ struct SettingsView: View {
                         row("bell.fill", "Notifications",
                             settings.notificationsEnabled ? "On" : "Off",
                             tint: Neka.lavender, fill: Neka.lavenderSoft) { legacy(NotificationsSettingsView()) }
+                        divider
+                        row("bell.badge.fill", "Reminders",
+                            ReminderSettings.load().enabled ? "Only when you're behind" : "Off",
+                            tint: Neka.sky, fill: Neka.skySoft) { RemindersSettingsView() }
                     }
 
                     group("Challenge") {
