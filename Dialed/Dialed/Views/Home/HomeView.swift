@@ -27,6 +27,8 @@ struct HomeView: View {
     @StateObject private var stateModel = NowViewModel()
     @ObservedObject private var photos = ProfilePhotoStore.shared
     @StateObject private var briefModel = AIBriefModel()
+    @ObservedObject private var studio = AvatarStudio.shared
+    @AppStorage("avatar.useOnHome") private var useAvatarOnHome = true
     @State private var aiAvailability: AIAvailability = DialedAI.availability
     @State private var askedForHealthAccess = false
 
@@ -38,7 +40,7 @@ struct HomeView: View {
     @EnvironmentObject private var router: AppRouter
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, weighIn, voice, profile, challengeSetup, ask
+        case water, meal, weighIn, voice, profile, challengeSetup, ask, avatar
         var id: String { rawValue }
     }
 
@@ -57,6 +59,12 @@ struct HomeView: View {
                     .onTapGesture {
                         if viewModel.challenge != nil { onOpenChallenge() }
                     }
+                    HomeFutureYouCard(
+                        event: viewModel.goalEvent,
+                        projection: viewModel.goalProjection,
+                        image: studio.futureImage ?? photos.thumbnail,
+                        onOpen: { sheet = .avatar }
+                    )
                     if aiAvailability != .unsupportedDevice {
                         AIBriefCard(
                             model: briefModel,
@@ -83,6 +91,7 @@ struct HomeView: View {
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
+            .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
             .task {
                 await requestHealthAccessIfNeeded()
@@ -91,6 +100,9 @@ struct HomeView: View {
             .refreshable { await refreshAll(force: true) }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await refreshAll(force: true) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: GoalEvent.didChangeNotification)) { _ in
+                viewModel.refreshGoal()
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
                 Task { await refreshAll(force: true) }
@@ -130,6 +142,10 @@ struct HomeView: View {
         await stateModel.refresh(context: modelContext)
         aiAvailability = DialedAI.availability
         await briefModel.refreshIfStale(viewModel.snapshot)
+        // Once avatars are on, quietly fill in today's mood look.
+        if let mood = viewModel.moodReading?.mood {
+            await studio.ensure(mood: mood)
+        }
     }
 
     /// New data types (heart rate, SpO₂, breathing, food) need a fresh
@@ -222,8 +238,8 @@ struct HomeView: View {
 
     private var hero: some View {
         HomeHeroView(
-            image: photos.heroImage,
-            isCutout: photos.hasCutout,
+            image: heroAvatar ?? photos.heroImage,
+            isCutout: heroAvatar == nil && photos.hasCutout,
             isProcessing: photos.isProcessing,
             photoScale: photos.heroScale,
             photoOffsetY: photos.heroOffsetY,
@@ -234,8 +250,17 @@ struct HomeView: View {
             weight: viewModel.latestWeight?.pounds,
             weightNote: weightNote,
             caption: heroCaption,
-            onTapPhoto: { sheet = .profile }
+            onTapPhoto: { sheet = heroAvatar != nil ? .avatar : .profile },
+            mood: viewModel.moodReading?.mood,
+            moodScore: viewModel.moodReading?.score,
+            onTapMood: { sheet = .avatar }
         )
+    }
+
+    /// Today's mood avatar, when you've made one and want it on Home.
+    private var heroAvatar: UIImage? {
+        guard useAvatarOnHome, let mood = viewModel.moodReading?.mood else { return nil }
+        return studio.image(for: mood)
     }
 
     private var weightNote: String? {
@@ -495,6 +520,13 @@ struct HomeView: View {
         case .ask:
             AskDialedSheet(snapshot: viewModel.snapshot)
                 .presentationDetents([.large])
+        case .avatar:
+            AvatarSheet(
+                reading: viewModel.moodReading ?? AvatarMood.read(viewModel.snapshot),
+                projection: viewModel.goalProjection,
+                onGoalChanged: { viewModel.refreshGoal() }
+            )
+            .presentationDetents([.large])
         case .voice:
             VoiceCaptureSheet()
                 .environment(\.colorScheme, .dark)

@@ -58,3 +58,18 @@ final class CoachEngineTests: XCTestCase {
         XCTAssertEqual(insights.map(\.priority), insights.map(\.priority).sorted(by: >))
     }
 }
+
+extension CoachEngineTests {
+    func testLateNightSuggestionsStayRealistic() {
+        var inputs = CoachEngine.Inputs()
+        inputs.now = at(hour: 21)
+        inputs.waterOz = 2
+        inputs.waterTargetOz = 87
+        inputs.steps = 4_900
+        let insights = CoachEngine.insights(inputs, calendar: calendar, limit: 10)
+        let water = insights.first { $0.id == "water" }
+        XCTAssertEqual(water?.title, "Get 24 oz in before bed")
+        let steps = insights.first { $0.id == "steps" }
+        XCTAssertEqual(steps?.title, "Take a 20-min walk")
+    }
+}
