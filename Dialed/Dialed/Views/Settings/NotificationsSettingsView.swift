@@ -42,7 +42,7 @@ struct NotificationsSettingsView: View {
                             }
                         }
                         .font(.subheadline.bold())
-                        .foregroundColor(.blue)
+                        .foregroundColor(Neka.sky)
                     }
                 }
                 .padding(.vertical, 4)
@@ -55,10 +55,10 @@ struct NotificationsSettingsView: View {
             }
             .listRowBackground(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
+                    .fill(Neka.surface)
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                            .stroke(Neka.hairline, lineWidth: 0.5)
                     )
             )
 
@@ -105,10 +105,10 @@ struct NotificationsSettingsView: View {
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial)
+                        .fill(Neka.surface)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
                         )
                 )
 
@@ -207,10 +207,10 @@ struct NotificationsSettingsView: View {
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial)
+                        .fill(Neka.surface)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
                         )
                 )
 
@@ -319,10 +319,10 @@ struct NotificationsSettingsView: View {
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial)
+                        .fill(Neka.surface)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
                         )
                 )
 
@@ -366,16 +366,16 @@ struct NotificationsSettingsView: View {
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(.ultraThinMaterial)
+                        .fill(Neka.surface)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
                         )
                 )
             }
         }
         .scrollContentBackground(.hidden)
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .alert("Notification Permission Denied", isPresented: $showPermissionAlert) {
