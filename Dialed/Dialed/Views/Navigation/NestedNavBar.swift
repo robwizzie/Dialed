@@ -47,12 +47,7 @@ struct NestedNavBar: View {
         .padding(6)
         // One contained dock, so the bar reads as its own surface instead of
         // loose circles floating over content.
-        .background(
-            Capsule()
-                .fill(.regularMaterial)
-                .overlay(Capsule().stroke(Neka.hairline, lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-        )
+        .dockGlass()
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 6)
@@ -259,6 +254,26 @@ extension AppTab {
         case .plan:      return [Color(hex: "9FD3F7"), Neka.sky]
         case .trends:    return [Color(hex: "C9B3F5"), Neka.lavender]
         case .settings:  return [Color(hex: "B9BCC4"), Color(hex: "7C8089")]
+        }
+    }
+}
+
+private extension View {
+    /// Liquid Glass on iOS 26 (the same glass as the app icon's knob);
+    /// frosted material with a hairline before that.
+    @ViewBuilder
+    func dockGlass() -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .glassEffect(.regular.interactive(), in: Capsule())
+                .shadow(color: .black.opacity(0.08), radius: 10, y: 4)
+        } else {
+            self.background(
+                Capsule()
+                    .fill(.regularMaterial)
+                    .overlay(Capsule().stroke(Neka.hairline, lineWidth: 0.5))
+                    .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
+            )
         }
     }
 }

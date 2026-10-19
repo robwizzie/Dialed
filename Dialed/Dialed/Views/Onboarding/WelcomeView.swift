@@ -14,85 +14,14 @@ struct WelcomeView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // App icon with liquid glass effect
-            ZStack {
-                // Outer glow
-                Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [AppColors.primary.opacity(0.3), AppColors.primary.opacity(0)],
-                            center: .center,
-                            startRadius: 50,
-                            endRadius: 80
-                        )
-                    )
-                    .frame(width: 160, height: 160)
-                    .blur(radius: 10)
+            // The Dialed mark — same dial as the app icon.
+            DialedMark()
+                .frame(width: 148, height: 148)
+                .padding(.bottom, 32)
 
-                // Glass container
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 120, height: 120)
-                    .overlay(
-                        Circle()
-                            .stroke(.white.opacity(0.1), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
-                    .shadow(color: AppColors.primary.opacity(0.2), radius: 20, x: 0, y: 10)
-
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            colors: [.white.opacity(0.05), .white.opacity(0.02)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 8
-                    )
-                    .frame(width: 100, height: 100)
-
-                Circle()
-                    .trim(from: 0, to: 0.75)
-                    .stroke(
-                        AngularGradient(
-                            gradient: Gradient(colors: [
-                                AppColors.primary.opacity(0.8),
-                                AppColors.primary,
-                                AppColors.primary.opacity(0.9),
-                                AppColors.primary
-                            ]),
-                            center: .center,
-                            startAngle: .degrees(-90),
-                            endAngle: .degrees(270)
-                        ),
-                        style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                    )
-                    .frame(width: 100, height: 100)
-                    .rotationEffect(.degrees(-90))
-                    .shadow(color: AppColors.primary.opacity(0.5), radius: 8, x: 0, y: 0)
-
-                Text("100")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [.primary, .primary.opacity(0.8)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-            }
-            .padding(.bottom, 40)
-
-            // App name
-            Text("Dialed")
-                .font(.system(size: 56, weight: .bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.primary, .primary.opacity(0.8)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
+            (Text("Dialed").foregroundColor(Neka.ink) + Text(".").foregroundColor(Neka.green))
+                .font(Neka.display(56, weight: .bold))
+                .tracking(-1.5)
 
             // Tagline
             Text("Your Automated Fitness OS")
