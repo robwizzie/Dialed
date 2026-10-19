@@ -47,9 +47,13 @@ struct WidgetSnapshot: Codable, Equatable {
     var waterLeftOz: Double { max(0, waterTargetOz - waterOz) }
     var proteinLeft: Double { max(0, proteinTarget - protein) }
     var caloriesLeft: Double { calorieTarget - calories }
-    var dialedScore: Int {
+    var dialedScore: Int { dialedScore(miles: nil) }
+
+    /// The Dialed score, with today's mile when Home has published it.
+    func dialedScore(miles: Double?) -> Int {
         DialedScore.compute(waterOz: waterOz, waterTargetOz: waterTargetOz, protein: protein,
-                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget)
+                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget,
+                            miles: miles)
     }
 
     /// Shown before the app has written anything (and in the gallery).
@@ -173,6 +177,9 @@ struct WidgetInsights: Codable, Equatable {
     var challenge: Challenge?
     var goal: Goal?
     var updatedAt: Date
+    /// The daily mile (walked or run). Optional so older insights decode.
+    var miles: Double? = nil
+    var mileStreak: Int? = nil
 
     var stepProgress: Double { stepGoal > 0 ? min(1, Double(steps) / Double(stepGoal)) : 0 }
 
@@ -208,7 +215,8 @@ struct WidgetInsights: Codable, Equatable {
             tagline: "Solid day. Keep stacking these.", accentHex: "4CB868",
             parts: [
                 .init(name: "Water", points: 15, maxPoints: 20),
-                .init(name: "Steps", points: 14, maxPoints: 20),
+                .init(name: "Steps", points: 7, maxPoints: 10),
+                .init(name: "Mile", points: 7, maxPoints: 10),
                 .init(name: "Protein", points: 13, maxPoints: 20),
                 .init(name: "Calories", points: 15, maxPoints: 15),
                 .init(name: "Sleep", points: 15, maxPoints: 15),

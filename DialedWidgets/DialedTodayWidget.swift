@@ -29,6 +29,8 @@ struct TodayWidgetView: View {
     @Environment(\.colorScheme) private var scheme
 
     private var s: WidgetSnapshot { entry.today }
+    /// The Dialed score, including today's mile once Home has published it.
+    private var dialed: Int { s.dialedScore(miles: entry.insights?.miles) }
     private var score: WidgetInsights.Score? { entry.insights?.score }
 
     var body: some View {
@@ -204,11 +206,11 @@ struct TodayWidgetView: View {
 
     /// Today's Dialed score on the same dial as the app icon and the Home card.
     private func dial(size: CGFloat) -> some View {
-        DialGauge(value: Double(s.dialedScore) / 100, label: "\(s.dialedScore)",
+        DialGauge(value: Double(dialed) / 100, label: "\(dialed)",
                   caption: size >= 80 ? "dialed" : nil, dark: scheme == .dark)
             .frame(width: size, height: size)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Dialed score \(s.dialedScore)")
+            .accessibilityLabel("Dialed score \(dialed)")
     }
 
     private func legend(_ tint: Color, _ value: String, _ unit: String) -> some View {
@@ -315,7 +317,7 @@ struct TodayWidgetView: View {
                 Image(systemName: "drop.fill")
                 Text("\(Fmt.int(s.waterOz))/\(Fmt.int(s.waterTargetOz)) oz")
                 Spacer(minLength: 2)
-                Label("\(s.dialedScore)", systemImage: "gauge.with.dots.needle.67percent")
+                Label("\(dialed)", systemImage: "gauge.with.dots.needle.67percent")
             }
             .font(.system(size: 13, weight: .semibold))
             .widgetAccentable()

@@ -2,7 +2,7 @@
 //  WorkoutPlanView.swift
 //  Dialed
 //
-//  The basement + Peaches plan, day by day: this week's strip, the
+//  The basement plan, day by day: this week's strip, the
 //  selected day's session with a "done" check, and the how-to sections.
 //  Open it from Home (Today's workout card or the Today menu → Go to).
 //
@@ -246,7 +246,7 @@ struct WorkoutPlanView: View {
             }
 
             if let walk = s.walk {
-                Label(walk, systemImage: "pawprint.fill")
+                Label(walk, systemImage: "figure.walk")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(Neka.ink)
                     .padding(10)
@@ -315,11 +315,11 @@ struct WorkoutPlanView: View {
                 .font(Neka.title)
                 .foregroundColor(Neka.ink)
             guideItem("calendar", "The week",
-                      "Mon Strength A · Tue Bike · Wed Strength B · Thu long walk/run · Fri Circuit C · Sat Bike + long walk · Sun rest. 10,000+ steps every day.")
+                      "Mon Strength A · Tue Bike · Wed Strength B · Thu long walk/run · Fri Circuit C · Sat Bike + long walk · Sun rest. A mile walked or run every day.")
             guideItem("bicycle", "Bike intervals",
                       "Weeks 1–2: 8 × (30 s hard / 90 s easy). Weeks 3–4: 10 × (40 s hard / 80 s easy). 5 min easy either side.")
-            guideItem("pawprint.fill", "Peaches",
-                      "Week 1 brisk walks only. From week 2, Thursdays are 2 min jog / 3 min walk × 6–8. Build her up too, skip hot pavement, check with the vet if unsure.")
+            guideItem("figure.walk", "Mile a day",
+                      "Walk or run at least a mile every single day — Dialed counts it from Apple Health. Week 1 brisk walks only; from week 2, Thursdays are 2 min jog / 3 min walk × 6–8.")
             guideItem("fork.knife", "Food & recovery",
                       "500–750 kcal/day deficit (never under 1,500), ~190 g protein, 120 oz water, 7.5+ h sleep, no alcohol until the day.")
             guideItem("sparkles", "Event week",
