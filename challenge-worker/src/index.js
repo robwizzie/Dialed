@@ -11,6 +11,8 @@
 //   PUT    /api/challenges/:id/weighins       upsert your own weigh-ins
 //   DELETE /api/challenges/:id/weighins/:date
 //   POST   /api/challenges/:id/messages       trash talk (≤ 280 chars)
+//   PUT    /api/challenges/:id/stats          your own stats card (goal, steps, workouts…)
+//   POST   /api/challenges/:id/scale?t=…      automatic weigh-in from a phone automation
 //   GET    /c/:id                             the friend's page
 
 import { page } from "./page.js";
@@ -42,9 +44,11 @@ async function sha256(text) {
 }
 
 /** "owner" | "friend" | null for the bearer token on this challenge. */
-async function roleFor(request, challenge) {
+async function roleFor(request, challenge, allowQueryToken = false) {
   const auth = request.headers.get("authorization") || "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  let token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  // Phone automations (Apple Shortcuts) are simplest with the token in the URL.
+  if (!token && allowQueryToken) token = new URL(request.url).searchParams.get("t") || "";
   if (!token) return null;
   const hash = await sha256(token);
   if (hash === challenge.owner_token_hash) return "owner";
@@ -98,12 +102,78 @@ async function create(request, env, url) {
 }
 
 async function get(env, c, role) {
-  const [w, m] = await Promise.all([
-    env.DB.prepare("SELECT role, date, pounds FROM weighins WHERE challenge_id = ? ORDER BY date").bind(c.id).all(),
+  const [w, m, st] = await Promise.all([
+    env.DB.prepare("SELECT role, date, pounds, source, updated_at AS updatedAt FROM weighins WHERE challenge_id = ? ORDER BY date").bind(c.id).all(),
     env.DB.prepare("SELECT id, role, text, created_at AS createdAt FROM messages WHERE challenge_id = ? ORDER BY id DESC LIMIT 50")
       .bind(c.id).all(),
+    env.DB.prepare("SELECT role, json, updated_at AS updatedAt FROM stats WHERE challenge_id = ?").bind(c.id).all(),
   ]);
-  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse() });
+  const stats = {};
+  for (const row of st.results) {
+    try { stats[row.role] = { ...JSON.parse(row.json), updatedAt: row.updatedAt }; } catch {}
+  }
+  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse(), stats });
+}
+
+/** Today's date where the request came from (Cloudflare knows the caller's timezone). */
+function localToday(request) {
+  const tz = request.cf?.timezone || "America/New_York";
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  } catch {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+/** "185.2", 185.2, "185.2 lb", "84 kg" → pounds, or null. */
+function parseWeight(value, unit) {
+  const text = String(value ?? "").trim().toLowerCase();
+  const n = parseFloat(text.replace(",", "."));
+  if (!isFinite(n)) return null;
+  const kg = /kg/.test(text) || String(unit || "").toLowerCase().startsWith("kg");
+  const pounds = kg ? n * 2.2046226 : n;
+  return isWeight(pounds) ? Math.round(pounds * 10) / 10 : null;
+}
+
+async function upsertStats(env, c, role, patch) {
+  const row = await env.DB.prepare("SELECT json FROM stats WHERE challenge_id = ? AND role = ?").bind(c.id, role).first();
+  let current = {};
+  try { current = row ? JSON.parse(row.json) : {}; } catch {}
+  const next = JSON.stringify({ ...current, ...patch }).slice(0, 4000);
+  await env.DB.prepare(
+    `INSERT INTO stats (challenge_id, role, json, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT (challenge_id, role) DO UPDATE SET json = excluded.json, updated_at = excluded.updated_at`
+  ).bind(c.id, role, next, new Date().toISOString()).run();
+}
+
+async function putStats(request, env, c, role) {
+  const b = await readBody(request);
+  if (!b || typeof b !== "object" || Array.isArray(b)) return fail(400, "expected an object");
+  // Small, flat, numbers/strings only.
+  const clean = {};
+  for (const [k, v] of Object.entries(b).slice(0, 30)) {
+    if (typeof v === "number" && isFinite(v)) clean[k.slice(0, 40)] = v;
+    else if (typeof v === "string") clean[k.slice(0, 40)] = v.slice(0, 120);
+    else if (typeof v === "boolean") clean[k.slice(0, 40)] = v;
+  }
+  await upsertStats(env, c, role, clean);
+  return get(env, c, role);
+}
+
+/** One call from a phone automation: { weight, unit?, steps?, date? }. */
+async function scale(request, env, c, role) {
+  let b = await readBody(request);
+  if (b === null) b = { weight: new URL(request.url).searchParams.get("weight") };
+  const pounds = parseWeight(b.weight ?? b.Weight ?? b.value, b.unit);
+  const date = isDate(b.date) ? b.date : localToday(request);
+  const steps = parseInt(b.steps, 10);
+  if (isFinite(steps) && steps >= 0 && steps < 200000) await upsertStats(env, c, role, { stepsToday: steps, stepsDate: date });
+  if (pounds === null) return json({ ok: true, saved: false, note: "No weight today yet — nothing to save." });
+  await env.DB.prepare(
+    `INSERT INTO weighins (challenge_id, role, date, pounds, updated_at, source) VALUES (?, ?, ?, ?, ?, 'scale')
+     ON CONFLICT (challenge_id, role, date) DO UPDATE SET pounds = excluded.pounds, updated_at = excluded.updated_at, source = 'scale'`
+  ).bind(c.id, role, date, pounds, new Date().toISOString()).run();
+  return json({ ok: true, saved: true, date, pounds });
 }
 
 async function patch(request, env, c, role) {
@@ -128,13 +198,14 @@ async function putWeighins(request, env, c, role) {
   const list = Array.isArray(b?.weighins) ? b.weighins.slice(0, 120) : null;
   if (!list) return fail(400, "expected { weighins: [{ date, pounds }] }");
   const now = new Date().toISOString();
+  const source = ["manual", "app", "scale"].includes(b.source) ? b.source : "manual";
   const stmts = list
     .filter((w) => isDate(w.date) && isWeight(w.pounds))
     .map((w) =>
       env.DB.prepare(
-        `INSERT INTO weighins (challenge_id, role, date, pounds, updated_at) VALUES (?, ?, ?, ?, ?)
-         ON CONFLICT (challenge_id, role, date) DO UPDATE SET pounds = excluded.pounds, updated_at = excluded.updated_at`
-      ).bind(c.id, role, w.date, Math.round(w.pounds * 10) / 10, now)
+        `INSERT INTO weighins (challenge_id, role, date, pounds, updated_at, source) VALUES (?, ?, ?, ?, ?, ?)
+         ON CONFLICT (challenge_id, role, date) DO UPDATE SET pounds = excluded.pounds, updated_at = excluded.updated_at, source = excluded.source`
+      ).bind(c.id, role, w.date, Math.round(w.pounds * 10) / 10, now, source)
     );
   if (stmts.length) await env.DB.batch(stmts);
   return get(env, c, role);
@@ -169,12 +240,12 @@ export default {
 
     if (url.pathname === "/api/challenges" && request.method === "POST") return create(request, env, url);
 
-    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages)?\/?$/);
+    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale)?\/?$/);
     if (!m) return url.pathname === "/" ? new Response("Dialed challenge server is running.") : fail(404, "not found");
 
     const c = await loadChallenge(env, m[1]);
     if (!c) return fail(404, "no such challenge");
-    const role = await roleFor(request, c);
+    const role = await roleFor(request, c, m[2] === "/scale");
     if (!role) return fail(401, "bad token");
 
     const sub = m[2] || "";
@@ -183,6 +254,8 @@ export default {
     if (sub === "/weighins" && request.method === "PUT") return putWeighins(request, env, c, role);
     if (sub.startsWith("/weighins/") && request.method === "DELETE") return deleteWeighin(env, c, role, m[3]);
     if (sub === "/messages" && request.method === "POST") return postMessage(request, env, c, role);
+    if (sub === "/stats" && request.method === "PUT") return putStats(request, env, c, role);
+    if (sub === "/scale" && (request.method === "POST" || request.method === "GET")) return scale(request, env, c, role);
     return fail(405, "method not allowed");
   },
 };
