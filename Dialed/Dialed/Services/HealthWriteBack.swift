@@ -69,8 +69,8 @@ enum HealthWriteBack {
     /// that went to zero / empty are removed from Health.
     static func sync(_ event: ContextEvent) {
         guard isEnabled, HKHealthStore.isHealthDataAvailable() else { return }
-        let parts = parts(of: event)
-        guard !parts.isEmpty else { return }
+        let nutrients = Self.parts(of: event)
+        guard !nutrients.isEmpty else { return }
 
         let id = event.id
         let time = event.timestamp
@@ -80,7 +80,7 @@ enum HealthWriteBack {
 
         var samples: [HKObject] = []
         var stale: [(HKQuantityTypeIdentifier, String)] = []
-        for part in parts {
+        for part in nutrients {
             guard let type = HKQuantityType.quantityType(forIdentifier: part.identifier),
                   store.authorizationStatus(for: type) == .sharingAuthorized else { continue }
             guard let amount = part.amount, amount > 0 else {
