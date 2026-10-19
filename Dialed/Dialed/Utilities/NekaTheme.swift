@@ -136,6 +136,16 @@ extension View {
         )
     }
 
+    /// Solid band behind the status bar so scrolled content doesn't run
+    /// into the clock and battery on screens with a hidden nav bar.
+    func nekaStatusBarScrim() -> some View {
+        safeAreaInset(edge: .top, spacing: 0) {
+            Color.clear
+                .frame(height: 0)
+                .background(Neka.paper.opacity(0.96))
+        }
+    }
+
     /// Paper background with two faint radial glows so the page isn't flat.
     func nekaPageBackground() -> some View {
         background(

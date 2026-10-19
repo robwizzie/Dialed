@@ -100,6 +100,7 @@ struct SettingsView: View {
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
+            .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
             .onAppear(perform: reload)
             .sheet(item: $sheet, onDismiss: reload) { sheet in

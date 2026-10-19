@@ -18,8 +18,9 @@ struct NestedNavBar: View {
     @ObservedObject private var photos = ProfilePhotoStore.shared
     @Namespace private var pillSpace
 
-    /// Height of the bar itself; tabs reserve this much space at the bottom.
-    static let height: CGFloat = 68
+    /// Height of the docked bar; tabs reserve exactly this much at the
+    /// bottom so nothing ever scrolls underneath it.
+    static let height: CGFloat = 70
 
     private let tabs: [AppTab] = [.home, .challenge, .plan, .trends, .settings]
 
@@ -54,8 +55,31 @@ struct NestedNavBar: View {
                 .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
         )
         .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+        .frame(height: Self.height)
+        // Docked, not floating: an opaque strip in the page color runs from
+        // the bar to the bottom edge, with a short fade above it, so page
+        // content never shows through or sits behind the bar.
+        .background(alignment: .top) {
+            pageColor
+                .overlay(alignment: .top) {
+                    LinearGradient(colors: [pageColor.opacity(0), pageColor], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 24)
+                        .offset(y: -24)
+                }
+                .ignoresSafeArea(edges: .bottom)
+                .allowsHitTesting(false)
+        }
         .animation(.spring(response: 0.42, dampingFraction: 0.82), value: router.tab)
+    }
+
+    /// Plan and Trends are still dark-designed; match whichever page is up.
+    private var pageColor: Color {
+        switch router.tab {
+        case .plan, .trends: return AppColors.nowBackground
+        default:             return Neka.paper
+        }
     }
 
     // MARK: - Selected pill
@@ -102,6 +126,9 @@ struct NestedNavBar: View {
             logMenu
             Button { router.openHome(.ask) } label: {
                 Label("Ask Dialed", systemImage: "sparkles")
+            }
+            Button { router.openHome(.avatar) } label: {
+                Label("Your avatar & future you", systemImage: "person.crop.circle.badge.checkmark")
             }
             Menu {
                 ForEach(HomeDestination.allCases, id: \.self) { destination in

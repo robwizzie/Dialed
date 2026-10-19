@@ -53,6 +53,9 @@ enum CoachEngine {
         var out: [CoachInsight] = []
         let hour = Double(calendar.component(.hour, from: i.now))
             + Double(calendar.component(.minute, from: i.now)) / 60
+        /// After 8 PM, catching up fully isn't realistic (or a good idea
+        /// before bed) — suggestions shrink and point at tomorrow.
+        let isLate = hour >= 20
 
         // 1. Weigh-in
         if let p = i.progress, !p.weighedInToday, hour < 12, p.daysLeft > 0 {
@@ -136,13 +139,23 @@ enum CoachEngine {
                     priority: 30
                 ))
             } else if behind >= 12 {
-                let catchUp = Int(roundTo(behind, 4))
-                out.append(CoachInsight(
-                    id: "water", icon: "drop.fill", tone: .nudge,
-                    title: "Drink \(catchUp) oz to catch up",
-                    detail: "\(Int(i.waterOz)) of \(Int(i.waterTargetOz)) oz. A full bottle before your next meal helps.",
-                    priority: 75
-                ))
+                if isLate {
+                    let tonight = Int(roundTo(min(behind, 24), 4))
+                    out.append(CoachInsight(
+                        id: "water", icon: "drop.fill", tone: .nudge,
+                        title: "Get \(tonight) oz in before bed",
+                        detail: "\(Int(i.waterOz)) of \(Int(i.waterTargetOz)) oz today. Tomorrow, aim for half by 2 PM.",
+                        priority: 60
+                    ))
+                } else {
+                    let catchUp = Int(roundTo(min(behind, 40), 4))
+                    out.append(CoachInsight(
+                        id: "water", icon: "drop.fill", tone: .nudge,
+                        title: "Drink \(catchUp) oz to catch up",
+                        detail: "\(Int(i.waterOz)) of \(Int(i.waterTargetOz)) oz. A full bottle before your next meal helps.",
+                        priority: 75
+                    ))
+                }
             }
         }
 
@@ -158,12 +171,17 @@ enum CoachEngine {
                     priority: 35
                 ))
             } else if behind >= 1_500 {
-                let minutes = max(10, Int(roundTo(behind / 100, 5)))  // ~100 steps/min
+                // ~100 steps/min; a single walk suggestion tops out at 45
+                // min (20 late at night — a short Peaches loop, not a hike).
+                let cap: Double = isLate ? 20 : 45
+                let minutes = max(10, Int(roundTo(min(behind / 100, cap), 5)))
                 out.append(CoachInsight(
                     id: "steps", icon: "figure.walk", tone: .nudge,
                     title: "Take a \(minutes)-min walk",
-                    detail: "You're \(Int(behind).formatted()) steps behind pace for \(i.stepGoal.formatted()).",
-                    priority: 65
+                    detail: isLate
+                        ? "\(i.steps.formatted()) steps today. Every bit counts — start earlier tomorrow."
+                        : "You're \(Int(behind).formatted()) steps behind pace for \(i.stepGoal.formatted()).",
+                    priority: isLate ? 50 : 65
                 ))
             }
         }
