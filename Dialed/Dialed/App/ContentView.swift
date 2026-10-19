@@ -122,6 +122,9 @@ struct MainTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToHistory"))) { _ in
             router.openHome(.calendar)
         }
+        // Smart reminders: re-plan on launch / foreground / after logging,
+        // and open the right place when one is tapped.
+        .smartReminders(router: router)
     }
 
     @ViewBuilder
