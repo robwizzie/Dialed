@@ -54,6 +54,15 @@ struct HomeView: View {
                     header
                         .padding(.top, 8)
                     hero
+                    HomeDialedTodayCard(
+                        waterOz: viewModel.waterOz,
+                        waterTarget: viewModel.waterTargetOz,
+                        protein: viewModel.proteinGrams,
+                        proteinTarget: viewModel.proteinTarget,
+                        calories: viewModel.caloriesIn,
+                        calorieTarget: viewModel.calorieTarget,
+                        onLogWater: { sheet = .water }
+                    )
                     HomeChallengeCard(
                         challenge: viewModel.challenge,
                         progress: viewModel.progress,

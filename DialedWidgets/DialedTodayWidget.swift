@@ -65,7 +65,7 @@ struct DialedTodayWidget: Widget {
             TodayWidgetView(entry: entry)
         }
         .configurationDisplayName("Today")
-        .description("Water, protein and calories left. Log water or a favorite meal with a tap.")
+        .description("Your Dialed score, plus water, protein and calories left. Log water or a favorite meal with a tap.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
@@ -129,10 +129,10 @@ struct TodayWidgetView: View {
     private var small: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 10) {
-                waterRing(size: 58, line: 7)
+                scoreDial(size: 62)
                 VStack(alignment: .leading, spacing: 4) {
+                    stat(value: s.waterOz, unit: "oz", caption: "of \(Int(s.waterTargetOz)) oz water", tint: Palette.sky)
                     stat(value: s.proteinLeft, unit: "g", caption: "protein left", tint: Palette.green)
-                    caloriesStat
                 }
             }
             Spacer(minLength: 0)
@@ -143,8 +143,8 @@ struct TodayWidgetView: View {
     private var medium: some View {
         HStack(spacing: 14) {
             VStack(spacing: 6) {
-                waterRing(size: 84, line: 9)
-                Text("\(Int(s.waterOz.rounded())) / \(Int(s.waterTargetOz)) oz")
+                scoreDial(size: 84)
+                Text("\(Int(s.waterOz.rounded())) / \(Int(s.waterTargetOz)) oz water")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(Palette.inkSecondary(scheme))
             }
@@ -167,28 +167,13 @@ struct TodayWidgetView: View {
         }
     }
 
-    private func waterRing(size: CGFloat, line: CGFloat) -> some View {
-        ZStack {
-            Circle()
-                .stroke(Palette.track(scheme), lineWidth: line)
-            Circle()
-                .trim(from: 0, to: s.waterProgress)
-                .stroke(Palette.sky, style: StrokeStyle(lineWidth: line, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            VStack(spacing: 0) {
-                Image(systemName: "drop.fill")
-                    .font(.system(size: size * 0.16))
-                    .foregroundColor(Palette.sky)
-                Text("\(Int(s.waterOz.rounded()))")
-                    .font(.system(size: size * 0.28, weight: .semibold))
-                    .foregroundColor(Palette.ink(scheme))
-                    .minimumScaleFactor(0.6)
-                Text("oz")
-                    .font(.system(size: size * 0.13, weight: .medium))
-                    .foregroundColor(Palette.inkSecondary(scheme))
-            }
-        }
-        .frame(width: size, height: size)
+    /// Today's Dialed score on the same dial as the app icon.
+    private func scoreDial(size: CGFloat) -> some View {
+        DialGauge(value: Double(s.dialedScore) / 100, label: "\(s.dialedScore)",
+                  caption: size >= 80 ? "dialed" : nil, dark: scheme == .dark)
+            .frame(width: size, height: size)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Dialed score \(s.dialedScore)")
     }
 
     private var caloriesStat: some View {

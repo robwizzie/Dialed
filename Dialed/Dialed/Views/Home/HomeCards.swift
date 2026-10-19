@@ -689,3 +689,78 @@ struct HomePathsCard: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+// MARK: - Dialed today
+
+/// Today's Dialed score on the same dial as the app icon: the knob turns
+/// as water, protein and calories come in. Same score the widget shows.
+struct HomeDialedTodayCard: View {
+    let waterOz: Double
+    let waterTarget: Double
+    let protein: Double
+    let proteinTarget: Double
+    let calories: Double
+    let calorieTarget: Double
+    var onLogWater: () -> Void
+
+    @Environment(\.colorScheme) private var scheme
+    @State private var shown: Double = 0
+
+    private var score: Int {
+        DialedScore.compute(waterOz: waterOz, waterTargetOz: waterTarget, protein: protein,
+                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget)
+    }
+
+    var body: some View {
+        HStack(spacing: 18) {
+            DialGauge(value: shown, label: "\(score)", caption: "dialed", dark: scheme == .dark)
+                .frame(width: 118, height: 118)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Dialed score \(score) out of 100")
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Dialed today")
+                    .font(Neka.label)
+                    .foregroundColor(Neka.ink)
+                part("drop.fill", "Water", "\(Int(waterOz)) / \(Int(waterTarget)) oz",
+                     done: waterOz >= waterTarget, tint: Neka.sky)
+                part("bolt.fill", "Protein", "\(Int(protein)) / \(Int(proteinTarget)) g",
+                     done: protein >= proteinTarget, tint: Neka.green)
+                part("flame.fill", "Calories",
+                     calories > calorieTarget ? "\(Int(calories - calorieTarget)) over" : "\(Int(max(0, calorieTarget - calories))) left",
+                     done: calories > 0 && calories <= calorieTarget, tint: Neka.orange)
+                Button(action: onLogWater) {
+                    Label("Turn up water", systemImage: "dial.medium")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(Neka.track))
+                }
+                .buttonStyle(.dialedScale)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+        .nekaCard()
+        .onAppear { withAnimation(.spring(response: 0.9, dampingFraction: 0.8).delay(0.15)) { shown = Double(score) / 100 } }
+        .onChange(of: score) { _, new in withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) { shown = Double(new) / 100 } }
+    }
+
+    private func part(_ icon: String, _ title: String, _ value: String, done: Bool, tint: Color) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: done ? "checkmark.circle.fill" : icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 16)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Neka.inkSecondary)
+            Spacer(minLength: 4)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Neka.ink)
+                .monospacedDigit()
+        }
+    }
+}
