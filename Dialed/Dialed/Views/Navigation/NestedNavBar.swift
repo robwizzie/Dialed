@@ -74,7 +74,7 @@ struct NestedNavBar: View {
     /// Plan and Trends are still dark-designed; match whichever page is up.
     private var pageColor: Color {
         switch router.tab {
-        case .plan, .trends: return AppColors.nowBackground
+        case .plan: return AppColors.nowBackground
         default:             return Neka.paper
         }
     }
@@ -165,7 +165,15 @@ struct NestedNavBar: View {
                 }
             }
 
-        case .plan, .trends, .settings:
+        case .trends:
+            logMenu
+            ForEach(HealthSection.allCases) { section in
+                Button { router.openHealth(section) } label: {
+                    Label(section.title, systemImage: section.icon)
+                }
+            }
+
+        case .plan, .settings:
             logMenu
             Button { router.openHome(.workout) } label: {
                 Label("Workout plan", systemImage: "dumbbell.fill")
@@ -229,7 +237,7 @@ extension AppTab {
         case .home:      return "Today"
         case .challenge: return "Challenge"
         case .plan:      return "Plan"
-        case .trends:    return "Trends"
+        case .trends:    return "Health"
         case .settings:  return "Settings"
         }
     }
@@ -239,7 +247,7 @@ extension AppTab {
         case .home:      return "house.fill"
         case .challenge: return "flag.2.crossed.fill"
         case .plan:      return "calendar.day.timeline.left"
-        case .trends:    return "chart.line.uptrend.xyaxis"
+        case .trends:    return "heart.text.square.fill"
         case .settings:  return "gearshape.fill"
         }
     }

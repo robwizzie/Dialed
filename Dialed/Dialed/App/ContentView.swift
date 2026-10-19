@@ -85,7 +85,7 @@ struct MainTabView: View {
                     .tabContent()
                     .tag(AppTab.plan)
 
-                PillarTrendsView()
+                HealthView()
                     .tabContent()
                     .tag(AppTab.trends)
 
