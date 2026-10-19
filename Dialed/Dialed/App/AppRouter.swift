@@ -35,6 +35,28 @@ enum HomeDestination: String, Hashable, CaseIterable {
     }
 }
 
+/// Pages of the Health tab.
+enum HealthSection: String, CaseIterable, Identifiable {
+    case body, sleep, nutrition
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .body:      return "Body"
+        case .sleep:     return "Sleep"
+        case .nutrition: return "Nutrition"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .body:      return "figure.stand"
+        case .sleep:     return "moon.fill"
+        case .nutrition: return "fork.knife"
+        }
+    }
+}
+
 /// Quick-log sheets available from every tab.
 enum QuickLog: String, Identifiable, CaseIterable {
     case water, weighIn, meal, voice
@@ -74,6 +96,8 @@ final class AppRouter: ObservableObject {
     @Published var homeSheet: HomeView.HomeSheet?
     @Published var homePush: HomeDestination?
     @Published var challengeSheet: ChallengeView.Sheet?
+    /// Page the Health tab shows (Body / Sleep / Nutrition).
+    @Published var healthSection: HealthSection = .body
 
     func select(_ tab: AppTab) {
         guard tab != self.tab else { return }
@@ -90,6 +114,11 @@ final class AppRouter: ObservableObject {
     func openHome(_ destination: HomeDestination) {
         select(.home)
         homePush = destination
+    }
+
+    func openHealth(_ section: HealthSection) {
+        healthSection = section
+        select(.trends)
     }
 
     func openChallenge(_ sheet: ChallengeView.Sheet) {
