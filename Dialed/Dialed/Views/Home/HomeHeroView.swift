@@ -7,12 +7,18 @@
 //  leader lines — heart at the head, breathing at the neck, blood oxygen
 //  at the shoulder, weight at the chest.
 //
+//  With a mood avatar on, the illustration fills the hero, framed on the
+//  face, and the four vitals sit in a row of tiles along the bottom so
+//  nothing covers the face.
+//
 
 import SwiftUI
 
 struct HomeHeroView: View {
     let image: UIImage?
     let isCutout: Bool
+    /// `image` is a full-scene mood avatar rather than your photo.
+    var isAvatar: Bool = false
     let isProcessing: Bool
     var photoScale: Double = 1
     var photoOffsetY: Double = 0
@@ -39,13 +45,20 @@ struct HomeHeroView: View {
             let w = geo.size.width
             let h = geo.size.height
             ZStack(alignment: .topLeading) {
-                backdrop(w: w, h: h)
-                photo(w: w, h: h)
-                    .onTapGesture(perform: onTapPhoto)
-                callouts(w: w, h: h)
-                captionView
-                    .frame(width: w * 0.42, alignment: .leading)
-                    .position(x: 18 + w * 0.21, y: h - 44)
+                if isAvatar, let image {
+                    avatarLayer(image, w: w, h: h)
+                        .onTapGesture(perform: onTapPhoto)
+                    vitalTiles
+                        .frame(width: w, height: h, alignment: .bottom)
+                } else {
+                    backdrop(w: w, h: h)
+                    photo(w: w, h: h)
+                        .onTapGesture(perform: onTapPhoto)
+                    callouts(w: w, h: h)
+                    captionView
+                        .frame(width: w * 0.42, alignment: .leading)
+                        .position(x: 18 + w * 0.21, y: h - 44)
+                }
                 if image != nil, let mood {
                     moodChip(mood)
                         .frame(width: w - 16, alignment: .trailing)
@@ -169,6 +182,105 @@ struct HomeHeroView: View {
                 center: .center, startRadius: 0, endRadius: 260
             )
         }
+    }
+
+    // MARK: - Avatar layout
+
+    private func avatarLayer(_ image: UIImage, w: CGFloat, h: CGFloat) -> some View {
+        // Face lands in the upper third, clear of the tiles at the bottom.
+        FocusedImage(image: image, anchorY: 0.34)
+            .frame(width: w, height: h)
+            .overlay(alignment: .bottom) {
+                // Darkens the scene behind the tiles so they always read.
+                LinearGradient(
+                    colors: [.black.opacity(0), .black.opacity(0.45)],
+                    startPoint: .top, endPoint: .bottom
+                )
+                .frame(height: h * 0.4)
+                .allowsHitTesting(false)
+            }
+            .accessibilityLabel("Your avatar for today. Tap to open.")
+    }
+
+    private struct Vital: Identifiable {
+        let title: String
+        let icon: String
+        let tint: Color
+        let value: String
+        let unit: String
+        let status: String
+        let hasData: Bool
+        var id: String { title }
+    }
+
+    private var vitals: [Vital] {
+        [
+            Vital(title: "Heart", icon: "heart.fill", tint: Neka.orange,
+                  value: heartRate.map { "\(Int($0.rounded()))" } ?? "--", unit: "bpm",
+                  status: heartRate == nil ? "No data" : (heartRateIsLive ? "Live" : "Resting"),
+                  hasData: heartRate != nil),
+            Vital(title: "Breathing", icon: "lungs.fill", tint: Neka.sky,
+                  value: breathingRate.map { String(format: "%.0f", $0) } ?? "--", unit: "rpm",
+                  status: breathingRate.map { (12...20).contains($0) ? "Normal" : "Check" } ?? "No data",
+                  hasData: breathingRate != nil),
+            Vital(title: "Blood O₂", icon: "drop.fill", tint: Neka.lavender,
+                  value: spO2.map { String(format: "%.0f", $0) } ?? "--", unit: "%",
+                  status: spO2.map { $0 >= 95 ? "Normal" : "Low" } ?? "No data",
+                  hasData: spO2 != nil),
+            Vital(title: "Weight", icon: "scalemass.fill", tint: Neka.green,
+                  value: weight.map { String(format: "%.1f", $0) } ?? "--", unit: "lb",
+                  status: weight == nil ? "Weigh in" : (weightNote ?? ""),
+                  hasData: weight != nil)
+        ]
+    }
+
+    private var vitalTiles: some View {
+        HStack(spacing: 6) {
+            ForEach(vitals) { v in
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Image(systemName: v.icon)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(v.tint)
+                        Text(v.title)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundColor(Neka.inkSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(v.value)
+                            .font(.system(size: 19, weight: .semibold))
+                            .foregroundColor(v.hasData ? Neka.ink : Neka.inkTertiary)
+                            .contentTransition(.numericText())
+                        Text(v.unit)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    Text(v.status)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(v.hasData ? Neka.inkSecondary : Neka.inkTertiary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 9)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(.regularMaterial)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Neka.hairline, lineWidth: 0.5)
+                )
+                .accessibilityElement(children: .combine)
+            }
+        }
+        .padding(10)
+        .allowsHitTesting(false)
     }
 
     // MARK: - Callouts

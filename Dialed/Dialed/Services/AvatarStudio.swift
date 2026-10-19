@@ -15,6 +15,7 @@
 
 import SwiftUI
 import UIKit
+import Vision
 #if canImport(ImagePlayground)
 import ImagePlayground
 #endif
@@ -28,6 +29,9 @@ final class AvatarStudio: ObservableObject {
     @Published private(set) var images: [String: UIImage] = [:]
     @Published private(set) var inProgress: Set<String> = []
     @Published var lastError: String?
+    /// Where the face sits in each avatar (unit coordinates, top-left
+    /// origin), so views can frame it instead of center-cropping.
+    @Published private(set) var focusPoints: [String: CGPoint] = [:]
 
     /// Set when generation needs the interactive Image Playground sheet.
     @Published var sheetRequest: SheetRequest?
@@ -51,6 +55,7 @@ final class AvatarStudio: ObservableObject {
         for key in AvatarMood.allCases.map(\.rawValue) + [Self.futureKey] {
             if let data = try? Data(contentsOf: Self.url(for: key)), let image = UIImage(data: data) {
                 images[key] = image
+                locateFocus(of: image, key: key)
             }
         }
     }
@@ -168,6 +173,7 @@ final class AvatarStudio: ObservableObject {
 
     private func store(_ image: UIImage, key: String) {
         images[key] = image
+        locateFocus(of: image, key: key)
         if let data = image.pngData() {
             try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             try? data.write(to: Self.url(for: key), options: .atomic)
@@ -177,7 +183,46 @@ final class AvatarStudio: ObservableObject {
     /// Called when your photo changes — old avatars no longer match.
     func clearAll() {
         images = [:]
+        focusPoints = [:]
         try? FileManager.default.removeItem(at: Self.directory)
+    }
+
+    // MARK: - Framing
+
+    /// Focus point for an image this studio made, or nil (frame centered).
+    func focus(of image: UIImage) -> CGPoint? {
+        guard let key = images.first(where: { $0.value === image })?.key else { return nil }
+        return focusPoints[key]
+    }
+
+    private func locateFocus(of image: UIImage, key: String) {
+        guard let cg = image.cgImage else { return }
+        Task.detached(priority: .utility) {
+            let point = Self.detectFocus(cg)
+            await MainActor.run {
+                // Ignore results for an image that has since been replaced.
+                if let point, self.images[key]?.cgImage === cg { self.focusPoints[key] = point }
+            }
+        }
+    }
+
+    /// Largest face, else the head end of the largest person; nil if
+    /// Vision finds neither (illustrations sometimes slip past it).
+    nonisolated static func detectFocus(_ cg: CGImage) -> CGPoint? {
+        let faces = VNDetectFaceRectanglesRequest()
+        let people = VNDetectHumanRectanglesRequest()
+        try? VNImageRequestHandler(cgImage: cg).perform([faces, people])
+        func area(_ r: CGRect) -> CGFloat { r.width * r.height }
+        // Vision boxes are normalized with a bottom-left origin.
+        if let face = faces.results?.max(by: { area($0.boundingBox) < area($1.boundingBox) }) {
+            let b = face.boundingBox
+            return CGPoint(x: b.midX, y: 1 - b.midY)
+        }
+        if let person = people.results?.max(by: { area($0.boundingBox) < area($1.boundingBox) }) {
+            let b = person.boundingBox
+            return CGPoint(x: b.midX, y: 1 - (b.maxY - b.height * 0.15))
+        }
+        return nil
     }
 
     private static var directory: URL {

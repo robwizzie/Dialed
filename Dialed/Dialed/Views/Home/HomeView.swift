@@ -240,6 +240,7 @@ struct HomeView: View {
         HomeHeroView(
             image: heroAvatar ?? photos.heroImage,
             isCutout: heroAvatar == nil && photos.hasCutout,
+            isAvatar: heroAvatar != nil,
             isProcessing: photos.isProcessing,
             photoScale: photos.heroScale,
             photoOffsetY: photos.heroOffsetY,
