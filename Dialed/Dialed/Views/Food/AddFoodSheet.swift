@@ -15,7 +15,7 @@ import PhotosUI
 
 struct AddFoodSheet: View {
     enum Method: String, Equatable {
-        case photo, scan, describe, manual
+        case photo, scan, describe, manual, eatingOut
     }
 
     /// Jump straight into a method (e.g. the + menu's "Scan barcode").
@@ -37,6 +37,7 @@ struct AddFoodSheet: View {
         case photo
         case scan
         case describe
+        case eatingOut
         case review(FoodDraft, Source)
     }
 
@@ -73,6 +74,8 @@ struct AddFoodSheet: View {
                         } onManual: { draft in
                             go(.review(stamped(draft), .manual))
                         }
+                    case .eatingOut:
+                        EatingOutView { _ in dismiss() }
                     case .review(let draft, let source):
                         FoodReviewStep(draft: draft, source: source) { final in
                             log(final)
@@ -121,6 +124,7 @@ struct AddFoodSheet: View {
         case .photo:    return "Snap a meal"
         case .scan:     return "Scan barcode"
         case .describe: return "Describe it"
+        case .eatingOut: return "Eating out"
         case .review:   return "Review & log"
         }
     }
@@ -130,6 +134,7 @@ struct AddFoodSheet: View {
         case .photo:    return .photo
         case .scan:     return .scan
         case .describe: return .describe
+        case .eatingOut: return .eatingOut
         case .manual:   return .review(stamped(FoodDraft()), .manual)
         }
     }
@@ -180,6 +185,34 @@ struct AddFoodSheet: View {
                                tint: Neka.orange, fill: Neka.orangeSoft) { go(stageFor(.manual)) }
                 }
             }
+
+            // Eating out: pick a restaurant, get an order that fits today.
+            Button { go(.eatingOut) } label: {
+                HStack(spacing: 14) {
+                    Text("🍽️")
+                        .font(.system(size: 26))
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Neka.surface))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Eating out?")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Pick a restaurant — get an order that fits today")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing))
+                )
+            }
+            .buttonStyle(.dialedScale)
 
             if !favorites.isEmpty {
                 savedList(title: "Favorites", icon: "star.fill", items: favorites.map(FoodDraft.init))
