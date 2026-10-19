@@ -15,13 +15,15 @@ struct LiveChallengeCard: View {
 
     var body: some View {
         Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Label(sync.isLive ? "Live with \(friendName)" : "Make it live", systemImage: "dot.radiowaves.left.and.right")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Neka.ink)
                     Spacer()
-                    if sync.isLive {
+                    if sync.isSyncing {
+                        ProgressView().controlSize(.small)
+                    } else if sync.isLive {
                         Text(sync.lastSync.map { "Synced \($0.formatted(.relative(presentation: .named)))" } ?? "Not synced yet")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Neka.inkTertiary)
@@ -31,11 +33,14 @@ struct LiveChallengeCard: View {
                         .foregroundColor(Neka.inkTertiary)
                 }
                 if !sync.isLive {
-                    Text("Send \(friendName) a link. They log weigh-ins from any phone's browser, the scoreboard updates on both sides, and you can trash talk.")
+                    Text("Send \(friendName) a link. They log weigh-ins from any phone's browser (or automatically from their scale), the scoreboard updates on both sides, and you can trash talk.")
                         .font(.system(size: 12))
                         .foregroundColor(Neka.inkSecondary)
                         .multilineTextAlignment(.leading)
-                } else if let last = sync.messages.last {
+                } else if let other = sync.other {
+                    friendDetails(other)
+                }
+                if sync.isLive, let last = sync.messages.last {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "bubble.left.fill")
                             .foregroundColor(last.role == "friend" ? Neka.lavender : Neka.orange)
@@ -44,11 +49,10 @@ struct LiveChallengeCard: View {
                             .foregroundColor(Neka.ink)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
+                        Spacer(minLength: 0)
                     }
-                } else {
-                    Text("No trash talk yet. Open to start it.")
-                        .font(.system(size: 12))
-                        .foregroundColor(Neka.inkSecondary)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface.opacity(0.7)))
                 }
                 if let error = sync.lastError {
                     Text(error)
@@ -62,6 +66,78 @@ struct LiveChallengeCard: View {
             .nekaCard(wash: .lavender)
         }
         .buttonStyle(.dialedScale)
+    }
+
+    /// Their last weigh-in (and whether their scale sent it), pace, projection, streak, steps.
+    @ViewBuilder
+    private func friendDetails(_ o: ChallengeWire.OtherSide) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let pounds = o.lastPounds, let date = o.lastDate {
+                HStack(spacing: 10) {
+                    Image(systemName: o.lastFromScale ? "scalemass.fill" : "pencil")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.lavender)
+                        .frame(width: 32, height: 32)
+                        .background(Circle().fill(Neka.surface))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(String(format: "%@ weighed in at %.1f lb", o.name, pounds))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text(lastLine(o, date: date))
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else {
+                Text("\(o.name) hasn't weighed in yet. Their first weigh-in starts their side of the scoreboard.")
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+                    .multilineTextAlignment(.leading)
+            }
+            HStack(spacing: 8) {
+                tile(o.weeklyLoss.map { String(format: "%@%.1f", $0 >= 0 ? "−" : "+", abs($0)) } ?? "—", "lb / week")
+                tile(o.projectedLoss.map { String(format: "%@%.1f", $0 >= 0 ? "−" : "+", abs($0)) } ?? "—", "by the end")
+                tile(o.streak > 0 ? "\(o.streak)🔥" : "—", "day streak")
+                if let steps = o.stats?.stepsToday {
+                    tile(Int(steps).formatted(), "steps today")
+                }
+            }
+            if o.autoSync {
+                Label("\(o.name)'s scale posts automatically", systemImage: "checkmark.seal.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.green)
+            }
+        }
+    }
+
+    private func lastLine(_ o: ChallengeWire.OtherSide, date: Date) -> String {
+        let when = Calendar.current.isDateInToday(date) ? "Today"
+            : Calendar.current.isDateInYesterday(date) ? "Yesterday"
+            : date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+        let how = o.lastFromScale ? "from their scale" : "logged by hand"
+        if let updated = o.lastUpdated, Calendar.current.isDateInToday(date) {
+            return "\(when) · \(how) · \(updated.formatted(date: .omitted, time: .shortened))"
+        }
+        return "\(when) · \(how)"
+    }
+
+    private func tile(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(Neka.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(label)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Neka.inkSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface.opacity(0.7)))
     }
 }
 
