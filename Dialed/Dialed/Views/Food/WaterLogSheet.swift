@@ -107,6 +107,14 @@ struct WaterLogSheet: View {
                         .padding(14)
                         .nekaCard()
                     }
+
+                    Label {
+                        Text("Hands-free: say “Log water in Dialed” to Siri, or put it on the Action button — Settings → Action Button → Shortcut → Dialed → Log water. The home-screen widget logs +16 oz with one tap.")
+                    } icon: {
+                        Image(systemName: "mic.fill")
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
                 }
                 .padding(16)
             }
