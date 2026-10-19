@@ -40,7 +40,7 @@ struct TargetsSettingsView: View {
             }
             .padding()
         }
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("Targets")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -87,10 +87,10 @@ struct TargetsSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .protein)
@@ -129,10 +129,10 @@ struct TargetsSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .water)
@@ -181,10 +181,10 @@ struct TargetsSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .calories)
@@ -202,15 +202,15 @@ struct TargetsSettingsView: View {
                     }) {
                         Text("Remove calorie tracking")
                             .font(.caption.bold())
-                            .foregroundColor(.red)
+                            .foregroundColor(Neka.rose)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(.red.opacity(0.15))
+                                    .fill(Neka.roseSoft)
                                     .overlay(
                                         Capsule()
-                                            .stroke(.red.opacity(0.3), lineWidth: 1)
+                                            .stroke(Neka.rose.opacity(0.35), lineWidth: 1)
                                     )
                             )
                     }
@@ -236,23 +236,23 @@ struct TargetsSettingsView: View {
                     }) {
                         Text("\(days)")
                             .font(.title3.bold())
-                            .foregroundColor(workoutsPerWeek == days ? .white : .primary)
+                            .foregroundColor(workoutsPerWeek == days ? Neka.onInk : Neka.ink)
                             .frame(width: 50, height: 50)
                             .background(
                                 Group {
                                     if workoutsPerWeek == days {
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(AppColors.primary)
+                                            .fill(Neka.ink)
                                     } else {
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(.ultraThinMaterial)
+                                            .fill(Neka.surface)
                                     }
                                 }
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(workoutsPerWeek == days ? .clear : .white.opacity(0.1), lineWidth: 0.5)
+                                        .stroke(workoutsPerWeek == days ? .clear : Neka.hairline, lineWidth: 0.5)
                                 )
-                                .shadow(color: workoutsPerWeek == days ? AppColors.primary.opacity(0.3) : .clear, radius: 8, x: 0, y: 4)
+                                .shadow(color: workoutsPerWeek == days ? Neka.shadow : .clear, radius: 8, x: 0, y: 4)
                             )
                     }
                 }
