@@ -64,6 +64,9 @@ struct SettingsView: View {
                         row("bell.fill", "Notifications",
                             settings.notificationsEnabled ? "On" : "Off",
                             tint: Neka.lavender, fill: Neka.lavenderSoft) { NotificationsSettingsView() }
+                        divider
+                        row("alarm.fill", "Smart reminders", "Nudges only when you're behind pace",
+                            tint: Neka.orange, fill: Neka.orangeSoft) { RemindersSettingsView() }
                     }
 
                     group("Challenge") {
