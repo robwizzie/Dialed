@@ -75,7 +75,7 @@ struct EatingOutView: View {
         let b = budget
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 14) {
-                budgetRing(value: b.calories, unit: "kcal", label: "to spend", tint: Neka.orange,
+                budgetRing(value: b.calories, unit: "calories", label: "to spend", tint: Neka.orange,
                            progress: calorieTarget > 0 ? eaten.calories / calorieTarget : 0)
                 budgetRing(value: b.protein, unit: "g", label: "protein to get", tint: Neka.green,
                            progress: proteinTarget > 0 ? eaten.protein / proteinTarget : 0)
@@ -88,7 +88,7 @@ struct EatingOutView: View {
             .pickerStyle(.segmented)
             Text(lastMeal
                  ? "Using almost everything you have left today."
-                 : "Saving room for later — \(Int(b.share * 100))% of what's left (\(Int(max(0, calorieTarget - eaten.calories))) kcal).")
+                 : "Saving room for later — \(Int(b.share * 100))% of what's left (\(Int(max(0, calorieTarget - eaten.calories))) calories).")
                 .font(.system(size: 11.5))
                 .foregroundColor(Neka.inkSecondary)
         }
@@ -418,7 +418,7 @@ private struct OrderCard: View {
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 14) {
-                numberStat(option.calories, "kcal")
+                numberStat(option.calories, "calories")
                 numberStat(option.protein, "g protein")
                 Spacer(minLength: 0)
             }
@@ -512,7 +512,7 @@ private struct OrderCard: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(Neka.inkTertiary)
             dayBar(done: eaten.calories, adds: option.calories, target: calorieTarget, tint: Neka.orange,
-                   text: calAfter <= calorieTarget ? "\(Int(calorieTarget - calAfter)) kcal left today" : "\(Int(calAfter - calorieTarget)) kcal over today")
+                   text: calAfter <= calorieTarget ? "\(Int(calorieTarget - calAfter)) calories left today" : "\(Int(calAfter - calorieTarget)) calories over today")
             dayBar(done: eaten.protein, adds: option.protein, target: proteinTarget, tint: Neka.green,
                    text: proAfter >= proteinTarget ? "Protein goal hit 🎉" : "\(Int(proteinTarget - proAfter)) g protein to go")
         }

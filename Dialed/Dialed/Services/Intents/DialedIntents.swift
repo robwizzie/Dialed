@@ -82,7 +82,7 @@ struct SavedMealEntity: AppEntity {
     var displayRepresentation: DisplayRepresentation {
         DisplayRepresentation(
             title: "\(name)",
-            subtitle: "\(Int(calories)) kcal · \(Int(protein)) g protein"
+            subtitle: "\(Int(calories)) calories · \(Int(protein)) g protein"
         )
     }
 }

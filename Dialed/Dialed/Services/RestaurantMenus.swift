@@ -46,9 +46,9 @@ enum RestaurantMenus {
     static let all: [Restaurant] = [
         Restaurant(name: "Chipotle", emoji: "🌯", aliases: ["chipotle mexican grill"], items: [
             m("Chicken burrito bowl (lettuce, fajita veg, pico, black beans)", 455, 47, 37, 13, tip: "Skip the rice and cheese; ask for extra fajita veg"),
-            m("Double chicken bowl (brown rice, beans, salsa)", 730, 80, 66, 18, tip: "Half rice saves ~105 kcal"),
+            m("Double chicken bowl (brown rice, beans, salsa)", 730, 80, 66, 18, tip: "Half rice saves ~105 calories"),
             m("Steak salad (lettuce, fajita veg, salsa, vinaigrette on the side)", 420, 32, 26, 22, tip: "Use half the vinaigrette"),
-            m("Chicken burrito (rice, beans, salsa, cheese)", 1_040, 60, 116, 37, tip: "Make it a bowl to save ~320 kcal"),
+            m("Chicken burrito (rice, beans, salsa, cheese)", 1_040, 60, 116, 37, tip: "Make it a bowl to save ~320 calories"),
             m("Sofritas bowl (rice, beans, veg, salsa)", 640, 24, 92, 20),
             m("Lifestyle Bowl — High Protein", 885, 81, 64, 33),
             s("Side of chicken", 180, 32, 0, 7),
@@ -57,8 +57,8 @@ enum RestaurantMenus {
         ]),
         Restaurant(name: "Chick-fil-A", emoji: "🐔", aliases: ["chickfila", "chick fil a", "cfa"], items: [
             m("Grilled Chicken Sandwich", 390, 28, 44, 12),
-            m("12-ct Grilled Nuggets", 200, 38, 2, 5, tip: "Zesty Buffalo sauce is only 25 kcal"),
-            m("Grilled Chicken Cool Wrap", 660, 42, 29, 43, tip: "Skip the avocado lime dressing to save ~300 kcal"),
+            m("12-ct Grilled Nuggets", 200, 38, 2, 5, tip: "Zesty Buffalo sauce is only 25 calories"),
+            m("Grilled Chicken Cool Wrap", 660, 42, 29, 43, tip: "Skip the avocado lime dressing to save ~300 calories"),
             m("8-ct Nuggets", 250, 27, 11, 11),
             m("Chick-fil-A Chicken Sandwich", 420, 29, 41, 18),
             m("Spicy Southwest Salad with grilled filet", 680, 36, 30, 46, tip: "Use a light dressing"),
@@ -68,7 +68,7 @@ enum RestaurantMenus {
             d("Diet lemonade", 50, 0, 13, 0)
         ]),
         Restaurant(name: "McDonald's", emoji: "🍔", aliases: ["mcdonalds", "mcd", "mickey d's"], items: [
-            m("McDouble", 400, 22, 33, 20, tip: "No cheese saves ~50 kcal"),
+            m("McDouble", 400, 22, 33, 20, tip: "No cheese saves ~50 calories"),
             m("Quarter Pounder with Cheese", 520, 30, 42, 26),
             m("10-pc Chicken McNuggets", 410, 23, 25, 24),
             m("Egg McMuffin", 310, 17, 30, 13),
@@ -116,7 +116,7 @@ enum RestaurantMenus {
             m("Grilled Chicken Sandwich", 370, 34, 37, 10),
             m("Jr. Cheeseburger", 290, 15, 26, 14),
             m("Dave's Single", 590, 29, 39, 34),
-            m("Apple Pecan Salad (full, grilled chicken)", 560, 37, 37, 30, tip: "Half the pecans and dressing saves ~150 kcal"),
+            m("Apple Pecan Salad (full, grilled chicken)", 560, 37, 37, 30, tip: "Half the pecans and dressing saves ~150 calories"),
             m("10-pc Nuggets", 450, 23, 28, 28),
             s("Small chili", 240, 17, 23, 7),
             s("Plain baked potato", 270, 7, 61, 0),
@@ -133,7 +133,7 @@ enum RestaurantMenus {
         ]),
         Restaurant(name: "Sweetgreen", emoji: "🥬", aliases: ["sweet green"], items: [
             m("Kale Caesar with chicken", 430, 34, 20, 26),
-            m("Harvest Bowl", 705, 36, 59, 37, tip: "Light dressing saves ~100 kcal"),
+            m("Harvest Bowl", 705, 36, 59, 37, tip: "Light dressing saves ~100 calories"),
             m("Chicken Pesto Parm", 530, 41, 41, 24),
             m("Guacamole Greens", 525, 29, 35, 32),
             s("Extra chicken", 130, 23, 1, 4),
@@ -181,7 +181,7 @@ enum RestaurantMenus {
         ]),
         Restaurant(name: "Burger King", emoji: "👑", aliases: ["bk"], items: [
             m("Whopper Jr. (no mayo)", 250, 13, 28, 10),
-            m("Whopper", 670, 31, 51, 40, tip: "No mayo saves ~150 kcal"),
+            m("Whopper", 670, 31, 51, 40, tip: "No mayo saves ~150 calories"),
             m("8-pc Chicken Nuggets", 360, 16, 21, 23),
             m("Hamburger", 250, 13, 29, 10),
             s("Small fries", 320, 4, 44, 14),

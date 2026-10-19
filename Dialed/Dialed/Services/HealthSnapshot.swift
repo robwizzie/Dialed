@@ -84,7 +84,7 @@ struct HealthSnapshot: Equatable {
             }
             if let proj = projectedLossAtEnd { lines.append("- Trend projects −\(Self.n(proj)) lb by the end") }
             if let deficit = requiredDailyDeficit, deficit > 0 {
-                lines.append("- Needs about \(Int(deficit)) kcal/day deficit from here")
+                lines.append("- Needs about \(Int(deficit)) calories/day deficit from here")
             }
         }
 

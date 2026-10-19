@@ -349,8 +349,8 @@ struct TodayWidgetView: View {
 
     private var caloriesShort: String {
         s.caloriesLeft >= 0
-            ? "\(Fmt.int(s.caloriesLeft)) kcal left"
-            : "\(Fmt.int(-s.caloriesLeft)) kcal over"
+            ? "\(Fmt.int(s.caloriesLeft)) cal left"
+            : "\(Fmt.int(-s.caloriesLeft)) cal over"
     }
 }
 

@@ -407,7 +407,7 @@ final class HomeViewModel: ObservableObject {
                   source: spO2 == nil ? nil : (usedWatchVitals ? "Pixel Watch" : "Apple Health"),
                   date: nil),
             DataSourceStatus(metric: "Food",
-                  value: caloriesIn > 0 ? "\(Int(caloriesIn)) kcal · \(Int(proteinGrams)) g protein" : nil,
+                  value: caloriesIn > 0 ? "\(Int(caloriesIn)) calories · \(Int(proteinGrams)) g protein" : nil,
                   source: hkEnergyToday >= loggedCalories && hkEnergyToday > 0 ? "Apple Health" : (loggedCalories > 0 ? "Logged in Dialed" : nil),
                   date: nil)
         ]

@@ -395,7 +395,7 @@ enum StateEngine {
         let calPts = min(30, Double(load.activeCalories) / 500.0 * 25.0)
         raw += calPts
         contributions.append(.init(label: "Active calories", points: calPts,
-                                   note: "\(load.activeCalories) kcal"))
+                                   note: "\(load.activeCalories) calories"))
 
         // Workout duration weighted by intensity (60m moderate ≈ 30 pts)
         let intensity = load.workoutIntensity ?? 0.6

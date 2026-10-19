@@ -161,7 +161,7 @@ struct TimelineEventRow: View {
     private var title: String {
         switch event.kind {
         case .meal:
-            let cals = event.value.map { "\(Int($0)) kcal" }
+            let cals = event.value.map { "\(Int($0)) calories" }
             let protein = event.secondaryValue.map { "\(Int($0))g protein" }
             return [cals, protein].compactMap { $0 }.joined(separator: " · ")
                 .ifEmpty("Meal")
@@ -218,7 +218,7 @@ struct TimelineEventRow: View {
             return event.text
         case .workout:
             if let cals = event.secondaryValue, cals > 0 {
-                return "\(Int(cals)) kcal burned"
+                return "\(Int(cals)) calories burned"
             }
             return event.text
         default:
