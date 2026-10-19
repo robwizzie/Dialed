@@ -580,9 +580,7 @@ struct HomeFutureYouCard: View {
             RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Neka.surface)
             if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                FocusedImage(image: image, anchorY: 0.42)
             } else {
                 Image(systemName: "tshirt.fill")
                     .font(.system(size: 28))

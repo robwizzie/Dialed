@@ -91,7 +91,7 @@ struct AvatarSheet: View {
                     .frame(width: 214, height: 214)
                 Group {
                     if let avatar = studio.image(for: mood) {
-                        Image(uiImage: avatar).resizable().scaledToFill()
+                        FocusedImage(image: avatar)
                     } else if let photo = photos.heroImage {
                         Image(uiImage: photo).resizable().scaledToFill()
                     } else {
@@ -240,7 +240,7 @@ struct AvatarSheet: View {
                 RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .fill(tint.opacity(0.12))
                 if let image = studio.image(for: m) {
-                    Image(uiImage: image).resizable().scaledToFill()
+                    FocusedImage(image: image)
                 } else if studio.inProgress.contains(m.rawValue) {
                     ProgressView().tint(tint)
                 } else if studio.canGenerate && photos.original != nil {
@@ -296,7 +296,7 @@ struct AvatarSheet: View {
                 ZStack {
                     RoundedRectangle(cornerRadius: 18, style: .continuous).fill(Neka.lavenderSoft)
                     if let image = studio.futureImage {
-                        Image(uiImage: image).resizable().scaledToFill()
+                        FocusedImage(image: image)
                     } else if studio.inProgress.contains(AvatarStudio.futureKey) {
                         ProgressView().tint(Neka.lavender)
                     } else {
