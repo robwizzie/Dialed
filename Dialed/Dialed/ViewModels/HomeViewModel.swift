@@ -108,6 +108,12 @@ final class HomeViewModel: ObservableObject {
     /// The day you're working toward, and where your trend lands you then.
     @Published var goalEvent: GoalEvent?
     @Published var goalProjection: WeightChallengeEngine.Projection?
+    /// "If every day were like…" — see PathProjection.
+    @Published var pathScenarios: [PathProjection.Scenario] = []
+    /// The date those scenarios project to (goal day, or 30 days out).
+    @Published var pathTargetDate: Date?
+    private var pathDays: [PathProjection.DayRecord] = []
+    private var currentWeightForPaths: Double = 0
 
     private let health = HealthKitManager.shared
     private var watchConnected: Bool { GoogleHealthSyncService.isConnected }
@@ -171,7 +177,8 @@ final class HomeViewModel: ObservableObject {
         async let hkWaterSources = health.sourceNames(.dietaryWater, since: today)
         async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 7)
         async let hkProtein = try? health.fetchDailySums(.dietaryProtein, unit: .gram(), days: 1)
-        async let hkEnergy = try? health.fetchDailySums(.dietaryEnergyConsumed, unit: .kilocalorie(), days: 1)
+        async let hkEnergy = try? health.fetchDailySums(.dietaryEnergyConsumed, unit: .kilocalorie(), days: 8)
+        async let hkActive = try? health.fetchDailySums(.activeEnergyBurned, unit: .kilocalorie(), days: 8)
         async let hkHRV = try? health.fetchSamples(
             .heartRateVariabilitySDNN,
             unit: .secondUnit(with: .milli),
@@ -194,7 +201,9 @@ final class HomeViewModel: ObservableObject {
         let hkWaterByDay = await hkWater ?? [:]
         let hkStepsByDay = await hkSteps ?? [:]
         let hkProteinToday = (await hkProtein ?? [:])[today] ?? 0
-        let hkEnergyToday = (await hkEnergy ?? [:])[today] ?? 0
+        let hkEnergyByDay = await hkEnergy ?? [:]
+        let hkEnergyToday = hkEnergyByDay[today] ?? 0
+        let hkActiveByDay = await hkActive ?? [:]
         let hkHRVSamples = await hkHRV ?? []
         let hkHeartLatest = await hkHeart
         let hkRestingLatest = await hkResting
@@ -247,6 +256,20 @@ final class HomeViewModel: ObservableObject {
         caloriesIn = max(loggedCalories, hkEnergyToday)
         proteinTarget = settings.proteinTargetGrams
         calorieTarget = settings.calorieTarget ?? Self.estimatedCutCalories(weight: latestWeight?.pounds ?? settings.currentWeight)
+        currentWeightForPaths = latestWeight?.pounds ?? settings.currentWeight
+
+        // ---- Past week of days for "if every day were like…"
+        let pastMeals = fetchMealEvents(context: context, since: calendar.date(byAdding: .day, value: -7, to: today) ?? today)
+        pathDays = (1...7).compactMap { back -> PathProjection.DayRecord? in
+            guard let day = calendar.date(byAdding: .day, value: -back, to: today) else { return nil }
+            let log = dayLogs.first { calendar.isDate($0.date, inSameDayAs: day) }
+            let meals = pastMeals
+                .filter { calendar.isDate($0.logicalDate, inSameDayAs: day) }
+                .reduce(0) { $0 + ($1.value ?? 0) }
+            let eaten = max((log?.caloriesConsumed ?? 0) + meals, hkEnergyByDay[day] ?? 0)
+            let stepCount = Int(max(hkStepsByDay[day] ?? 0, watchSteps[day] ?? 0, Double(log?.steps ?? 0)))
+            return PathProjection.DayRecord(date: day, caloriesIn: eaten, activeKcal: hkActiveByDay[day], steps: stepCount)
+        }
 
         // ---- HRV: prefer the watch's nightly RMSSD; fall back to Apple Health SDNN.
         //      Never mix the two in one series — they're different measures.
@@ -379,6 +402,13 @@ final class HomeViewModel: ObservableObject {
         } else {
             goalProjection = nil
         }
+        let target = goalEvent.map(\.date).flatMap { $0 > now ? $0 : nil }
+            ?? Calendar.current.date(byAdding: .day, value: 30, to: now) ?? now
+        pathTargetDate = target
+        pathScenarios = currentWeightForPaths > 0
+            ? PathProjection.scenarios(days: pathDays, weight: currentWeightForPaths,
+                                       calorieTarget: calorieTarget, goalDate: target, now: now)
+            : []
     }
 
     private func buildSnapshot(now: Date, challenge: WeightChallenge?) -> HealthSnapshot {
@@ -463,6 +493,14 @@ final class HomeViewModel: ObservableObject {
         let day = Calendar.current.logicalStartOfDay(for: now)
         let desc = FetchDescriptor<ContextEvent>(
             predicate: #Predicate { $0.logicalDate == day }
+        )
+        return (try? context.fetch(desc)) ?? []
+    }
+
+    private func fetchMealEvents(context: ModelContext, since start: Date) -> [ContextEvent] {
+        let meal = ContextEvent.Kind.meal.rawValue
+        let desc = FetchDescriptor<ContextEvent>(
+            predicate: #Predicate { $0.logicalDate >= start && $0.kindRaw == meal }
         )
         return (try? context.fetch(desc)) ?? []
     }

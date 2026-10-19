@@ -65,6 +65,14 @@ struct HomeView: View {
                         image: studio.futureImage ?? photos.thumbnail,
                         onOpen: { sheet = .avatar }
                     )
+                    HomeWorkoutCard(onOpen: { path.append(.workout) })
+                    if !viewModel.pathScenarios.isEmpty {
+                        HomePathsCard(
+                            scenarios: viewModel.pathScenarios,
+                            targetDate: viewModel.pathTargetDate,
+                            eventName: viewModel.goalEvent.flatMap { $0.date == viewModel.pathTargetDate ? $0.name : nil }
+                        )
+                    }
                     if aiAvailability != .unsupportedDevice {
                         AIBriefCard(
                             model: briefModel,
@@ -120,6 +128,8 @@ struct HomeView: View {
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
+                case .workout:
+                    WorkoutPlanView()
                 case .timeline:
                     TimelineView().environment(\.colorScheme, .dark)
                 case .tracking:
