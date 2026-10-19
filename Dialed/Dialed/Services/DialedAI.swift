@@ -32,6 +32,19 @@ struct AIBrief: Codable, Equatable {
     var actions: [String]
 }
 
+/// An order Apple Intelligence suggests at a restaurant Dialed doesn't
+/// have a menu for.
+struct AIRestaurantPick: Equatable, Identifiable {
+    var title: String
+    var items: [String]
+    var calories: Int
+    var proteinGrams: Int
+    var carbsGrams: Int
+    var fatGrams: Int
+    var tips: [String]
+    var id: String { title + items.joined() }
+}
+
 struct AIMealEstimate: Equatable {
     var name: String
     var calories: Int
@@ -156,6 +169,43 @@ enum DialedAI {
                     fatGrams: max(0, min(300, m.fatGrams)),
                     assumption: m.assumption
                 )
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
+    // MARK: Eating out
+
+    /// Up to three orders at `restaurant` that fit the calories and
+    /// protein this meal has to work with.
+    static func restaurantPicks(_ restaurant: String, calories: Int, protein: Int) async -> [AIRestaurantPick]? {
+        let place = restaurant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !place.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You help someone on a weight-loss cut order at restaurants. Suggest real, \
+            orderable items that this restaurant (or this kind of restaurant) commonly has, \
+            with realistic calorie and macro estimates — be honest, not optimistic. \
+            Favor lean protein, vegetables and sauces on the side. Never suggest skipping meals.
+            """)
+            let prompt = """
+            Restaurant: \(place). This meal should be about \(calories) calories or less \
+            with about \(protein) g of protein. Give three different orders: the best fit for \
+            those numbers, a lighter one, and a more filling one.
+            """
+            do {
+                let response = try await session.respond(to: prompt, generating: GeneratedRestaurantPicks.self)
+                let picks = response.content.orders.prefix(3).map {
+                    AIRestaurantPick(title: $0.title, items: $0.items,
+                                     calories: max(0, min(3_000, $0.calories)), proteinGrams: max(0, min(250, $0.proteinGrams)),
+                                     carbsGrams: max(0, min(400, $0.carbsGrams)), fatGrams: max(0, min(250, $0.fatGrams)),
+                                     tips: Array($0.tips.prefix(3)))
+                }
+                return picks.isEmpty ? nil : Array(picks)
             } catch {
                 return nil
             }
@@ -316,6 +366,38 @@ struct GeneratedBrief {
 
     @Guide(description: "Three short, concrete actions for the rest of today, each under 8 words")
     var actions: [String]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedRestaurantPicks {
+    @Guide(description: "Three different orders: best fit, lighter, more filling")
+    var orders: [GeneratedRestaurantOrder]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedRestaurantOrder {
+    @Guide(description: "Two to four words, e.g. Best fit, Lighter, More filling")
+    var title: String
+
+    @Guide(description: "The items to order, as they'd appear on the menu")
+    var items: [String]
+
+    @Guide(description: "Estimated total calories as a whole number")
+    var calories: Int
+
+    @Guide(description: "Estimated grams of protein as a whole number")
+    var proteinGrams: Int
+
+    @Guide(description: "Estimated grams of carbohydrate as a whole number")
+    var carbsGrams: Int
+
+    @Guide(description: "Estimated grams of fat as a whole number")
+    var fatGrams: Int
+
+    @Guide(description: "One or two short ordering tips, e.g. dressing on the side")
+    var tips: [String]
 }
 
 @available(iOS 26.0, *)

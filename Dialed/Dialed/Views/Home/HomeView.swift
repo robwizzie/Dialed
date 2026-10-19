@@ -56,7 +56,7 @@ struct HomeView: View {
     }
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, weighIn, voice, profile, challengeSetup, ask, avatar
+        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar
         var id: String { rawValue }
     }
 
@@ -149,7 +149,8 @@ struct HomeView: View {
                         calories: viewModel.caloriesIn,
                         calorieTarget: viewModel.calorieTarget,
                         onLogMeal: { sheet = .meal },
-                        onOpenLog: { path.append(.foodLog) }
+                        onOpenLog: { path.append(.foodLog) },
+                        onEatingOut: { sheet = .eatingOut }
                     )
                     HomeTimelineCard(items: viewModel.timeline)
                     HomeCoachCard(insights: viewModel.insights)
@@ -618,6 +619,9 @@ struct HomeView: View {
                 .presentationDetents([.large])
         case .meal:
             AddFoodSheet()
+                .presentationDetents([.large])
+        case .eatingOut:
+            EatingOutSheet()
                 .presentationDetents([.large])
         case .ask:
             AskDialedSheet(snapshot: viewModel.snapshot)
