@@ -71,10 +71,10 @@ struct ChecklistSettingsView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(.green.opacity(0.1))
+                        .fill(Neka.greenSoft)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(.green.opacity(0.2), lineWidth: 1)
+                                .stroke(Neka.green.opacity(0.3), lineWidth: 1)
                         )
                 )
                 .padding(.horizontal)
@@ -107,7 +107,7 @@ struct ChecklistSettingsView: View {
             }
             .padding(.vertical)
         }
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("Daily Routine")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
