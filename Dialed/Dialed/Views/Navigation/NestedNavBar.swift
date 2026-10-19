@@ -74,7 +74,7 @@ struct NestedNavBar: View {
     /// Plan and Trends are still dark-designed; match whichever page is up.
     private var pageColor: Color {
         switch router.tab {
-        case .plan: return AppColors.nowBackground
+        case .plan: return Neka.paper
         default:             return Neka.paper
         }
     }

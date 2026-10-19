@@ -1,0 +1,14 @@
+# Dialed live challenge — tiny API + invite page for your friend.
+# Deploy: see README.md (one command: npx wrangler deploy).
+name = "dialed-challenge"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "dialed-challenge"
+database_id = "319a40a9-bec2-4355-b0e8-369a8a7e04af"
+
+# Optional: set a secret so only your app can create challenges.
+#   npx wrangler secret put CREATE_KEY
+# then paste the same key into Dialed → Challenge → Live sync.
