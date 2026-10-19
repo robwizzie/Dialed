@@ -34,6 +34,10 @@ struct WidgetSnapshot: Codable, Equatable {
     var waterProgress: Double { waterTargetOz > 0 ? min(1, waterOz / waterTargetOz) : 0 }
     var proteinLeft: Double { max(0, proteinTarget - protein) }
     var caloriesLeft: Double { calorieTarget - calories }
+    var dialedScore: Int {
+        DialedScore.compute(waterOz: waterOz, waterTargetOz: waterTargetOz, protein: protein,
+                            proteinTarget: proteinTarget, calories: calories, calorieTarget: calorieTarget)
+    }
 
     /// Shown before the app has written anything (and in the gallery).
     static let placeholder = WidgetSnapshot(

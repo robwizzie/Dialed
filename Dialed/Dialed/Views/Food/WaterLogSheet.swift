@@ -66,14 +66,25 @@ struct WaterLogSheet: View {
                         }
                     }
 
-                    HStack {
-                        Stepper("\(Int(custom)) oz", value: $custom, in: 1...64, step: 2)
-                            .font(.system(size: 15, weight: .semibold))
-                        Button("Log") { log(custom) }
-                            .buttonStyle(.borderedProminent)
-                            .tint(Neka.sky)
+                    // Or turn the dial to any amount.
+                    VStack(spacing: 12) {
+                        Text("Turn to any amount")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.inkSecondary)
+                        DialPicker(value: $custom, range: 2...64, step: 2, unit: "oz")
+                            .frame(width: 190, height: 190)
+                        Button { log(custom) } label: {
+                            Text("Log \(Int(custom)) oz")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Capsule().fill(Neka.sky))
+                        }
+                        .buttonStyle(.dialedScale)
                     }
-                    .padding(14)
+                    .frame(maxWidth: .infinity)
+                    .padding(16)
                     .nekaCard()
 
                     if !manual.isEmpty {

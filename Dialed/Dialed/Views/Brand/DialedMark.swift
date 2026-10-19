@@ -35,40 +35,12 @@ struct DialedMark: View, Animatable {
     private static let ringRadius = 316.0
     private static let ringWidth = 92.0
     private static let knobRadius = 200.0
-    private static let lensRadius = 70.0
+    private static let lensRadius = 50.0
     private static let outer = ringRadius + lensRadius + 4
 
-    /// green → sky → lavender → orange, sampled in OKLCH (make_icon.py) so
-    /// the blends stay vivid instead of going grey.
-    private static let rampHex: [UInt32] = [0x4CB868, 0x00BE9A, 0x00BEC3, 0x26BAE1, 0x61B2F2, 0x7AA6F7,
-                                            0x9298F5, 0xA88BEB, 0xDD81C5, 0xF8848A, 0xF59A4C]
-    private static func rgb(_ h: UInt32) -> (Double, Double, Double) {
-        (Double(h >> 16 & 0xFF) / 255, Double(h >> 8 & 0xFF) / 255, Double(h & 0xFF) / 255)
-    }
-    static let ramp: [Color] = rampHex.map { let c = rgb($0); return Color(red: c.0, green: c.1, blue: c.2) }
+    static let ringGradient = DialPalette.ringGradient(span: sweep / 360)
 
-    /// The ramp laid along the ring. The circle is rotated to `start`, so
-    /// 0…0.75 is the scale and the gap is split between the two end
-    /// colours — that keeps the round start cap green, not orange.
-    static let ringGradient: Gradient = {
-        let span = sweep / 360
-        var stops = ramp.enumerated().map { i, c in
-            Gradient.Stop(color: c, location: span * Double(i) / Double(ramp.count - 1))
-        }
-        stops.append(.init(color: ramp.last!, location: span + (1 - span) / 2))
-        stops.append(.init(color: ramp.first!, location: span + (1 - span) / 2 + 0.0001))
-        stops.append(.init(color: ramp.first!, location: 1))
-        return Gradient(stops: stops)
-    }()
-
-    /// Colour on the ring at 0…1. A straight blend between ramp samples,
-    /// which are close enough together to stay on the OKLCH path.
-    static func color(at t: Double) -> Color {
-        let x = min(1, max(0, t)) * Double(rampHex.count - 1)
-        let i = min(rampHex.count - 2, Int(x)), f = x - Double(i)
-        let a = rgb(rampHex[i]), b = rgb(rampHex[i + 1])
-        return Color(red: a.0 + (b.0 - a.0) * f, green: a.1 + (b.1 - a.1) * f, blue: a.2 + (b.2 - a.2) * f)
-    }
+    static func color(at t: Double) -> Color { DialPalette.color(at: t) }
 
     private var dark: Bool { scheme == .dark }
 
@@ -296,9 +268,9 @@ struct DialedMark: View, Animatable {
                 .padding(3 * k)
             Ellipse()
                 .fill(.white.opacity(dark ? 0.5 : 0.85))
-                .frame(width: 52 * k, height: 26 * k)
+                .frame(width: 38 * k, height: 18 * k)
                 .rotationEffect(.degrees(-30))
-                .offset(x: -22 * k, y: -30 * k)
+                .offset(x: -16 * k, y: -21 * k)
         }
         .frame(width: d, height: d)
         .liquidGlass(tint: tint)
@@ -338,6 +310,7 @@ struct DialedLockup: View {
         HStack(spacing: markSize * 0.3) {
             DialedMark()
                 .frame(width: markSize, height: markSize)
+                .motionTilt(14)
             (Text("Dialed").foregroundColor(Neka.ink) + Text(".").foregroundColor(Neka.green))
                 .font(Neka.display(textSize, weight: .bold))
                 .tracking(-textSize * 0.03)
