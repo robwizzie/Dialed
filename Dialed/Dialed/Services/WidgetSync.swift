@@ -164,7 +164,9 @@ enum WidgetSync {
             score: score,
             challenge: challenge,
             goal: goal,
-            updatedAt: now
+            updatedAt: now,
+            miles: home.milesToday,
+            mileStreak: home.mileStreak
         )
     }
 

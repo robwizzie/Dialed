@@ -472,7 +472,7 @@ enum HealthInsights {
         }
         if today.calorieTarget > 0, today.calories > today.calorieTarget * 1.05 {
             out.append(Insight(icon: "flame.fill", tone: .watch,
-                               text: "\(Int(today.calories - today.calorieTarget)) kcal over budget. A long walk with Peaches burns ~300."))
+                               text: "\(Int(today.calories - today.calorieTarget)) kcal over budget. A long walk burns ~300."))
         }
         return out
     }

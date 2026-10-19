@@ -32,6 +32,10 @@ class HealthKitManager: ObservableObject {
             types.insert(stepsType)
         }
 
+        if let distanceType = HKObjectType.quantityType(forIdentifier: .distanceWalkingRunning) {
+            types.insert(distanceType)
+        }
+
         if let activeEnergyType = HKObjectType.quantityType(forIdentifier: .activeEnergyBurned) {
             types.insert(activeEnergyType)
         }

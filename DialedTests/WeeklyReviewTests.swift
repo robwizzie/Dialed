@@ -157,12 +157,12 @@ final class WeeklyReviewTests: XCTestCase {
         XCTAssertEqual(WeeklyReview.biggestGap(summary(days), targets: targets).area, .water)
     }
 
-    func testStepsFixMentionsPeaches() {
+    func testStepsFixSuggestsAWalk() {
         var days = goodWeek()
         for i in 0..<6 { days[i].steps = 4_000 }
         let fix = WeeklyReview.biggestGap(summary(days), targets: targets)
         XCTAssertEqual(fix.area, .steps)
-        XCTAssertTrue(fix.headline.contains("Peaches"))
+        XCTAssertTrue(fix.headline.contains("Walk"))
     }
 
     func testPromptTextHasTheNumbers() {
