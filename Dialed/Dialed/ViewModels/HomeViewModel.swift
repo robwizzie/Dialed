@@ -103,6 +103,12 @@ final class HomeViewModel: ObservableObject {
     /// Today in one value — fed to Apple Intelligence and the fallbacks.
     @Published var snapshot = HealthSnapshot()
 
+    /// Today's mood for your avatar, and what would move it up.
+    @Published var moodReading: AvatarMood.Reading?
+    /// The day you're working toward, and where your trend lands you then.
+    @Published var goalEvent: GoalEvent?
+    @Published var goalProjection: WeightChallengeEngine.Projection?
+
     private let health = HealthKitManager.shared
     private var watchConnected: Bool { GoogleHealthSyncService.isConnected }
     private static let backfillKey = "home.googleHealthBackfilled.v1"
@@ -310,6 +316,8 @@ final class HomeViewModel: ObservableObject {
         ))
 
         snapshot = buildSnapshot(now: now, challenge: challenge)
+        moodReading = AvatarMood.read(snapshot)
+        refreshGoal(now: now)
 
         // ---- Data check (Devices screen): what each tile found, and where.
         let hkWaterToday = hkWaterByDay[today] ?? 0
@@ -361,6 +369,16 @@ final class HomeViewModel: ObservableObject {
         ]
         DataDiagnostics.shared.update(rows: rows)
         return true
+    }
+
+    /// Re-read the goal day (cheap; also called when it's edited).
+    func refreshGoal(now: Date = Date()) {
+        goalEvent = GoalEvent.load()
+        if let event = goalEvent, event.date > now {
+            goalProjection = WeightChallengeEngine.projection(readings: weightReadings, to: event.date, now: now)
+        } else {
+            goalProjection = nil
+        }
     }
 
     private func buildSnapshot(now: Date, challenge: WeightChallenge?) -> HealthSnapshot {
@@ -503,7 +521,10 @@ final class HomeViewModel: ObservableObject {
                     case .done:            status = .done
                     case .active:          status = .active
                     case .due:             status = .missed
-                    case .upcoming:        status = .upcoming
+                    case .upcoming:
+                        // liveStatus keeps finished, unchecked duration blocks
+                        // at .upcoming — past their end they were missed.
+                        status = block.endTime < now ? .missed : .upcoming
                     case .skipped:         status = .missed
                     }
                     let duration = max(block.durationMinutes, 20)

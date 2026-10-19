@@ -84,12 +84,14 @@ final class ProfilePhotoStore: ObservableObject {
         heroScale = 1.0
         heroOffsetY = 0
         rebuildDerived()
+        AvatarStudio.shared.clearAll()   // avatars were drawn from the old photo
     }
 
     func removePhoto() {
         original = nil
         cutout = nil
         rebuildDerived()
+        AvatarStudio.shared.clearAll()
         try? FileManager.default.removeItem(at: Self.originalURL)
         try? FileManager.default.removeItem(at: Self.cutoutURL)
     }
