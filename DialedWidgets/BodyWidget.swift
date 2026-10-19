@@ -2,9 +2,9 @@
 //  BodyWidget.swift
 //  DialedWidgets
 //
-//  Activity and recovery from your watch and scale: steps, sleep, HRV
-//  against your baseline, resting heart rate and the weight trend, each
-//  in its own pastel tile with a week of history.
+//  Activity and recovery from your watch and scale: steps, the daily
+//  mile, sleep, HRV against your baseline, resting heart rate and the
+//  weight trend, each in its own pastel tile with a week of history.
 //
 
 import SwiftUI
@@ -16,7 +16,7 @@ struct DialedBodyWidget: Widget {
             BodyWidgetView(entry: entry)
         }
         .configurationDisplayName("Body")
-        .description("Steps, sleep, HRV, resting heart rate and your weight trend.")
+        .description("Steps, your daily mile, sleep, HRV, resting heart rate and your weight trend.")
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }
@@ -71,8 +71,10 @@ struct BodyWidgetView: View {
                     }
                 }
                 .frame(width: 72, height: 72)
-                VStack(alignment: .leading, spacing: 7) {
-                    miniStat(icon: "moon.fill", tint: Theme.lavender, value: i.sleepHours.map(Fmt.hours) ?? "—")
+                VStack(alignment: .leading, spacing: 5) {
+                    miniStat(icon: entry.ranToday ? "figure.run" : "figure.walk", tint: Theme.lavender,
+                             value: String(format: "%.2f mi", entry.milesToday) + (entry.mileDone ? " ✓" : ""))
+                    miniStat(icon: "moon.fill", tint: Theme.blue, value: i.sleepHours.map(Fmt.hours) ?? "—")
                     miniStat(icon: "waveform.path.ecg", tint: Theme.rose, value: i.hrv.map { "\(Fmt.int($0)) ms" } ?? "—")
                     miniStat(icon: "heart.fill", tint: Theme.orange, value: i.restingHR.map { "\(Fmt.int($0))" } ?? "—")
                 }
@@ -103,9 +105,9 @@ struct BodyWidgetView: View {
             }
             HStack(spacing: 8) {
                 hrvTile(i)
-                restingTile(i)
+                mileTile()
             }
-            .frame(height: 70)
+            .frame(height: 78)
             weightTile(i, wide: true)
         }
     }
@@ -115,7 +117,8 @@ struct BodyWidgetView: View {
     private func stepsTile(_ i: WidgetInsights, chart: Bool = false) -> some View {
         tile(icon: "figure.walk", title: "Steps", tint: Theme.green, wash: .mint,
              value: i.steps.formatted(), unit: nil,
-             note: i.stepProgress >= 1 ? "Goal hit" : "\(Fmt.compact(max(0, i.stepGoal - i.steps))) to go") {
+             note: (i.stepProgress >= 1 ? "Goal hit" : "\(Fmt.compact(max(0, i.stepGoal - i.steps))) to go")
+                + " · " + String(format: "%.1f mi", entry.milesToday) + (entry.mileDone ? " ✓" : "")) {
             if chart {
                 WeekBars(values: i.stepsWeek.map(Double.init), tint: Theme.green,
                          goal: Double(i.stepGoal), today: entry.date)
@@ -147,10 +150,15 @@ struct BodyWidgetView: View {
         }
     }
 
-    private func restingTile(_ i: WidgetInsights) -> some View {
-        tile(icon: "heart.fill", title: "Resting HR", tint: Theme.orange, wash: .peach,
-             value: i.restingHR.map(Fmt.int) ?? "—", unit: "bpm", note: nil) {
-            EmptyView()
+    /// The daily mile: today's distance, the streak, and the week as medals.
+    private func mileTile() -> some View {
+        tile(icon: entry.ranToday ? "figure.run" : "figure.walk", title: "Mile a day", tint: Theme.lavender,
+             wash: .lavender, value: String(format: "%.2f", entry.milesToday), unit: "mi",
+             note: entry.mileDone
+                ? (entry.mileStreak > 1 ? "Done · 🔥 \(entry.mileStreak) days" : "Done today ✓")
+                : String(format: "%.2f mi to go", max(0, entry.mileGoal - entry.milesToday)),
+             chartBeside: true) {
+            MileWeekDots(days: entry.mileWeek, goal: entry.mileGoal, size: 12)
         }
     }
 

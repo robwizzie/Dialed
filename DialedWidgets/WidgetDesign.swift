@@ -563,3 +563,67 @@ enum Fmt {
         date.formatted(.dateTime.weekday(.abbreviated).day()).uppercased()
     }
 }
+
+// MARK: - Daily mile
+
+/// A week of the daily mile, oldest → today: a filled medal with a check
+/// on days you hit it (sky when you ran), a partial ring on short days.
+struct MileWeekDots: View {
+    let days: [MileDay]
+    let goal: Double
+    var size: CGFloat = 16
+    var showsDays = true
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(Array(days.suffix(7).enumerated()), id: \.offset) { index, day in
+                let isToday = index == min(days.count, 7) - 1
+                let done = MileADay.isDone(day.miles, goal: goal)
+                VStack(spacing: 2) {
+                    ZStack {
+                        Circle().stroke(Theme.track, lineWidth: max(2, size * 0.14))
+                        if done {
+                            Circle().fill(day.ran ? Theme.sky : Theme.green).widgetAccentable()
+                            Image(systemName: "checkmark")
+                                .font(.system(size: size * 0.48, weight: .heavy))
+                                .foregroundStyle(.white)
+                        } else if day.miles > 0 {
+                            Circle()
+                                .trim(from: 0, to: min(1, day.miles / max(0.1, goal)))
+                                .stroke(Theme.lavender, style: StrokeStyle(lineWidth: max(2, size * 0.14), lineCap: .round))
+                                .rotationEffect(.degrees(-90))
+                                .widgetAccentable()
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .overlay(Circle().stroke(isToday ? Theme.ink.opacity(0.45) : .clear, lineWidth: 1).padding(-2))
+                    if showsDays {
+                        Text(Self.letter(day.date))
+                            .font(.system(size: 8.5, weight: isToday ? .bold : .medium))
+                            .foregroundStyle(isToday ? Theme.ink : Theme.inkTertiary)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    private static func letter(_ date: Date) -> String {
+        let calendar = Calendar.current
+        return calendar.veryShortStandaloneWeekdaySymbols[calendar.component(.weekday, from: date) - 1]
+    }
+}
+
+extension MileHistory {
+    /// Gallery / preview data: a good week with one short day and a run.
+    static var placeholder: MileHistory {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let miles = [1.4, 1.1, 0.6, 1.2, 2.3, 1.0, 0.62]
+        let days = miles.enumerated().compactMap { i, m -> MileDay? in
+            guard let d = calendar.date(byAdding: .day, value: i - 6, to: today) else { return nil }
+            return MileDay(date: d, miles: m, ran: i == 4, source: .distance)
+        }
+        return MileHistory(start: days.first?.date ?? today, days: days, updatedAt: Date())
+    }
+}

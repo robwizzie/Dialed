@@ -184,9 +184,7 @@ final class HomeViewModel: ObservableObject {
         // 3. Apple Health, in parallel. try? = a missing permission is not an error.
         async let hkWater = try? health.fetchDailySums(.dietaryWater, unit: .fluidOunceUS(), days: 7)
         async let hkWaterSources = health.sourceNames(.dietaryWater, since: today)
-        async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 60)
-        async let hkDistance = try? health.fetchDailySums(.distanceWalkingRunning, unit: .mile(), days: 60)
-        async let hkWorkoutsToday = try? health.fetchWorkouts(for: today)
+        async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 7)
         async let hkProtein = try? health.fetchDailySums(.dietaryProtein, unit: .gram(), days: 1)
         async let hkEnergy = try? health.fetchDailySums(.dietaryEnergyConsumed, unit: .kilocalorie(), days: 8)
         async let hkActive = try? health.fetchDailySums(.activeEnergyBurned, unit: .kilocalorie(), days: 8)
@@ -211,8 +209,6 @@ final class HomeViewModel: ObservableObject {
         let merged = await WeightDataSource.readings(context: context, since: weightWindowStart)
         let hkWaterByDay = await hkWater ?? [:]
         let hkStepsByDay = await hkSteps ?? [:]
-        let hkMilesByDay = await hkDistance ?? [:]
-        let workoutsToday = await hkWorkoutsToday ?? []
         let hkProteinToday = (await hkProtein ?? [:])[today] ?? 0
         let hkEnergyByDay = await hkEnergy ?? [:]
         let hkEnergyToday = hkEnergyByDay[today] ?? 0
@@ -261,31 +257,17 @@ final class HomeViewModel: ObservableObject {
         }
         steps = stepsSeries.last ?? 0
 
-        // ---- Mile a day (walked or run)
-        // Learn your stride from days Health has both steps and distance,
-        // so step-only days (Pixel Watch) are estimated the way you walk.
-        var mileSettings = MileSettings.load()
-        let learned = MileADay.learnStride(hkMilesByDay.compactMap { day, miles in
-            hkStepsByDay[day].map { (steps: $0, miles: miles) }
-        })
-        if let learned, learned != mileSettings.learnedStepsPerMile {
-            mileSettings.learnedStepsPerMile = learned
-            mileSettings.save()
-        }
+        // ---- Mile a day (walked or run): distance, on-foot workouts, or
+        // steps — worked out per day and shared with the widgets.
+        let mileHistory = await MileHistoryService.update(context: context, extraSteps: watchSteps, now: now)
+        let mileSettings = MileSettings.load()
         stepsPerMileInUse = mileSettings.stepsPerMile
-        var milesByDay: [Date: Double] = [:]
-        for offset in 0..<60 {
-            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
-            let log = dayLogs.first { calendar.isDate($0.date, inSameDayAs: day) }
-            let daySteps = Int(max(hkStepsByDay[day] ?? 0, watchSteps[day] ?? 0, Double(log?.steps ?? 0)))
-            milesByDay[day] = MileADay.miles(distance: hkMilesByDay[day], steps: daySteps,
-                                             stepsPerMile: mileSettings.stepsPerMile)
-        }
-        milesToday = milesByDay[today] ?? 0
-        milesWeek = lastDays(7, today: today).map { milesByDay[$0] ?? 0 }
         mileGoal = mileSettings.goalMiles
-        mileStreak = MileADay.streak(milesByDay: milesByDay, today: now, goal: mileGoal, calendar: calendar)
-        ranToday = workoutsToday.contains { $0.workoutType == .running }
+        let mileWeek = mileHistory.last(7, today: now, calendar: calendar)
+        milesToday = mileWeek.last?.miles ?? 0
+        milesWeek = mileWeek.map(\.miles)
+        ranToday = mileWeek.last?.ran ?? false
+        mileStreak = mileHistory.currentStreak(today: now, goal: mileGoal, calendar: calendar)
 
         // ---- Fuel
         let mealEvents = todayEvents.filter { $0.kindRaw == ContextEvent.Kind.meal.rawValue }
