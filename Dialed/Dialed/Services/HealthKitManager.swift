@@ -92,7 +92,33 @@ class HealthKitManager: ObservableObject {
         return types
     }()
 
+    /// Food and water Dialed mirrors into Apple Health (see HealthWriteBack).
+    nonisolated static let intakeIdentifiers: Set<HKQuantityTypeIdentifier> = [
+        .dietaryWater, .dietaryEnergyConsumed, .dietaryProtein, .dietaryCarbohydrates, .dietaryFatTotal
+    ]
+
+    /// Types we ask to write — meals and water logged in Dialed.
+    nonisolated static let typesToShare: Set<HKSampleType> = {
+        Set(intakeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+    }()
+
     nonisolated private init() {}
+
+    /// Date-window predicate for a quantity type. For food and water it also
+    /// leaves out samples Dialed wrote itself: those mirror meals and water
+    /// we already count from SwiftData, so reading them back would double them.
+    nonisolated static func samplePredicate(
+        _ identifier: HKQuantityTypeIdentifier,
+        start: Date?,
+        end: Date?,
+        options: HKQueryOptions
+    ) -> NSPredicate {
+        let window = HKQuery.predicateForSamples(withStart: start, end: end, options: options)
+        guard intakeIdentifiers.contains(identifier) else { return window }
+        let ours = HKQuery.predicateForObjects(from: [HKSource.default()])
+        let notOurs = NSCompoundPredicate(notPredicateWithSubpredicate: ours)
+        return NSCompoundPredicate(andPredicateWithSubpredicates: [window, notOurs])
+    }
 
     // MARK: - Authorization
 
@@ -115,7 +141,7 @@ class HealthKitManager: ObservableObject {
             print("🔍 [HealthKit] Current authorization status BEFORE request:")
             _ = checkAuthorizationStatus()
             
-            try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+            try await healthStore.requestAuthorization(toShare: Self.typesToShare, read: typesToRead)
             print("✅ [HealthKit] Authorization request completed")
             
             // Wait for iOS to update the authorization state
@@ -145,7 +171,7 @@ class HealthKitManager: ObservableObject {
     func needsAuthorizationPrompt() async -> Bool {
         guard HKHealthStore.isHealthDataAvailable() else { return false }
         return await withCheckedContinuation { continuation in
-            healthStore.getRequestStatusForAuthorization(toShare: [], read: typesToRead) { status, _ in
+            healthStore.getRequestStatusForAuthorization(toShare: Self.typesToShare, read: typesToRead) { status, _ in
                 continuation.resume(returning: status == .shouldRequest)
             }
         }
@@ -772,7 +798,7 @@ class HealthKitManager: ObservableObject {
         to end: Date = Date()
     ) async throws -> [QuantityReading] {
         guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        let predicate = Self.samplePredicate(identifier, start: start, end: end, options: [])
         let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
 
         return try await withCheckedThrowingContinuation { continuation in
@@ -838,7 +864,7 @@ class HealthKitManager: ObservableObject {
         let today = calendar.startOfDay(for: Date())
         guard let start = calendar.date(byAdding: .day, value: -(days - 1), to: today),
               let end = calendar.date(byAdding: .day, value: 1, to: today) else { return [:] }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let predicate = Self.samplePredicate(identifier, start: start, end: end, options: .strictStartDate)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsCollectionQuery(
@@ -875,7 +901,7 @@ class HealthKitManager: ObservableObject {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: day)
         guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return Array(repeating: 0, count: 24) }
-        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let predicate = Self.samplePredicate(identifier, start: start, end: end, options: .strictStartDate)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsCollectionQuery(
@@ -943,7 +969,9 @@ class HealthKitManager: ObservableObject {
         let predicate = HKQuery.predicateForSamples(withStart: start, end: Date(), options: [])
         return await withCheckedContinuation { continuation in
             let query = HKSourceQuery(sampleType: type, samplePredicate: predicate) { _, sources, _ in
-                let names = (sources ?? []).map(\.name).sorted()
+                // Dialed's own write-back isn't a device feeding us data.
+                let own = HKSource.default().bundleIdentifier
+                let names = (sources ?? []).filter { $0.bundleIdentifier != own }.map(\.name).sorted()
                 continuation.resume(returning: names)
             }
             healthStore.execute(query)
@@ -964,7 +992,8 @@ class HealthKitManager: ObservableObject {
             return nil
         }
 
-        let predicate = HKQuery.predicateForSamples(withStart: startOfDay, end: endOfDay, options: .strictStartDate)
+        let identifier = HKQuantityTypeIdentifier(rawValue: quantityType.identifier)
+        let predicate = Self.samplePredicate(identifier, start: startOfDay, end: endOfDay, options: .strictStartDate)
 
         return try await withCheckedThrowingContinuation { continuation in
             let query = HKStatisticsQuery(
