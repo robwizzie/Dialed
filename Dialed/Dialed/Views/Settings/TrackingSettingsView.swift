@@ -65,7 +65,7 @@ struct TrackingSettingsView: View {
 
                                 Text(String(format: "%.2fx", preferences.scaleFactor))
                                     .font(.caption.bold())
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(Neka.sky)
                             }
                         } else {
                             Text("Enable at least one category to start tracking")
@@ -76,24 +76,17 @@ struct TrackingSettingsView: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(.ultraThinMaterial)
+                            .fill(Neka.surface)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(Neka.hairline, lineWidth: 0.5)
                             )
                     )
                 }
             } header: {
                 Text("Overview")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
 
             // Category toggles
             Section {
@@ -115,21 +108,14 @@ struct TrackingSettingsView: View {
             } footer: {
                 Text("Disable categories you don't want to track. Your score adjusts automatically.")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
-                    )
-            )
+            .listRowBackground(Neka.surface)
 
             // Info section
             Section {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Neka.sky)
                         Text("How it works")
                             .font(.subheadline.bold())
                             .foregroundStyle(.primary)
@@ -145,17 +131,10 @@ struct TrackingSettingsView: View {
             } header: {
                 Text("About Scoring")
             }
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.blue.opacity(0.1))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(.blue.opacity(0.3), lineWidth: 1)
-                    )
-            )
+            .listRowBackground(Neka.skySoft)
         }
         .scrollContentBackground(.hidden)
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("What to Track")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -255,7 +234,7 @@ struct InfoRow: View {
         HStack(spacing: 8) {
             Image(systemName: "checkmark")
                 .font(.caption2)
-                .foregroundStyle(.blue)
+                .foregroundStyle(Neka.sky)
                 .frame(width: 12)
 
             Text(text)

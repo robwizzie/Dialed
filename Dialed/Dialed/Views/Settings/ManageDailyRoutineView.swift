@@ -56,10 +56,10 @@ struct ManageDailyRoutineView: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(.ultraThinMaterial)
+                            .fill(Neka.surface)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(.green.opacity(0.3), lineWidth: 1)
+                                    .stroke(Neka.green.opacity(0.35), lineWidth: 1)
                             )
                     )
 
@@ -97,7 +97,7 @@ struct ManageDailyRoutineView: View {
                                     Text("Add Task")
                                 }
                                 .font(.caption.bold())
-                                .foregroundColor(.blue)
+                                .foregroundColor(Neka.green)
                             }
                         }
 
@@ -120,10 +120,10 @@ struct ManageDailyRoutineView: View {
                             .padding(.vertical, 40)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                         } else {
@@ -139,7 +139,7 @@ struct ManageDailyRoutineView: View {
                 }
                 .padding()
             }
-            .background(AppColors.background.ignoresSafeArea())
+            .nekaPageBackground()
             .navigationTitle("Daily Routine")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showAddTask) {
@@ -213,20 +213,20 @@ struct DefaultTaskRow: View {
                 .padding(.vertical, 4)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial)
+                        .fill(Neka.surface)
                         .overlay(
                             Capsule()
-                                .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
                         )
                 )
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(.ultraThinMaterial)
+                .fill(Neka.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                        .stroke(Neka.hairline, lineWidth: 0.5)
                 )
         )
     }
@@ -275,27 +275,27 @@ struct CustomTaskRow: View {
                     .padding(.vertical, 4)
                     .background(
                         Capsule()
-                            .fill(.ultraThinMaterial)
+                            .fill(Neka.surface)
                             .overlay(
                                 Capsule()
-                                    .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                    .stroke(Neka.hairline, lineWidth: 0.5)
                             )
                     )
 
                 Button(action: onDelete) {
                     Image(systemName: "trash")
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(Neka.rose)
                 }
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(.ultraThinMaterial)
+                .fill(Neka.surface)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(.blue.opacity(0.3), lineWidth: 1)
+                        .stroke(Neka.sky.opacity(0.4), lineWidth: 1)
                 )
         )
     }
@@ -329,10 +329,10 @@ struct AddCustomTaskSheet: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                     }
@@ -354,10 +354,10 @@ struct AddCustomTaskSheet: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                     }
@@ -366,7 +366,7 @@ struct AddCustomTaskSheet: View {
                     HStack(spacing: 8) {
                         Image(systemName: "info.circle.fill")
                             .font(.caption)
-                            .foregroundStyle(.blue)
+                            .foregroundStyle(Neka.sky)
                         Text("Point values are automatically calculated based on your total number of tasks")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -374,10 +374,10 @@ struct AddCustomTaskSheet: View {
                     .padding()
                     .background(
                         RoundedRectangle(cornerRadius: 10)
-                            .fill(.blue.opacity(0.1))
+                            .fill(Neka.skySoft)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(.blue.opacity(0.2), lineWidth: 1)
+                                    .stroke(Neka.sky.opacity(0.3), lineWidth: 1)
                             )
                     )
 
@@ -425,17 +425,17 @@ struct AddCustomTaskSheet: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(.ultraThinMaterial)
+                                .fill(Neka.surface)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                        .stroke(Neka.hairline, lineWidth: 0.5)
                                 )
                         )
                     }
                 }
                 .padding()
             }
-            .background(AppColors.background.ignoresSafeArea())
+            .nekaPageBackground()
             .navigationTitle("Add Custom Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
