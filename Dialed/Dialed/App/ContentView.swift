@@ -157,7 +157,13 @@ struct MainTabView: View {
             WeighInSheet(lastWeight: nil)
                 .presentationDetents([.medium])
         case .meal:
-            AIMealSheet()
+            AddFoodSheet()
+                .presentationDetents([.large])
+        case .snapMeal:
+            AddFoodSheet(start: .photo)
+                .presentationDetents([.large])
+        case .scanFood:
+            AddFoodSheet(start: .scan)
                 .presentationDetents([.large])
         case .voice:
             VoiceCaptureSheet()

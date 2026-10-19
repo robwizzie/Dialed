@@ -4,17 +4,17 @@
 //
 //  Point the camera at a barcode, look the product up in Open Food Facts,
 //  pick how much you had (servings or grams), then hand a pre-filled
-//  draft back to the food log so the usual edit sheet can adjust and log
-//  it. Devices without the live scanner can type the number instead.
+//  draft back to Add food, which shows the same review screen as every
+//  other way of adding food. Devices without the live scanner can type
+//  the number instead.
 //
 
 import SwiftUI
 import VisionKit
 import Vision
 
-struct BarcodeScanSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    /// Called with the draft to review; the caller opens the edit sheet.
+struct BarcodeScanView: View {
+    /// Called with the draft to review.
     var onDraft: (FoodDraft) -> Void
 
     @State private var phase: Phase = .scanning
@@ -35,30 +35,22 @@ struct BarcodeScanSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch phase {
-                case .scanning:
-                    scanning
-                case .looking(let code):
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Looking up \(code)…")
-                            .font(.system(size: 13))
-                            .foregroundColor(Neka.inkSecondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                case .found(let product):
-                    confirm(product)
-                case .failed(let message):
-                    failed(message)
+        Group {
+            switch phase {
+            case .scanning:
+                scanning
+            case .looking(let code):
+                VStack(spacing: 12) {
+                    ProgressView()
+                    Text("Looking up \(code)…")
+                        .font(.system(size: 13))
+                        .foregroundColor(Neka.inkSecondary)
                 }
-            }
-            .nekaPageBackground()
-            .navigationTitle("Scan barcode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            case .found(let product):
+                confirm(product)
+            case .failed(let message):
+                failed(message)
             }
         }
     }
@@ -166,7 +158,6 @@ struct BarcodeScanSheet: View {
                 Button {
                     guard let n else { return }
                     onDraft(draft(product, n, portion: portion))
-                    dismiss()
                 } label: {
                     Text("Review & log").frame(maxWidth: .infinity)
                 }
@@ -213,7 +204,6 @@ struct BarcodeScanSheet: View {
                 .buttonStyle(.nekaPrimary)
             Button("Add by hand") {
                 onDraft(FoodDraft())
-                dismiss()
             }
             .font(.system(size: 14, weight: .semibold))
             .foregroundColor(Neka.inkSecondary)
