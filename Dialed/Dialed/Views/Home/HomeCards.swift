@@ -249,6 +249,16 @@ struct HomeFuelCard: View {
                 Text("Fuel")
                     .font(Neka.label)
                     .foregroundColor(Neka.ink)
+                if isFinalPush {
+                    Label("FINAL PUSH", systemImage: "flame.fill")
+                        .font(.system(size: 9, weight: .heavy))
+                        .tracking(0.6)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(LinearGradient(colors: [Neka.amber, Neka.rose],
+                                                                  startPoint: .leading, endPoint: .trailing)))
+                }
                 Spacer()
                 Button(action: onOpenLog) {
                     Label("Food log", systemImage: "list.bullet")
@@ -315,9 +325,14 @@ struct HomeFuelCard: View {
         .nekaCard()
     }
 
+    /// Final push has tightened today's target (the last 14 days of the challenge).
+    private var isFinalPush: Bool { FinalPushStore.activeTarget() != nil }
+
     private var calorieNote: String {
         let left = calorieTarget - calories
-        if calories == 0 { return "Nothing logged yet today." }
+        if calories == 0 {
+            return isFinalPush ? "Final push target today. Every calorie counts." : "Nothing logged yet today."
+        }
         if left >= 0, earned.earned > 0 {
             return "\(Int(left).formatted()) calories left, \(Int(earned.earned)) of them earned by moving."
         }

@@ -32,7 +32,7 @@ struct EatingOutView: View {
 
     /// Today's target plus what exercise earned back.
     private var calorieTarget: Double {
-        (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)) + earnedCalories
+        CalorieTarget.current(settings: settings, weight: settings.currentWeight) + earnedCalories
     }
     private var proteinTarget: Double { settings.proteinTargetGrams }
 

@@ -3,8 +3,11 @@
 //  DialedWidgets
 //
 //  The weight-loss challenge scoreboard — you vs your friend, who's
-//  leading and by how much, days left, progress to your goal and your
-//  weigh-in streak — plus the countdown to your goal day.
+//  leading and by how much, days left, the pace you need to finish ahead,
+//  progress to your goal and your weigh-in streak — plus the countdown to
+//  your goal day. Turns orange-hot for the final push (last 14 days).
+//  Home Screen (small, medium) and Lock Screen (rectangular, circular,
+//  inline).
 //
 
 import SwiftUI
@@ -15,9 +18,9 @@ struct DialedChallengeWidget: Widget {
         StaticConfiguration(kind: "DialedChallengeWidget", provider: DialedProvider()) { entry in
             ChallengeWidgetView(entry: entry)
         }
-        .configurationDisplayName("Challenge")
-        .description("You vs your friend, days left, and the countdown to your goal day.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular])
+        .configurationDisplayName("Race")
+        .description("You vs your friend: who leads, by how much, the pace to win, and days left.")
+        .supportedFamilies([.systemSmall, .systemMedium, .accessoryRectangular, .accessoryCircular, .accessoryInline])
     }
 }
 
@@ -34,10 +37,16 @@ struct ChallengeWidgetView: View {
             case .accessoryRectangular:
                 rectangular
                     .containerBackground(for: .widget) { Color.clear }
+            case .accessoryCircular:
+                circular
+                    .containerBackground(for: .widget) { Color.clear }
+            case .accessoryInline:
+                inline
+                    .containerBackground(for: .widget) { Color.clear }
             case .systemMedium:
-                medium.dialedBackground(.lavender)
+                medium.dialedBackground(challenge?.isFinalPush == true ? .peach : .lavender)
             default:
-                small.dialedBackground(.lavender)
+                small.dialedBackground(challenge?.isFinalPush == true ? .peach : .lavender)
             }
         }
         .widgetURL(WidgetLink.challenge.url)
@@ -49,7 +58,9 @@ struct ChallengeWidgetView: View {
     private var small: some View {
         if let c = challenge {
             VStack(alignment: .leading, spacing: 0) {
-                WidgetTitle(icon: "trophy.fill", title: "Day \(c.dayNumber)", tint: Theme.amber,
+                WidgetTitle(icon: c.isFinalPush ? "flame.fill" : "trophy.fill",
+                            title: c.isFinalPush ? "Final push" : "Day \(c.dayNumber)",
+                            tint: c.isFinalPush ? Theme.orange : Theme.amber,
                             trailing: "\(c.daysLeft)d left")
                 Spacer(minLength: 4)
                 Text(headline(c))
@@ -76,7 +87,8 @@ struct ChallengeWidgetView: View {
         if let c = challenge {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 0) {
-                    WidgetTitle(icon: "trophy.fill", title: "Challenge", tint: Theme.amber)
+                    WidgetTitle(icon: c.isFinalPush ? "flame.fill" : "trophy.fill",
+                                title: c.isFinalPush ? "Final push" : "Race", tint: c.isFinalPush ? Theme.orange : Theme.amber)
                     Spacer(minLength: 4)
                     Text(headline(c))
                         .font(Theme.display(17))
@@ -88,12 +100,20 @@ struct ChallengeWidgetView: View {
                         racer("You", c.youLost, c, isYou: true)
                         racer(c.friendName, c.friendLost, c, isYou: false)
                     }
+                    if let pace = paceLine(c) {
+                        Spacer(minLength: 6)
+                        Text(pace)
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(paceTint(c))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
                     Spacer(minLength: 0)
                 }
 
                 VStack(spacing: 8) {
                     ZStack {
-                        ProgressRing(progress: c.timeProgress, tint: Theme.lavender, lineWidth: 7)
+                        ProgressRing(progress: c.timeProgress, tint: c.isFinalPush ? Theme.orange : Theme.lavender, lineWidth: 7)
                         VStack(spacing: -2) {
                             Text("\(c.daysLeft)")
                                 .font(Theme.display(22))
@@ -134,9 +154,10 @@ struct ChallengeWidgetView: View {
                 Text("You \(amount(c.youLost, c)) · \(c.friendName) \(c.friendLost.map { amount($0, c) } ?? "—")")
                     .font(.system(size: 12))
                     .lineLimit(1)
-                Text("Day \(c.dayNumber) of \(c.totalDays)")
+                Text(paceLine(c) ?? (c.isFinalPush ? "Final push · \(c.daysLeft)d left" : "Day \(c.dayNumber) of \(c.totalDays)"))
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
             } else if let goal {
                 Label("\(daysUntil(goal.date)) days", systemImage: "calendar")
                     .font(.system(size: 15, weight: .semibold))
@@ -149,7 +170,72 @@ struct ChallengeWidgetView: View {
         }
     }
 
+    /// Lock Screen ring: days left around the edge, your lead (or deficit) inside.
+    @ViewBuilder
+    private var circular: some View {
+        if let c = challenge {
+            ZStack {
+                AccessoryWidgetBackground()
+                Gauge(value: c.timeProgress) {
+                    Image(systemName: c.isFinalPush ? "flame.fill" : "trophy.fill")
+                } currentValueLabel: {
+                    VStack(spacing: -2) {
+                        Text(signedLead(c))
+                            .font(.system(size: 13, weight: .bold))
+                            .minimumScaleFactor(0.6)
+                        Text("\(c.daysLeft)d")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                }
+                .gaugeStyle(.accessoryCircular)
+                .widgetAccentable()
+            }
+        } else {
+            ZStack {
+                AccessoryWidgetBackground()
+                Image(systemName: "trophy")
+            }
+        }
+    }
+
+    /// One line above the clock: "👑 +1.2 lb on Dave · 12d".
+    @ViewBuilder
+    private var inline: some View {
+        if let c = challenge {
+            switch c.leader {
+            case "you":    Text("👑 \(signedLead(c)) on \(c.friendName) · \(c.daysLeft)d")
+            case "friend": Text("\(c.friendName) \(amount(c.margin, c)) up · \(c.daysLeft)d left")
+            case "tied":   Text("Tied with \(c.friendName) · \(c.daysLeft)d")
+            default:       Text("\(c.daysLeft) days vs \(c.friendName)")
+            }
+        } else {
+            Text("Start a challenge")
+        }
+    }
+
     // MARK: Pieces
+
+    /// "+1.2 lb" when you lead, "−0.4 lb" when behind, "0" tied.
+    private func signedLead(_ c: WidgetInsights.Challenge) -> String {
+        let unit = c.scoresPercent ? "%" : ""
+        switch c.leader {
+        case "you":    return "+" + String(format: "%.1f", c.margin) + unit
+        case "friend": return "−" + String(format: "%.1f", c.margin) + unit
+        default:       return "0"
+        }
+    }
+
+    /// "Need 1.4 lb/wk · you're on 1.7"
+    private func paceLine(_ c: WidgetInsights.Challenge) -> String? {
+        guard let needed = c.neededPace, c.raceStatus != nil, c.raceStatus != "unknown" else { return nil }
+        if needed <= 0.05 { return "Far enough ahead to hold steady" }
+        let you = c.yourPace.map { " · you're on \(String(format: "%.1f", $0))" } ?? ""
+        return "Need \(String(format: "%.1f", needed)) lb/wk\(you)"
+    }
+
+    private func paceTint(_ c: WidgetInsights.Challenge) -> Color {
+        c.raceStatus == "behind" ? Theme.orangeText : Theme.greenText
+    }
 
     private func headline(_ c: WidgetInsights.Challenge) -> String {
         let lead = amount(c.margin, c)
