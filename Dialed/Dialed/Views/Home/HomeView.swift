@@ -134,6 +134,8 @@ struct HomeView: View {
                     MileHistoryView()
                 case .weightTrend:
                     TrendWeightView()
+                case .mealPlan:
+                    MealPlanView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -592,6 +594,10 @@ struct HomeView: View {
                 onOpenLog: { path.append(.foodLog) },
                 onEatingOut: { sheet = .eatingOut }
             )
+        case .proteinPace:
+            HomeProteinPaceCard(protein: viewModel.proteinGrams, target: viewModel.proteinTarget)
+        case .mealPlan:
+            HomeMealPlanCard(onOpen: { path.append(.mealPlan) })
         case .timeline:
             HomeTimelineCard(items: viewModel.timeline)
         case .coach:
