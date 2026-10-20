@@ -9,6 +9,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import WidgetKit
 
 struct MileSettingsView: View {
