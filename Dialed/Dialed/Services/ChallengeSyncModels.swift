@@ -33,6 +33,8 @@ enum ChallengeWire {
         let messages: [Message]
         /// Each side's stats card, keyed "owner" / "friend".
         var stats: [String: SideStats]?
+        /// Weekly side bets (missing on servers from before side bets).
+        var bets: [SideBets.Wire]?
     }
 
     /// Optional, loosely-typed stats a side shares (all fields optional).

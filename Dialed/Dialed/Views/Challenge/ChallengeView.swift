@@ -58,6 +58,7 @@ struct ChallengeView: View {
                         headToHead(c, p)
                         if let race = viewModel.race { RacePaceCard(report: race) }
                         wrappedButton(p)
+                        SideBetsSection()
                         LiveChallengeCard(sync: liveSync, friendName: c.friendDisplayName) { sheet = .live }
                         TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
                             .id("\(c.scoring.rawValue)-\(p.leader)-\(Int(p.margin * 10))")

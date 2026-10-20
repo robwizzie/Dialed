@@ -13,6 +13,8 @@
 //   POST   /api/challenges/:id/messages       trash talk (≤ 280 chars)
 //   PUT    /api/challenges/:id/stats          your own stats card (goal, steps, workouts…)
 //   POST   /api/challenges/:id/scale?t=…      automatic weigh-in from a phone automation
+//   POST   /api/challenges/:id/bets           propose this week's side bet { week, metric, stake }
+//   PATCH  /api/challenges/:id/bets/:betId    { action: accept|decline|cancel|paid|unpaid } and/or { score }
 //   GET    /c/:id                             the friend's page
 
 import { page } from "./page.js";
@@ -101,18 +103,34 @@ async function create(request, env, url) {
   return json({ id, ownerToken, friendToken, inviteUrl }, 201);
 }
 
+const METRICS = ["steps", "miles", "workouts", "prs", "skippedDays", "proteinDays"];
+
+/** Side bets, newest week first. A database without the table just has none. */
+async function loadBets(env, c) {
+  try {
+    const r = await env.DB.prepare(
+      `SELECT id, week, metric, stake, proposer, status, owner_score AS ownerScore, friend_score AS friendScore, paid,
+              created_at AS createdAt FROM bets WHERE challenge_id = ? ORDER BY week DESC, created_at DESC LIMIT 40`
+    ).bind(c.id).all();
+    return r.results;
+  } catch {
+    return [];
+  }
+}
+
 async function get(env, c, role) {
-  const [w, m, st] = await Promise.all([
+  const [w, m, st, bets] = await Promise.all([
     env.DB.prepare("SELECT role, date, pounds, source, updated_at AS updatedAt FROM weighins WHERE challenge_id = ? ORDER BY date").bind(c.id).all(),
     env.DB.prepare("SELECT id, role, text, created_at AS createdAt FROM messages WHERE challenge_id = ? ORDER BY id DESC LIMIT 50")
       .bind(c.id).all(),
     env.DB.prepare("SELECT role, json, updated_at AS updatedAt FROM stats WHERE challenge_id = ?").bind(c.id).all(),
+    loadBets(env, c),
   ]);
   const stats = {};
   for (const row of st.results) {
     try { stats[row.role] = { ...JSON.parse(row.json), updatedAt: row.updatedAt }; } catch {}
   }
-  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse(), stats });
+  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse(), stats, bets });
 }
 
 /** Today's date where the request came from (Cloudflare knows the caller's timezone). */
@@ -217,6 +235,52 @@ async function deleteWeighin(env, c, role, date) {
   return get(env, c, role);
 }
 
+async function proposeBet(request, env, c, role) {
+  const b = await readBody(request);
+  const stake = String(b?.stake ?? "").trim().slice(0, 80);
+  if (!b || !isDate(b.week) || !METRICS.includes(b.metric) || !stake) return fail(400, "expected { week, metric, stake }");
+  const open = await env.DB.prepare(
+    "SELECT id FROM bets WHERE challenge_id = ? AND week = ? AND status IN ('proposed','active')"
+  ).bind(c.id, b.week).first();
+  if (open) return fail(409, "there's already a bet this week");
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `INSERT INTO bets (id, challenge_id, week, metric, stake, proposer, status, paid, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, 'proposed', 0, ?, ?)`
+  ).bind(randomToken(6), c.id, b.week, b.metric, stake, role, now, now).run();
+  return get(env, c, role);
+}
+
+async function patchBet(request, env, c, role, betId) {
+  const bet = await env.DB.prepare("SELECT * FROM bets WHERE id = ? AND challenge_id = ?").bind(betId, c.id).first();
+  if (!bet) return fail(404, "no such bet");
+  const b = (await readBody(request)) || {};
+  let status = bet.status;
+  let paid = bet.paid;
+  switch (b.action) {
+    case undefined: break;
+    case "accept":
+    case "decline":
+      if (bet.status !== "proposed" || bet.proposer === role) return fail(403, "only the other side can answer");
+      status = b.action === "accept" ? "active" : "declined";
+      break;
+    case "cancel":
+      if (bet.status !== "proposed" || bet.proposer !== role) return fail(403, "only the proposer can cancel");
+      status = "cancelled";
+      break;
+    case "paid": paid = 1; break;
+    case "unpaid": paid = 0; break;
+    default: return fail(400, "unknown action");
+  }
+  // Each side only ever writes its own score.
+  const score = typeof b.score === "number" && isFinite(b.score) && b.score >= 0 && b.score < 1e7 ? b.score : null;
+  const column = role === "owner" ? "owner_score" : "friend_score";
+  await env.DB.prepare(
+    `UPDATE bets SET status = ?, paid = ?, ${column} = COALESCE(?, ${column}), updated_at = ? WHERE id = ?`
+  ).bind(status, paid, score, new Date().toISOString(), bet.id).run();
+  return get(env, c, role);
+}
+
 async function postMessage(request, env, c, role) {
   const b = await readBody(request);
   const text = String(b?.text ?? "").trim().slice(0, 280);
@@ -240,7 +304,7 @@ export default {
 
     if (url.pathname === "/api/challenges" && request.method === "POST") return create(request, env, url);
 
-    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale)?\/?$/);
+    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale|\/bets(?:\/([a-f0-9]{12}))?)?\/?$/);
     if (!m) return url.pathname === "/" ? new Response("Dialed challenge server is running.") : fail(404, "not found");
 
     const c = await loadChallenge(env, m[1]);
@@ -256,6 +320,8 @@ export default {
     if (sub === "/messages" && request.method === "POST") return postMessage(request, env, c, role);
     if (sub === "/stats" && request.method === "PUT") return putStats(request, env, c, role);
     if (sub === "/scale" && (request.method === "POST" || request.method === "GET")) return scale(request, env, c, role);
+    if (sub === "/bets" && request.method === "POST") return proposeBet(request, env, c, role);
+    if (sub.startsWith("/bets/") && request.method === "PATCH") return patchBet(request, env, c, role, m[4]);
     return fail(405, "method not allowed");
   },
 };

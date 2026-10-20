@@ -62,4 +62,23 @@ npx wrangler dev
 | POST | `/api/challenges/:id/messages` | `{ text }`, 280 chars max |
 | PUT | `/api/challenges/:id/stats` | your stats card (goal, steps, workouts…) |
 | POST | `/api/challenges/:id/scale?t=<token>` | automatic weigh-in: `{ "weight": "185.2 lb" }` (kg understood); dated by the caller's timezone |
+| POST | `/api/challenges/:id/bets` | propose this week's side bet `{ week, metric, stake }` (one open bet per week) |
+| PATCH | `/api/challenges/:id/bets/:betId` | `{ action: accept \| decline \| cancel \| paid \| unpaid }` and/or `{ score }` (your own number only) |
 | GET | `/c/:id#t=<token>` | the friend's page |
+
+## Side bets (v3)
+
+Weekly mini-battles (most steps, miles, workouts, PRs, protein days, or
+fewest skipped days) with a stake. Either side proposes; the other
+accepts on the page or in the app. Each side posts only its own number;
+the winner is worked out when the week (Mon–Sun) ends.
+
+To turn them on for an existing server, add the table and redeploy:
+
+```sh
+npx wrangler d1 execute dialed-challenge --remote --file schema.sql
+npx wrangler deploy
+```
+
+Until then the app keeps bets on the phone and you type your friend's
+number in.
