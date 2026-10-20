@@ -49,6 +49,15 @@ struct AvatarSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
+                    if let levelUp = studio.levelUp {
+                        AvatarLevelUpCard(levelUp: levelUp, after: studio.image(for: mood),
+                                          isDrawing: studio.inProgress.contains(mood.rawValue),
+                                          onDismiss: { withAnimation { studio.dismissLevelUp() } })
+                            .task { await studio.ensure(mood: mood) }
+                    }
+                    if let evolution = studio.evolution {
+                        AvatarStageCard(reading: evolution)
+                    }
                     if let error = studio.lastError {
                         Text(error)
                             .font(.system(size: 12, weight: .medium))
@@ -199,6 +208,10 @@ struct AvatarSheet: View {
                     .offset(x: 76, y: 76)
                 referenceBadge(mood.rawValue, size: 40)
                     .offset(x: -76, y: 76)
+                if let evolution = studio.evolution {
+                    AvatarStageBadge(reading: evolution)
+                        .offset(y: -112)
+                }
             }
             .padding(.top, 8)
 
