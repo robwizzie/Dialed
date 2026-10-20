@@ -21,6 +21,8 @@ struct FoodLogView: View {
     /// Add food, optionally jumping straight into a method.
     @State private var adding: AddRequest?
     @State private var justLogged: String?
+    /// What exercise earned back on this day.
+    @State private var earned = EarnedCalories.Day()
     @AppStorage(HealthWriteBack.defaultsKey) private var writeBack = true
 
     private let calendar = Calendar.current
@@ -152,6 +154,11 @@ struct FoodLogView: View {
         foods = FoodLog.entries(on: day, context: modelContext)
         recents = FoodLog.recents(context: modelContext)
         favorites = SavedMealsManager.load()
+        let shown = day
+        Task {
+            let found = await EarnedCalories.day(shown, context: modelContext)
+            if shown == day { withAnimation { earned = found } }
+        }
     }
 
     private func delete(_ food: LoggedFood) {
@@ -193,11 +200,14 @@ struct FoodLogView: View {
     private var summary: some View {
         let calories = foods.reduce(0) { $0 + $1.calories }
         let protein = foods.reduce(0) { $0 + $1.protein }
-        let calTarget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)
+        let calTarget = (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)) + earned.earned
         let proteinTarget = settings.proteinTargetGrams
-        return HStack(spacing: 12) {
-            total("Calories", value: calories, target: calTarget, unit: "calories", tint: calories > calTarget ? Neka.rose : Neka.orange)
-            total("Protein", value: protein, target: proteinTarget, unit: "g", tint: Neka.green)
+        return VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                total("Calories", value: calories, target: calTarget, unit: "calories", tint: calories > calTarget ? Neka.rose : Neka.orange)
+                total("Protein", value: protein, target: proteinTarget, unit: "g", tint: Neka.green)
+            }
+            if earned.earned > 0 { EarnedCaloriesPill(earned: earned) }
         }
     }
 
@@ -241,6 +251,30 @@ struct FoodLogView: View {
                 shortcut("barcode.viewfinder", "Scan a barcode", .scan)
                 shortcut("text.bubble.fill", "Describe a meal", .describe)
             }
+            NavigationLink { MealPlanView() } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "list.bullet.clipboard.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Neka.greenText)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Neka.greenSoft))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Meal plan")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Go-to meals for the week and a grocery list")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface))
+            }
+            .buttonStyle(.dialedScale)
             if !favorites.isEmpty {
                 chips(title: "Favorites", items: favorites.map(FoodDraft.init), icon: "star.fill")
             }

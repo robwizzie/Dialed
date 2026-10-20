@@ -178,6 +178,7 @@ enum SmartReminders {
         inputs.stepGoal = 10_000
         inputs.weighedInToday = weights.contains { calendar.isDate($0.date, inSameDayAs: now) }
         inputs.lastMealAt = lastMeal
+        inputs.proteinCurve = ProteinPacing.curve(context: context, now: now)
         inputs.deliveredToday = await deliveredToday(calendar: calendar, now: now)
         return inputs
     }
@@ -206,7 +207,8 @@ enum SmartReminders {
 
     /// Ask iOS to wake us again in ~45 minutes (it decides when).
     nonisolated static func scheduleBackgroundRefresh() {
-        guard ReminderSettings.load().enabled else {
+        // Reminders or a live challenge (your friend's weigh-ins) need it.
+        guard ReminderSettings.load().enabled || ChallengeSync.hasLiveChallenge else {
             BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: backgroundTaskID)
             return
         }
@@ -236,7 +238,9 @@ enum SmartReminders {
             backgroundContainer = try? DialedSchema.makeContainer()
         }
         guard let container = backgroundContainer else { return }
-        await refresh(context: ModelContext(container))
+        let context = ModelContext(container)
+        await HeadToHeadSync.run(context: context, force: true)
+        await refresh(context: context)
     }
 
     // MARK: - Tap routing
@@ -279,11 +283,15 @@ struct SmartRemindersDriver: ViewModifier {
                 try? await Task.sleep(nanoseconds: 900_000_000)
                 openPendingRoute()
                 await SmartReminders.refresh(context: modelContext)
+                await HeadToHeadSync.run(context: modelContext, force: true)
             }
             .onChange(of: scenePhase) { _, phase in
                 switch phase {
                 case .active:
-                    Task { await SmartReminders.refresh(context: modelContext) }
+                    Task {
+                        await SmartReminders.refresh(context: modelContext)
+                        await HeadToHeadSync.run(context: modelContext)
+                    }
                 case .background:
                     SmartReminders.scheduleBackgroundRefresh()
                 default:
@@ -295,6 +303,8 @@ struct SmartRemindersDriver: ViewModifier {
                     // Give Apple Health a moment to settle writes.
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
                     await SmartReminders.refresh(context: modelContext)
+                    // A new scale reading goes up to the live challenge.
+                    await HeadToHeadSync.run(context: modelContext)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: SmartReminders.openRouteNotification)) { _ in
@@ -310,6 +320,7 @@ struct SmartRemindersDriver: ViewModifier {
         case .foodLog:      router.openHome(.foodLog)
         case .weeklyReview: router.openHome(.weeklyReview)
         case .home:         router.select(.home)
+        case .challenge:    router.select(.challenge)
         }
     }
 }

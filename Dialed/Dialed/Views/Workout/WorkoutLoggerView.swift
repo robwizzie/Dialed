@@ -53,6 +53,9 @@ struct WorkoutLoggerView: View {
     @State private var savedFingerprint = ""
     @State private var autosave: Task<Void, Never>?
     @State private var watch: [DetectedWorkout] = []
+    /// PRs from the session just saved, shown before the summary.
+    @State private var celebration: [StrengthMilestones.PR] = []
+    @State private var pendingSummary: [String]?
     @FocusState private var typing: Bool
 
     private var isCardio: Bool { session.kind == .bike || session.kind == .walk }
@@ -131,9 +134,14 @@ struct WorkoutLoggerView: View {
                         .fontWeight(.semibold)
                 }
             }
-            .onChange(of: fingerprint) { _, _ in scheduleAutosave() }
+            .onChange(of: fingerprint) { _, _ in
+                scheduleAutosave()
+                syncLiveActivity()
+            }
+            .onChange(of: restEndsAt) { _, _ in syncLiveActivity() }
             .onDisappear {
                 flushAutosave()
+                if WorkoutLiveActivityController.isRunning { WorkoutLiveActivityController.end(liveState) }
                 if hasExistingLog { onSaved() }
             }
             .safeAreaInset(edge: .bottom) {
@@ -148,6 +156,12 @@ struct WorkoutLoggerView: View {
             }
             .onAppear(perform: loadIfNeeded)
             .task { await lookForWatchWorkouts() }
+            .overlay {
+                if !celebration.isEmpty {
+                    PRCelebrationView(prs: celebration, onDone: endCelebration)
+                        .transition(.opacity)
+                }
+            }
             .alert("Saved", isPresented: Binding(get: { summary != nil }, set: { if !$0 { finish() } })) {
                 Button("Nice", role: .cancel) {}
             } message: {
@@ -595,6 +609,40 @@ struct WorkoutLoggerView: View {
     private func closeKeepingChanges() {
         flushAutosave()
         dismiss()
+    }
+
+    // MARK: - Live Activity
+
+    /// Lock Screen / Dynamic Island: starts with your first finished set
+    /// today and follows along until you close the logger.
+    private func syncLiveActivity() {
+        guard loaded, !isCardio, Calendar.current.isDateInToday(day) else { return }
+        if WorkoutLiveActivityController.isRunning {
+            WorkoutLiveActivityController.update(liveState)
+        } else if exercises.contains(where: { $0.sets.contains(where: \.done) }), !liveState.isFinished {
+            WorkoutLiveActivityController.start(title: session.title, state: liveState)
+        }
+    }
+
+    /// The next undone set (first exercise that still has one), sets done,
+    /// and the rest timer.
+    private var liveState: WorkoutActivityAttributes.ContentState {
+        let tracked = exercises.filter { !$0.checkOnly }
+        let all = tracked.flatMap(\.sets)
+        var state = WorkoutActivityAttributes.ContentState(
+            exercise: nil, setNumber: 0, setCount: 0, nextWeight: nil, nextReps: 0,
+            restEndsAt: restEndsAt.flatMap { $0 > Date() ? $0 : nil },
+            setsDone: all.filter(\.done).count, setsTotal: all.count)
+        for ex in tracked {
+            guard let i = ex.sets.firstIndex(where: { !$0.done }) else { continue }
+            state.exercise = ex.name
+            state.setNumber = i + 1
+            state.setCount = ex.sets.count
+            state.nextWeight = ex.tracksWeight ? ex.sets[i].weight : nil
+            state.nextReps = ex.sets[i].reps
+            break
+        }
+        return state
     }
 
     /// Every exercise in the plan, for matching typed names.
@@ -1105,12 +1153,46 @@ struct WorkoutLoggerView: View {
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
-        let lines = notesSummary + nextTimeLines()
+        let records = sessionPRs()
+        let lines = records.map { "🏆 \($0.text)" } + notesSummary + nextTimeLines()
+        guard !records.isEmpty else { return showSummary(lines) }
+        // Celebrate first; the summary follows (tap skips ahead).
+        pendingSummary = lines
+        withAnimation { celebration = records }
+        Task {
+            try? await Task.sleep(for: .seconds(2.6))
+            if !celebration.isEmpty { endCelebration() }
+        }
+    }
+
+    private func showSummary(_ lines: [String]) {
         if lines.isEmpty {
             finish()
         } else {
             summary = lines
         }
+    }
+
+    private func endCelebration() {
+        withAnimation(.easeOut(duration: 0.2)) { celebration = [] }
+        let lines = pendingSummary ?? []
+        pendingSummary = nil
+        showSummary(lines)
+    }
+
+    /// Records this session set against everything logged before this day.
+    private func sessionPRs() -> [StrengthMilestones.PR] {
+        let start = Calendar.current.startOfDay(for: day)
+        let logID = PlanWorkoutLogStore.log(for: dayKey, context: context)?.id
+        let history = PlanWorkoutLogStore.allSets(context: context)
+            .filter { $0.completed && $0.workoutID != logID && $0.date < start }
+            .map { StrengthMilestones.SetRecord(exercise: $0.exerciseName, date: $0.date, weight: $0.weightLbs, reps: $0.reps) }
+        let session = exercises.filter(\.tracksWeight).flatMap { ex in
+            ex.sets.filter(\.done).map {
+                StrengthMilestones.SetRecord(exercise: ex.name, date: start, weight: $0.weight ?? 0, reps: $0.reps)
+            }
+        }
+        return StrengthMilestones.prs(session: session, history: history)
     }
 
     private func finish() {

@@ -177,6 +177,44 @@ struct DialedShortcuts: AppShortcutsProvider {
             systemImageName: "star.fill"
         )
         AppShortcut(
+            intent: LogFoodIntent(),
+            phrases: [
+                "Log food in \(.applicationName)",
+                "Log a meal in \(.applicationName)",
+                "Log what I ate in \(.applicationName)"
+            ],
+            shortTitle: "Log food",
+            systemImageName: "fork.knife"
+        )
+        AppShortcut(
+            intent: LogExerciseIntent(),
+            phrases: [
+                "Log exercise in \(.applicationName)",
+                "Log a set in \(.applicationName)",
+                "Log my lift in \(.applicationName)"
+            ],
+            shortTitle: "Log exercise",
+            systemImageName: "dumbbell.fill"
+        )
+        AppShortcut(
+            intent: LogWeightIntent(),
+            phrases: [
+                "Log my weight in \(.applicationName)",
+                "Log a weigh-in in \(.applicationName)"
+            ],
+            shortTitle: "Log weight",
+            systemImageName: "scalemass.fill"
+        )
+        AppShortcut(
+            intent: CaloriesLeftIntent(),
+            phrases: [
+                "How many calories do I have left in \(.applicationName)",
+                "Calories left in \(.applicationName)"
+            ],
+            shortTitle: "Calories left",
+            systemImageName: "flame.fill"
+        )
+        AppShortcut(
             intent: TodayStatusIntent(),
             phrases: [
                 "How am I doing in \(.applicationName)",

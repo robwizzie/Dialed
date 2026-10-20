@@ -35,6 +35,9 @@ struct WeeklyReviewView: View {
                         HealthTileGrid { tiles(s) }
                         dayByDayCard(s)
                     }
+                    if !model.patterns.isEmpty {
+                        patternsSection
+                    }
                     goalCard(s)
                 } else {
                     ProgressView()
@@ -110,6 +113,25 @@ struct WeeklyReviewView: View {
         }
         .buttonStyle(.dialedScale)
         .disabled(!enabled)
+    }
+
+    // MARK: - Patterns
+
+    private var patternsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Patterns")
+                    .font(Neka.title)
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Text("Last 5 weeks")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+            ForEach(model.patterns.prefix(5)) { p in
+                PatternRow(pattern: p)
+            }
+        }
     }
 
     // MARK: - One thing to fix

@@ -33,6 +33,8 @@ final class WeeklyReviewModel: ObservableObject {
     @Published private(set) var projection: WeightChallengeEngine.Projection?
     @Published private(set) var latestWeight: Double?
     @Published private(set) var goalWeight: Double?
+    /// Habits across the last five weeks (not just this week).
+    @Published private(set) var patterns: [PatternFinder.Pattern] = []
 
     private let health = HealthKitManager.shared
     private let calendar = Calendar.current
@@ -140,6 +142,8 @@ final class WeeklyReviewModel: ObservableObject {
         } else {
             projection = nil
         }
+
+        patterns = await PatternLoader.patterns(context: context)
 
         let fallback = WeeklyReview.biggestGap(summary, targets: targets)
         if let cached = aiFixes[start] {
