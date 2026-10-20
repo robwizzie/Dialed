@@ -72,7 +72,16 @@ class HealthKitManager: ObservableObject {
             .respiratoryRate,
             .oxygenSaturation,
             .dietaryEnergyConsumed,
-            .dietaryProtein
+            .dietaryProtein,
+            // Health tab: macros, micros, temperature
+            .dietaryCarbohydrates,
+            .dietaryFatTotal,
+            .dietaryFiber,
+            .dietarySugar,
+            .dietarySodium,
+            .dietaryCaffeine,
+            .basalEnergyBurned,
+            .appleSleepingWristTemperature
         ]
         for identifier in extra {
             if let type = HKObjectType.quantityType(forIdentifier: identifier) {
@@ -851,6 +860,77 @@ class HealthKitManager: ObservableObject {
                     }
                 }
                 continuation.resume(returning: totals)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Hourly totals for one day (24 slots, midnight first).
+    func fetchHourlySums(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        on day: Date
+    ) async throws -> [Double] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return Array(repeating: 0, count: 24) }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: day)
+        guard let end = calendar.date(byAdding: .day, value: 1, to: start) else { return Array(repeating: 0, count: 24) }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKStatisticsCollectionQuery(
+                quantityType: type,
+                quantitySamplePredicate: predicate,
+                options: .cumulativeSum,
+                anchorDate: start,
+                intervalComponents: DateComponents(hour: 1)
+            )
+            query.initialResultsHandler = { _, collection, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                var hours = Array(repeating: 0.0, count: 24)
+                collection?.enumerateStatistics(from: start, to: end) { stats, _ in
+                    let hour = calendar.component(.hour, from: stats.startDate)
+                    if (0..<24).contains(hour), let sum = stats.sumQuantity()?.doubleValue(for: unit) {
+                        hours[hour] += sum
+                    }
+                }
+                continuation.resume(returning: hours)
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    enum SleepStage: String { case awake, rem, light, deep }
+
+    struct SleepSegment: Equatable {
+        let start: Date
+        let end: Date
+        let stage: SleepStage
+    }
+
+    /// Stage-by-stage sleep (for the hypnogram) between two times, from any
+    /// app that writes sleep stages to Apple Health. Empty when none.
+    func fetchSleepStages(from start: Date, to end: Date) async -> [SleepSegment] {
+        guard let type = HKObjectType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        return await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit, sortDescriptors: [sort]) { _, samples, _ in
+                let segments: [SleepSegment] = (samples as? [HKCategorySample] ?? []).compactMap { sample in
+                    let stage: SleepStage
+                    switch HKCategoryValueSleepAnalysis(rawValue: sample.value) {
+                    case .awake?:      stage = .awake
+                    case .asleepREM?:  stage = .rem
+                    case .asleepDeep?: stage = .deep
+                    case .asleepCore?, .asleepUnspecified?: stage = .light
+                    default:           return nil   // in bed
+                    }
+                    return SleepSegment(start: sample.startDate, end: sample.endDate, stage: stage)
+                }
+                continuation.resume(returning: segments)
             }
             healthStore.execute(query)
         }

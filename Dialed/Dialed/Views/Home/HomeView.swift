@@ -308,10 +308,15 @@ struct HomeView: View {
                 .buttonStyle(.dialedScale)
             Button { sheet = .water } label: { waterTile }
                 .buttonStyle(.dialedScale)
-            hrvTile
-            sleepTile
-            heartTile
-            activityTile
+            // These open the Health tab's deep-dive pages.
+            Button { router.openHealth(.body) } label: { hrvTile }
+                .buttonStyle(.dialedScale)
+            Button { router.openHealth(.sleep) } label: { sleepTile }
+                .buttonStyle(.dialedScale)
+            Button { router.openHealth(.body) } label: { heartTile }
+                .buttonStyle(.dialedScale)
+            Button { router.openHealth(.body) } label: { activityTile }
+                .buttonStyle(.dialedScale)
         }
     }
 
