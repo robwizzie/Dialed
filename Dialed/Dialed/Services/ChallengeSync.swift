@@ -162,6 +162,8 @@ final class ChallengeSync: ObservableObject {
         var errorDescription: String? { message }
     }
 
+    private struct ServerFailure: Decodable { let error: String }
+
     private func authorized(_ path: String, method: String) -> URLRequest {
         let base = server?.appendingPathComponent("api/challenges/\(challengeID ?? "")\(path)")
         var request = URLRequest(url: base ?? URL(string: "https://invalid.invalid")!)
@@ -175,8 +177,7 @@ final class ChallengeSync: ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
-            struct Failure: Decodable { let error: String }
-            let message = (try? JSONDecoder().decode(Failure.self, from: data))?.error ?? "HTTP \(status)"
+            let message = (try? JSONDecoder().decode(ServerFailure.self, from: data))?.error ?? "HTTP \(status)"
             throw ServerError(message: message)
         }
         return try JSONDecoder().decode(T.self, from: data)
