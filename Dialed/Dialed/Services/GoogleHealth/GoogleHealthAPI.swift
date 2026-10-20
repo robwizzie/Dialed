@@ -56,6 +56,21 @@ final class GoogleHealthAPI {
         return all
     }
 
+    /// The first page of a type as raw JSON — for the Devices diagnostic, to
+    /// see exactly which fields Google sends.
+    func rawList(_ dataType: String, filter: String?, pageSize: Int = 1) async throws -> String {
+        var components = URLComponents(string: "\(GoogleHealthConfig.apiBase.absoluteString)users/me/dataTypes/\(dataType)/dataPoints")!
+        var items = [URLQueryItem(name: "pageSize", value: String(pageSize))]
+        if let filter { items.append(URLQueryItem(name: "filter", value: filter)) }
+        components.percentEncodedQueryItems = items.map {
+            URLQueryItem(name: $0.name, value: $0.value.map { Self.strictEncode($0) })
+        }
+        var request = URLRequest(url: components.url!)
+        request.httpMethod = "GET"
+        let raw: RawJSON = try await send(request)
+        return raw.text
+    }
+
     /// Daily totals for `days` days ending today (inclusive).
     func dailyRollUp(_ dataType: String, days: Int, calendar: Calendar = .current) async throws -> [GHDailyRollUpResponse.Point] {
         let today = calendar.startOfDay(for: Date())
@@ -97,6 +112,23 @@ final class GoogleHealthAPI {
         guard (200..<300).contains(status) else {
             throw APIError.http(status, String(data: data, encoding: .utf8) ?? "")
         }
+        if T.self == RawJSON.self, let raw = RawJSON(data: data) as? T { return raw }
         return try JSONDecoder().decode(T.self, from: data)
     }
+}
+
+/// A response body kept as pretty-printed text.
+struct RawJSON: Decodable {
+    let text: String
+
+    init(data: Data) {
+        if let object = try? JSONSerialization.jsonObject(with: data),
+           let pretty = try? JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys]) {
+            text = String(data: pretty, encoding: .utf8) ?? ""
+        } else {
+            text = String(data: data, encoding: .utf8) ?? ""
+        }
+    }
+
+    init(from decoder: Decoder) throws { text = "" }
 }

@@ -43,6 +43,9 @@ final class SleepVisualsTests: XCTestCase {
         XCTAssertEqual(clock(t.bedtime), "20 23:45")  // 8 h goal + 45 min
         XCTAssertEqual(clock(t.windDown), "20 23:15")
         XCTAssertEqual(SleepVisuals.countdown(t, now: at(20, 21, 5)), "Wind down in 2 h 10 m")
+        // Only within 3 h of wind-down: not at 10 AM, yes at 9:05 PM.
+        XCTAssertNil(SleepVisuals.countdownIfSoon(t, now: at(20, 10)))
+        XCTAssertEqual(SleepVisuals.countdownIfSoon(t, now: at(20, 21, 5)), "Wind down in 2 h 10 m")
     }
 
     func testAfterMidnightStillPlansForThisMorning() {
