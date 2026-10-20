@@ -228,6 +228,8 @@ private struct MealPayload: Codable {
     // Optional so older payloads (items only) still decode.
     var carbs: Double?
     var fat: Double?
+    /// How many servings the numbers are for (nil = 1).
+    var servings: Double?
 }
 
 // MARK: - Meal fields (food log editing)
@@ -246,23 +248,27 @@ extension ContextEvent {
 
     var mealCarbs: Double? { mealPayload?.carbs }
     var mealFat: Double? { mealPayload?.fat }
+    var mealServings: Double? { mealPayload?.servings }
 
     /// Rewrite a meal in place; moves it to the right day if the time changed.
-    func updateMeal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, time: Date) {
+    func updateMeal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, time: Date,
+                    servings: Double? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         text = trimmed.isEmpty ? nil : trimmed
         value = calories
         secondaryValue = protein
-        let payload = MealPayload(items: trimmed.isEmpty ? [] : [trimmed], carbs: carbs, fat: fat)
+        let payload = MealPayload(items: trimmed.isEmpty ? [] : [trimmed], carbs: carbs, fat: fat,
+                                  servings: servings.flatMap { $0 == 1 ? nil : $0 })
         structuredJSON = (try? JSONEncoder().encode(payload)).flatMap { String(data: $0, encoding: .utf8) }
         timestamp = time
         logicalDate = Self.logicalDate(for: time)
         updatedAt = Date()
     }
 
-    static func meal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, at time: Date = Date()) -> ContextEvent {
+    static func meal(name: String, calories: Double, protein: Double, carbs: Double?, fat: Double?, at time: Date = Date(),
+                     servings: Double? = nil) -> ContextEvent {
         let event = ContextEvent.meal(calories: calories, protein: protein, items: [], at: time)
-        event.updateMeal(name: name, calories: calories, protein: protein, carbs: carbs, fat: fat, time: time)
+        event.updateMeal(name: name, calories: calories, protein: protein, carbs: carbs, fat: fat, time: time, servings: servings)
         return event
     }
 }

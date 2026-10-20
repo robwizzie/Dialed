@@ -33,7 +33,7 @@ struct FuelWidgetView: View {
         switch family {
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 3) {
-                Label(over ? "\(Fmt.int(-s.caloriesLeft)) kcal over" : "\(Fmt.int(s.caloriesLeft)) kcal left",
+                Label(over ? "\(Fmt.int(-s.caloriesLeft)) calories over" : "\(Fmt.int(s.caloriesLeft)) calories left",
                       systemImage: "flame.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .widgetAccentable()
@@ -94,7 +94,7 @@ struct FuelWidgetView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     WidgetTitle(icon: "flame.fill", title: "Fuel", tint: Theme.orange,
                                 trailing: Fmt.weekday(entry.date))
-                    macroRow("Eaten", "\(Fmt.int(s.calories)) kcal", of: "\(Fmt.int(s.calorieTarget))",
+                    macroRow("Eaten", "\(Fmt.int(s.calories)) calories", of: "\(Fmt.int(s.calorieTarget))",
                              progress: s.calorieProgress, tint: over ? Theme.rose : Theme.orange)
                     macroRow("Protein", "\(Fmt.int(s.protein)) g", of: "\(Fmt.int(s.proteinTarget))",
                              progress: s.proteinProgress, tint: Theme.green)
@@ -161,7 +161,7 @@ struct FuelWidgetView: View {
                     .contentTransition(.numericText())
                     .minimumScaleFactor(0.6)
                     .lineLimit(1)
-                Text(over ? "kcal over" : "kcal left")
+                Text(over ? "calories over" : "calories left")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(over ? Theme.roseText : Theme.orangeText)
             }
@@ -281,7 +281,7 @@ struct FuelWidgetView: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
                     .padding(.trailing, 12)
-                Text("\(Fmt.int(meal.calories)) kcal · \(Fmt.int(meal.protein)) g")
+                Text("\(Fmt.int(meal.calories)) calories · \(Fmt.int(meal.protein)) g")
                     .font(.system(size: 9.5, weight: .medium))
                     .foregroundStyle(Theme.inkSecondary)
                     .lineLimit(1)
