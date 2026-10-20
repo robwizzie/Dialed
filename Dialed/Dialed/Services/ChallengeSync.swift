@@ -51,6 +51,12 @@ final class ChallengeSync: ObservableObject {
     }
 
     var isLive: Bool { challengeID != nil && token != nil }
+
+    /// Whether a live challenge was set up, readable off the main actor
+    /// (background refresh scheduling).
+    nonisolated static var hasLiveChallenge: Bool {
+        UserDefaults.standard.string(forKey: "challengeSync.id") != nil
+    }
     var messages: [ChallengeWire.Message] { state?.messages ?? [] }
     /// Your friend's side, summarized for the Challenge tab.
     var other: ChallengeWire.OtherSide? { state.map { ChallengeWire.otherSide($0) } }
