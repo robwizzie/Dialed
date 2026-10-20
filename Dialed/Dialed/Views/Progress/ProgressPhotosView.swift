@@ -2,10 +2,11 @@
 //  ProgressPhotosView.swift
 //  Dialed
 //
-//  Weekly progress photos: take this week's shot with last week's ghost
-//  over the camera, browse by week, open one to edit / retake / delete,
-//  and compare any two side by side or with a before/after wipe.
-//  Photos live only on this device (ProgressPhotoStore).
+//  Progress photos: take a shot with the last photo of the same pose as a
+//  ghost over the camera, a monthly "photo day" reminder, browse by week,
+//  open one to edit / retake / delete, and compare any two side by side
+//  or with a before/after wipe. Photos live only on this device
+//  (ProgressPhotoStore).
 //
 
 import SwiftUI
@@ -16,11 +17,10 @@ struct ProgressPhotosView: View {
     @Environment(\.modelContext) private var context
     @ObservedObject private var store = ProgressPhotoStore.shared
 
-    /// Camera request: what to replace (retake) and what to ghost.
+    /// Camera request: what to replace (retake); the ghost follows the pose.
     private struct CaptureRequest: Identifiable {
         let id = UUID()
         let replacing: ProgressPhotoEntry?
-        let ghost: UIImage?
     }
 
     /// A photo waiting for its date / weight / note before saving.
@@ -28,10 +28,12 @@ struct ProgressPhotosView: View {
         let id = UUID()
         let image: UIImage
         let replacing: ProgressPhotoEntry?
+        var pose: ProgressPose? = nil
     }
 
     @State private var capture: CaptureRequest?
-    @State private var captured: UIImage?
+    @State private var captured: (image: UIImage, pose: ProgressPose)?
+    @State private var reminder = MonthlyPhotoReminder.load()
     @State private var pending: PendingPhoto?
     @State private var detail: ProgressPhotoEntry?
     @State private var retakeAfterDetail: ProgressPhotoEntry?
@@ -45,6 +47,7 @@ struct ProgressPhotosView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 header
+                reminderCard
                 if store.entries.count >= 2, let first = store.index.first, let latest = store.index.latest {
                     NavigationLink {
                         PhotoCompareView(before: first, after: latest)
@@ -73,17 +76,29 @@ struct ProgressPhotosView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: store.entries.count) { stats = await PhotoStatsData.load(for: store.entries, context: context) }
         .fullScreenCover(item: $capture, onDismiss: {
-            if let image = captured {
+            if let shot = captured {
                 let replacing = lastCaptureReplacing
                 captured = nil
-                pending = PendingPhoto(image: image, replacing: replacing)
+                pending = PendingPhoto(image: shot.image, replacing: replacing, pose: shot.pose)
             }
         }) { request in
-            ProgressCameraView(ghost: request.ghost) { image in
-                captured = image
+            ProgressCameraView(ghostFor: { pose in ghost(for: pose, replacing: request.replacing) }) { image, pose in
+                captured = (image, pose)
                 lastCaptureReplacing = request.replacing
             }
         }
+        .onAppear {
+            // Photo day defaults to the day of your first photo.
+            if !MonthlyPhotoReminder.isSaved, let first = store.index.first {
+                reminder.day = MonthlyPhotoReminder.defaultDay(firstPhoto: first.date)
+            }
+            // Tapped the monthly "photo day" reminder: straight to the camera.
+            if UserDefaults.standard.bool(forKey: MonthlyPhotoReminder.openCameraKey) {
+                UserDefaults.standard.removeObject(forKey: MonthlyPhotoReminder.openCameraKey)
+                startCapture(replacing: nil)
+            }
+        }
+        .onChange(of: reminder) { _, r in r.save() }
         .sheet(item: $pending) { p in
             ProgressPhotoSaveSheet(pending: p)
         }
@@ -113,12 +128,72 @@ struct ProgressPhotosView: View {
     @State private var lastCaptureReplacing: ProgressPhotoEntry?
 
     private func startCapture(replacing: ProgressPhotoEntry?) {
-        // Ghost = the photo before the one being retaken, else the latest.
-        let ghostEntry = replacing.flatMap { store.index.latest(before: $0.date) } ?? (replacing == nil ? store.index.latest : nil)
-        let ghost = ghostEntry.flatMap { store.image(for: $0) }
         if ProgressCameraModel.isCameraAvailable {
-            capture = CaptureRequest(replacing: replacing, ghost: ghost)
+            capture = CaptureRequest(replacing: replacing)
         }
+    }
+
+    /// The last photo of this pose — before the one being retaken, if any.
+    private func ghost(for pose: ProgressPose, replacing: ProgressPhotoEntry?) -> UIImage? {
+        store.index.latest(pose: pose, before: replacing?.date).flatMap { store.image(for: $0) }
+    }
+
+    // MARK: - Monthly reminder
+
+    private var reminderCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: $reminder.enabled) {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Neka.lavenderText)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Neka.lavenderSoft))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Monthly photo day")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text(reminderSummary)
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                }
+            }
+            .tint(Neka.green)
+            if reminder.enabled {
+                HStack {
+                    Picker("Day", selection: $reminder.day) {
+                        ForEach(1...28, id: \.self) { d in Text("Day \(d)").tag(d) }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(Neka.ink)
+                    Spacer()
+                    DatePicker("Time", selection: reminderTime, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                }
+                .font(.system(size: 14))
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private var reminderSummary: String {
+        guard reminder.enabled, let next = reminder.next(after: Date()) else {
+            return "A nudge on the same day each month"
+        }
+        return "Next: \(next.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))"
+    }
+
+    private var reminderTime: Binding<Date> {
+        Binding(
+            get: { Calendar.current.date(bySettingHour: reminder.hour, minute: reminder.minute, second: 0, of: Date()) ?? Date() },
+            set: { picked in
+                let c = Calendar.current.dateComponents([.hour, .minute], from: picked)
+                reminder.hour = c.hour ?? 9
+                reminder.minute = c.minute ?? 0
+            }
+        )
     }
 
     // MARK: - Header
@@ -134,14 +209,14 @@ struct ProgressPhotosView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Neka.inkSecondary)
             }
-            Text("Weekly check-in")
+            Text("Progress check-in")
                 .font(Neka.display(26, weight: .bold))
                 .foregroundColor(Neka.ink)
-            Label("Same spot, same light, same pose — Sunday mornings", systemImage: "sun.horizon.fill")
+            Label("Same spot, same light, same pose", systemImage: "sun.horizon.fill")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("The camera shows last week's photo as a ghost with head and feet marks, so you can match it. Use the 3 s or 10 s timer and prop the phone up.")
+            Text("Pick front, side or back and the camera shows your last photo of that pose as a ghost, with head, shoulder, hip and feet marks so you can match it. Use the 3 s or 10 s timer and prop the phone up.")
                 .font(.system(size: 12))
                 .foregroundColor(Neka.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -354,7 +429,7 @@ struct ProgressPhotoSaveSheet: View {
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         ProgressPhotoStore.shared.add(
             pending.image, date: date, weightLbs: weight,
-            note: trimmed.isEmpty ? nil : trimmed, replacing: pending.replacing
+            note: trimmed.isEmpty ? nil : trimmed, pose: pending.pose, replacing: pending.replacing
         )
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)

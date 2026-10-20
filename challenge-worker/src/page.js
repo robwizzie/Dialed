@@ -420,6 +420,29 @@ function betsCard(me, them) {
   return el("div", { class: "card" }, el("h2", {}, "🎲 Side bet"), body);
 }
 
+// The other side's Sunday summary (posted from the Dialed app).
+function reportCard(them) {
+  const r = state.reports?.[them.role];
+  if (!r || !r.headline) return null;
+  // "you" in the report is the person who wrote it, so flip the labels here.
+  const label = w => w === "you" ? them.name : w === "friend" ? "You" : w === "tie" ? "Tie" : "";
+  const rows = (r.rows || []).filter(row => row.title).map(row =>
+    el("div", { class: "between", style: { padding: "8px 0", borderTop: "1px solid var(--hair)" } },
+      el("div", {}, el("b", {}, row.title),
+        el("div", { class: "tiny" }, them.name + ": " + (row.you || "—") + (row.friend ? " · You: " + row.friend : ""))),
+      row.winner ? el("span", { class: "pill " + (row.winner === "friend" ? "green" : row.winner === "tie" ? "" : "orange") }, label(row.winner)) : null));
+  return el("div", { class: "card", style: { background: "var(--lavSoft)" } },
+    el("div", { class: "between" },
+      el("h2", { style: { margin: 0 } }, "📊 Week " + (r.weekNumber || "") + " report"),
+      el("span", { class: "pill lav" }, "from " + them.name)),
+    el("p", { style: { margin: "8px 0 2px", fontWeight: 700, fontSize: "17px" } }, r.headline),
+    r.subline ? el("div", { class: "muted" }, r.subline) : null,
+    el("div", { style: { marginTop: "10px" } }, rows),
+    r.betLine ? el("p", { style: { margin: "10px 0 0", fontWeight: 600 } }, "🎲 " + r.betLine) : null,
+    r.standing ? el("p", { class: "muted", style: { margin: "6px 0 0" } }, r.standing) : null,
+    el("p", { class: "tiny", style: { margin: "8px 0 0" } }, "Week of " + niceDate(r.week)));
+}
+
 function chatCard(me, them) {
   const c = state.challenge;
   const text = el("input", { maxlength: "280", placeholder: "Say something…", enterkeyhint: "send" });
@@ -475,6 +498,8 @@ function render() {
       el("b", {}, "No weigh-in yet today"), el("div", { class: "muted" }, me.auto ? "Your scale syncs this automatically after you step on it." : "Step on the scale and log it below — it keeps your streak alive.")));
   }
 
+  const report = reportCard(them);
+  if (report) app.append(report);
   app.append(betsCard(me, them), autoSyncCard(me), weighInCard(me));
   const theirs = statsCard(them, false), mine = statsCard(me, true);
   if (theirs) app.append(theirs);

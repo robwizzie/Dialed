@@ -6,7 +6,9 @@
 //  (not UIImagePickerController) so the live preview, the ghost of last
 //  week's photo and the alignment guides all share one 3:4 frame — the
 //  sensor's portrait aspect — and line up exactly with the saved photo.
-//  Self-timer for solo shots, front/back flip, review before keeping.
+//  Pick the pose (front / side / back) and the ghost is the last photo of
+//  that pose, at the opacity you like. Self-timer for solo shots,
+//  front/back flip, review before keeping.
 //
 
 import SwiftUI
@@ -140,7 +142,8 @@ private struct CameraPreview: UIViewRepresentable {
 
 // MARK: - Alignment guides
 
-/// Center line, thirds and head / feet marks so every week is framed the same.
+/// Center line, thirds, head / feet marks and shoulder / hip lines so
+/// every month is framed the same.
 struct PoseGuides: View {
     var body: some View {
         GeometryReader { geo in
@@ -165,8 +168,21 @@ struct PoseGuides: View {
                 }
                 .stroke(Color.white.opacity(0.7), lineWidth: 1.5)
 
+                // Shoulders and hips: short marks either side of center.
+                Path { p in
+                    for (f, half) in [(0.25, 0.22), (0.52, 0.17)] {
+                        p.move(to: CGPoint(x: w * (0.5 - half), y: h * f))
+                        p.addLine(to: CGPoint(x: w * (0.5 + half), y: h * f))
+                    }
+                }
+                .stroke(Color.white.opacity(0.55), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 5]))
+
                 Text("HEAD")
                     .position(x: w * 0.12, y: h * 0.08)
+                Text("SHOULDERS")
+                    .position(x: w * 0.13, y: h * 0.25)
+                Text("HIPS")
+                    .position(x: w * 0.12, y: h * 0.52)
                 Text("FEET")
                     .position(x: w * 0.12, y: h * 0.94)
             }
@@ -180,14 +196,19 @@ struct PoseGuides: View {
 // MARK: - Capture screen
 
 struct ProgressCameraView: View {
-    /// Last photo, shown at ~35% over the live preview.
-    let ghost: UIImage?
-    var onCapture: (UIImage) -> Void
+    /// The last photo of a pose, shown over the live preview to line up with.
+    let ghostFor: (ProgressPose) -> UIImage?
+    var onCapture: (UIImage, ProgressPose) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = ProgressCameraModel()
     @AppStorage("progressPhotos.timer") private var timerSeconds = 3
     @AppStorage("progressPhotos.showGhost") private var showGhost = true
+    @AppStorage("progressPhotos.ghostOpacity") private var ghostOpacity = 0.35
+    @AppStorage("progressPhotos.pose") private var poseRaw = ProgressPose.front.rawValue
+
+    private var pose: ProgressPose { ProgressPose(rawValue: poseRaw) ?? .front }
+    private var ghost: UIImage? { ghostFor(pose) }
     @State private var countdown: Int?
     @State private var countdownTask: Task<Void, Never>?
 
@@ -225,7 +246,7 @@ struct ProgressCameraView: View {
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(Color.white.opacity(showGhost ? 0.3 : 0.15)))
                 }
-                .accessibilityLabel(showGhost ? "Hide last week's ghost" : "Show last week's ghost")
+                .accessibilityLabel(showGhost ? "Hide last photo's ghost" : "Show last photo's ghost")
             }
             if camera.captured == nil {
                 Menu {
@@ -279,7 +300,7 @@ struct ProgressCameraView: View {
                         Image(uiImage: ghost)
                             .resizable()
                             .scaledToFill()
-                            .opacity(0.35)
+                            .opacity(ghostOpacity)
                             .allowsHitTesting(false)
                     }
                     PoseGuides()
@@ -329,7 +350,7 @@ struct ProgressCameraView: View {
                         .background(Capsule().fill(Color.white.opacity(0.15)))
                 }
                 Button {
-                    onCapture(shot)
+                    onCapture(shot, pose)
                     dismiss()
                 } label: {
                     Text("Use photo")
@@ -343,7 +364,29 @@ struct ProgressCameraView: View {
             .foregroundColor(.white)
         } else {
             VStack(spacing: 10) {
-                Text("Same spot, same light, same pose — Sunday mornings")
+                Picker("Pose", selection: $poseRaw) {
+                    ForEach(ProgressPose.allCases) { p in
+                        Text(p.title).tag(p.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 260)
+                if ghost != nil && showGhost {
+                    HStack(spacing: 10) {
+                        Image(systemName: "circle.lefthalf.filled")
+                        Slider(value: $ghostOpacity, in: 0.1...0.7)
+                            .tint(.white)
+                        Text("\(Int(ghostOpacity * 100))%")
+                            .monospacedDigit()
+                            .frame(width: 36, alignment: .trailing)
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .frame(maxWidth: 300)
+                    .accessibilityLabel("Ghost opacity")
+                }
+                Text(ghost == nil ? "First \(pose.title.lowercased()) photo: this becomes the one to match"
+                     : "Line up with last time's ghost. Same spot, same light.")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
                 Button(action: shutter) {

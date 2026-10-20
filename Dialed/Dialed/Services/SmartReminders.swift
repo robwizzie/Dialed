@@ -323,6 +323,10 @@ struct SmartRemindersDriver: ViewModifier {
         case .weeklyReview: router.openHome(.weeklyReview)
         case .home:         router.select(.home)
         case .challenge:    router.select(.challenge)
+        case .weeklyReport: router.openChallenge(.report)
+        case .progressPhoto:
+            UserDefaults.standard.set(true, forKey: MonthlyPhotoReminder.openCameraKey)
+            router.openHome(.progressPhotos)
         }
     }
 }

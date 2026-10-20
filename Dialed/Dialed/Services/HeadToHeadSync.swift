@@ -31,9 +31,11 @@ enum HeadToHeadSync {
     /// changed. At most every 5 minutes unless `force`.
     static func run(context: ModelContext, force: Bool = false) async {
         let live = ChallengeSync.shared
-        guard live.isLive, let challenge = WeightChallenge.load() else { return }
         let now = Date()
         if !force, let lastRun, now.timeIntervalSince(lastRun) < 300 { return }
+        // The Sunday report reminder works with or without the live server.
+        await WeeklyReportService.scheduleReminder()
+        guard live.isLive, let challenge = WeightChallenge.load() else { return }
         lastRun = now
 
         let calendar = Calendar.current
@@ -43,6 +45,8 @@ enum HeadToHeadSync {
         await live.sync(readings: readings, force: true)
         // Side bets: publish your running number, hear about proposals and results.
         await SideBetsStore.shared.refresh(context: context)
+        // Sunday evening: this week's report goes to your friend's page.
+        await WeeklyReportService.postIfDue(context: context, now: now)
         guard let updated = WeightChallenge.load() else { return }
 
         let progress = WeightChallengeEngine.progress(challenge: updated, readings: readings, now: now)
