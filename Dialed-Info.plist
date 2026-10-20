@@ -6,6 +6,17 @@
 	<array>
 		<string>org.robertwiscount.Dialed.refresh</string>
 	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>org.robertwiscount.Dialed</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dialed</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

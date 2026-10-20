@@ -182,6 +182,11 @@ struct HomeView: View {
         if let mood = viewModel.moodReading?.mood {
             await studio.ensure(mood: mood)
         }
+        // Steps, sleep, score, challenge and today's avatar → the widgets.
+        let avatar = studio.isEnabled && useAvatarOnHome
+            ? viewModel.moodReading.flatMap { studio.image(for: $0.mood) }
+            : nil
+        WidgetSync.publish(viewModel, avatar: avatar)
     }
 
     /// New data types (heart rate, SpO₂, breathing, food) need a fresh

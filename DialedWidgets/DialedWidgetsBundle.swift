@@ -12,5 +12,10 @@ import WidgetKit
 struct DialedWidgetsBundle: WidgetBundle {
     var body: some Widget {
         DialedTodayWidget()
+        DialedWaterWidget()
+        DialedFuelWidget()
+        DialedScoreWidget()
+        DialedBodyWidget()
+        DialedChallengeWidget()
     }
 }

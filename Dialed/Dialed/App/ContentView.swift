@@ -127,6 +127,24 @@ struct MainTabView: View {
         // Smart reminders: re-plan on launch / foreground / after logging,
         // and open the right place when one is tapped.
         .smartReminders(router: router)
+        // Widget taps (dialed://…, see WidgetLink).
+        .onOpenURL { url in
+            if let link = WidgetLink(url: url) { open(link) }
+        }
+    }
+
+    private func open(_ link: WidgetLink) {
+        switch link {
+        case .home:      router.select(.home)
+        case .water:     router.quickLog = .water
+        case .meal:      router.quickLog = .meal
+        case .weighIn:   router.quickLog = .weighIn
+        case .food:      router.openHome(.foodLog)
+        case .score:     router.openHome(.avatar)
+        case .challenge: router.select(.challenge)
+        case .sleep:     router.openHealth(.sleep)
+        case .body:      router.openHealth(.body)
+        }
     }
 
     @ViewBuilder

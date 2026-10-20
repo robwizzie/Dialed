@@ -152,6 +152,85 @@ final class WidgetBridgeTests: XCTestCase {
         XCTAssertEqual(fresh.favorites, [shake])
     }
 
+    // MARK: - Meals
+
+    func testPendingFavoritesJoinTodaysPlate() {
+        var s = snapshot(at: date(19, 8))
+        s.meals = [WidgetMeal(name: "Egg Wrap", calories: 380, protein: 30, time: date(19, 7))]
+        let shown = s.display(with: [.favorite(shake.id, at: date(19, 11))], now: date(19, 12), calendar: calendar)
+        XCTAssertEqual(shown.meals?.map(\.name), ["Egg Wrap", "Clear Whey Shake"])
+        XCTAssertEqual(shown.meals?.last?.time, date(19, 11))
+    }
+
+    func testStaleSnapshotClearsMeals() {
+        var s = snapshot(at: date(18, 20))
+        s.meals = [WidgetMeal(name: "Egg Wrap", calories: 380, protein: 30, time: date(18, 19))]
+        XCTAssertEqual(s.display(with: [], now: date(19, 9), calendar: calendar).meals, [])
+    }
+
+    func testVersionOneSnapshotStillDecodes() throws {
+        // Written before meals existed.
+        let json = """
+        {"waterOz":40,"waterTargetOz":120,"protein":100,"proteinTarget":190,
+         "calories":1000,"calorieTarget":2200,"favorites":[],"updatedAt":0}
+        """
+        let decoded = try JSONDecoder().decode(WidgetSnapshot.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.meals)
+        XCTAssertEqual(decoded.waterOz, 40)
+    }
+
+    // MARK: - Insights
+
+    private func insights(at updated: Date) -> WidgetInsights {
+        var i = WidgetInsights.placeholder
+        i.updatedAt = updated
+        return i
+    }
+
+    func testInsightsRoundTrip() {
+        XCTAssertNil(bridge.readInsights())
+        let i = insights(at: Date(timeIntervalSince1970: 1_790_000_000))
+        bridge.writeInsights(i)
+        XCTAssertEqual(bridge.readInsights(), i)
+    }
+
+    func testInsightsDerivedValues() {
+        let i = WidgetInsights.placeholder
+        XCTAssertEqual(i.stepProgress, 0.742, accuracy: 0.0001)
+        XCTAssertEqual(i.weightChange ?? 0, 186.4 - 191.2, accuracy: 0.0001)
+        XCTAssertEqual(i.challenge?.goalProgress ?? 0, 0.48, accuracy: 0.0001)
+        XCTAssertEqual(i.challenge?.timeProgress ?? 0, 0.6, accuracy: 0.0001)
+    }
+
+    func testStaleInsightsResetTodayOnly() {
+        let i = insights(at: date(18, 21))
+        // Same app day (2 AM): untouched.
+        XCTAssertEqual(i.display(now: date(19, 2), calendar: calendar), i)
+
+        let fresh = i.display(now: date(19, 7), calendar: calendar)
+        XCTAssertEqual(fresh.steps, 0)
+        XCTAssertNil(fresh.score)
+        XCTAssertEqual(fresh.stepsWeek.count, 7)
+        XCTAssertEqual(fresh.stepsWeek.last, 0)
+        XCTAssertEqual(fresh.stepsWeek.first, i.stepsWeek[1])
+        XCTAssertEqual(fresh.waterWeek.last, 0)
+        // Last night's sleep, weight and the challenge carry over.
+        XCTAssertEqual(fresh.sleepHours, i.sleepHours)
+        XCTAssertEqual(fresh.weight, i.weight)
+        XCTAssertEqual(fresh.challenge, i.challenge)
+    }
+
+    // MARK: - Links
+
+    func testWidgetLinksRoundTrip() {
+        for link in WidgetLink.allCases {
+            XCTAssertEqual(WidgetLink(url: link.url), link)
+        }
+        XCTAssertEqual(WidgetLink.weighIn.url.absoluteString, "dialed://weigh-in")
+        XCTAssertNil(WidgetLink(url: URL(string: "https://water")!))
+        XCTAssertNil(WidgetLink(url: URL(string: "dialed://nowhere")!))
+    }
+
     func testLogicalDayUsesFourAMCutoff() {
         XCTAssertEqual(WidgetBridge.logicalDay(for: date(19, 3, 59), calendar: calendar),
                        calendar.startOfDay(for: date(18, 12)))

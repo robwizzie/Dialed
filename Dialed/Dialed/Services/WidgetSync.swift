@@ -54,7 +54,7 @@ enum WidgetSync {
         // (b) Fresh snapshot for the widget.
         if bridge.isAvailable {
             let totals = await QuickLogService.todayTotalsIncludingHealth(context: context)
-            bridge.writeSnapshot(snapshot(from: totals))
+            bridge.writeSnapshot(snapshot(from: totals, meals: todayMeals(context: context)))
         }
 
         // (c) Redraw, and keep Siri's "Log <favorite>" phrases current.
@@ -62,7 +62,7 @@ enum WidgetSync {
         DialedShortcuts.updateAppShortcutParameters()
     }
 
-    static func snapshot(from totals: QuickLogService.Totals, now: Date = Date()) -> WidgetSnapshot {
+    static func snapshot(from totals: QuickLogService.Totals, meals: [WidgetMeal] = [], now: Date = Date()) -> WidgetSnapshot {
         WidgetSnapshot(
             waterOz: totals.waterOz,
             waterTargetOz: totals.waterTargetOz,
@@ -73,8 +73,112 @@ enum WidgetSync {
             favorites: QuickLogService.favorites().prefix(4).map {
                 WidgetFavorite(id: $0.id, name: $0.name, calories: $0.calories, protein: $0.proteinGrams)
             },
+            updatedAt: now,
+            meals: meals
+        )
+    }
+
+    /// Meals logged in Dialed today, oldest first.
+    private static func todayMeals(context: ModelContext, now: Date = Date()) -> [WidgetMeal] {
+        let logical = Calendar.current.logicalStartOfDay(for: now)
+        let meal = ContextEvent.Kind.meal.rawValue
+        let events = (try? context.fetch(FetchDescriptor<ContextEvent>(
+            predicate: #Predicate { $0.logicalDate == logical && $0.kindRaw == meal },
+            sortBy: [SortDescriptor(\.timestamp)]))) ?? []
+        return events.map {
+            WidgetMeal(name: $0.mealName, calories: $0.value ?? 0, protein: $0.secondaryValue ?? 0, time: $0.timestamp)
+        }
+    }
+
+    // MARK: - Insights
+
+    /// Home's latest read of the day (activity, recovery, weight, score,
+    /// challenge) plus today's mood avatar → the data widgets.
+    static func publish(_ home: HomeViewModel, avatar: UIImage?, now: Date = Date()) {
+        let bridge = WidgetBridge()
+        guard bridge.isAvailable else { return }
+        bridge.writeInsights(insights(from: home, now: now))
+        WidgetBridge.writeAvatar(avatar.flatMap(thumbnail))
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    static func insights(from home: HomeViewModel, now: Date = Date()) -> WidgetInsights {
+        let score = home.moodReading.map { reading in
+            WidgetInsights.Score(
+                value: reading.score,
+                mood: reading.mood.rawValue,
+                title: reading.mood.title,
+                emoji: reading.mood.emoji,
+                tagline: reading.mood.tagline,
+                accentHex: reading.mood.accentHex,
+                parts: reading.components.map { .init(name: $0.name, points: $0.points, maxPoints: $0.maxPoints) },
+                boost: reading.boosts.first?.action
+            )
+        }
+
+        var challenge: WidgetInsights.Challenge?
+        if let c = home.challenge, let p = home.progress {
+            let percent = c.scoring == .percent
+            let leader: String
+            switch p.leader {
+            case .you:     leader = "you"
+            case .friend:  leader = "friend"
+            case .tied:    leader = "tied"
+            case .unknown: leader = "unknown"
+            }
+            challenge = WidgetInsights.Challenge(
+                friendName: c.friendDisplayName,
+                scoresPercent: percent,
+                youLost: percent ? p.lostPercent : p.lostLbs,
+                friendLost: p.friend.map { percent ? $0.lostPercent : $0.lostLbs },
+                leader: leader,
+                margin: p.margin,
+                dayNumber: p.dayNumber,
+                totalDays: p.totalDays,
+                daysLeft: p.daysLeft,
+                goalLossLbs: p.goalLossLbs,
+                lostLbs: p.lostLbs,
+                weighedInToday: p.weighedInToday,
+                weighInStreak: p.weighInStreak
+            )
+        }
+
+        let goal = home.goalEvent.flatMap { event in
+            event.date > now
+                ? WidgetInsights.Goal(name: event.name, date: event.date, projectedWeight: home.goalProjection?.weight)
+                : nil
+        }
+
+        return WidgetInsights(
+            steps: home.steps,
+            stepGoal: home.stepGoal,
+            stepsWeek: home.stepsSeries,
+            waterWeek: home.waterWeek,
+            sleepHours: home.sleepHours,
+            sleepWeek: home.sleepSeries,
+            hrv: home.hrv,
+            hrvBaseline: home.hrvBaseline,
+            restingHR: home.restingHR,
+            weight: home.latestWeight?.pounds,
+            weightTrend: WeightChallengeEngine.dailySeries(home.weightReadings).suffix(14).map(\.trend),
+            score: score,
+            challenge: challenge,
+            goal: goal,
             updatedAt: now
         )
+    }
+
+    /// Widgets have a tight memory budget — keep the avatar small.
+    private static func thumbnail(_ image: UIImage) -> Data? {
+        let side: CGFloat = 360
+        let scale = min(1, side / max(image.size.width, image.size.height))
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let small = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return small.jpegData(compressionQuality: 0.8)
     }
 }
 

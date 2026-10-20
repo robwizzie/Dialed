@@ -2,173 +2,208 @@
 //  DialedTodayWidget.swift
 //  DialedWidgets
 //
-//  Today at a glance on the Home Screen and Lock Screen: a water ring,
-//  protein and calories left, and one-tap "+16 oz" / top-favorite
-//  buttons. Reads the snapshot the app writes to the App Group, plus any
-//  taps still waiting for the app, so a tap shows up immediately.
+//  Today at a glance: your Dialed score on the brand dial, water, protein
+//  and calories against pace, today's mood, and one-tap logging. Large adds steps, sleep, HRV and the
+//  weight trend; the Lock Screen gets a water gauge and a one-line recap.
 //
 
 import AppIntents
 import SwiftUI
 import WidgetKit
 
-// MARK: - Timeline
-
-struct TodayEntry: TimelineEntry {
-    let date: Date
-    let snapshot: WidgetSnapshot
-}
-
-struct TodayProvider: TimelineProvider {
-    func placeholder(in context: Context) -> TodayEntry {
-        TodayEntry(date: Date(), snapshot: .placeholder)
-    }
-
-    func getSnapshot(in context: Context, completion: @escaping (TodayEntry) -> Void) {
-        completion(entry(at: Date(), preview: context.isPreview))
-    }
-
-    func getTimeline(in context: Context, completion: @escaping (Timeline<TodayEntry>) -> Void) {
-        let now = Date()
-        let calendar = Calendar.current
-        // One entry now and one at the next 4 AM day line, when totals reset.
-        let today = WidgetBridge.logicalDay(for: now)
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? now.addingTimeInterval(86_400)
-        let rollover = calendar.date(byAdding: .hour, value: WidgetBridge.dayCutoffHour, to: tomorrow)
-            ?? now.addingTimeInterval(86_400)
-        let entries = [entry(at: now, preview: false), entry(at: rollover, preview: false)]
-        completion(Timeline(entries: entries, policy: .atEnd))
-    }
-
-    private func entry(at date: Date, preview: Bool) -> TodayEntry {
-        let bridge = WidgetBridge()
-        guard let stored = bridge.readSnapshot() else {
-            return TodayEntry(date: date, snapshot: preview ? .placeholder : .empty)
-        }
-        return TodayEntry(date: date, snapshot: stored.display(with: bridge.pending(), now: date))
-    }
-}
-
-private extension WidgetSnapshot {
-    /// Before the app has run once with the App Group.
-    static var empty: WidgetSnapshot {
-        WidgetSnapshot(waterOz: 0, waterTargetOz: 120, protein: 0, proteinTarget: 190,
-                       calories: 0, calorieTarget: 2_200, favorites: [], updatedAt: .distantPast)
-    }
-}
-
-// MARK: - Widget
-
 struct DialedTodayWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: WidgetBridge.widgetKind, provider: TodayProvider()) { entry in
+        StaticConfiguration(kind: WidgetBridge.widgetKind, provider: DialedProvider()) { entry in
             TodayWidgetView(entry: entry)
         }
         .configurationDisplayName("Today")
         .description("Your Dialed score, plus water, protein and calories left. Log water or a favorite meal with a tap.")
-        .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
+        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge,
+                            .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
-
-// MARK: - Palette (mirrors the app's Neka tokens)
-
-private enum Palette {
-    static func paper(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(rgb: 0x1E2125) : .white }
-    static func ink(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(rgb: 0xF4F4F2) : Color(rgb: 0x121212) }
-    static func inkSecondary(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(rgb: 0xA0A0A6) : Color(rgb: 0x6E6E73) }
-    static func track(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color.white.opacity(0.09) : Color.black.opacity(0.06) }
-    static func skySoft(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(rgb: 0x16293A) : Color(rgb: 0xDDF0FC) }
-    static func greenSoft(_ scheme: ColorScheme) -> Color { scheme == .dark ? Color(rgb: 0x1C3324) : Color(rgb: 0xDDF3E1) }
-    static let sky = Color(rgb: 0x5DB4F0)
-    static let green = Color(rgb: 0x4CB868)
-    static let orange = Color(rgb: 0xF59A4C)
-    static let rose = Color(rgb: 0xEE7C8E)
-}
-
-private extension Color {
-    init(rgb: UInt32) {
-        self.init(
-            red: Double((rgb >> 16) & 0xFF) / 255,
-            green: Double((rgb >> 8) & 0xFF) / 255,
-            blue: Double(rgb & 0xFF) / 255
-        )
-    }
-}
-
-// MARK: - Views
 
 struct TodayWidgetView: View {
-    let entry: TodayEntry
+    let entry: DialedEntry
     @Environment(\.widgetFamily) private var family
     @Environment(\.colorScheme) private var scheme
 
-    private var s: WidgetSnapshot { entry.snapshot }
+    private var s: WidgetSnapshot { entry.today }
+    private var score: WidgetInsights.Score? { entry.insights?.score }
 
     var body: some View {
         switch family {
         case .accessoryCircular:
             circular
                 .containerBackground(for: .widget) { AccessoryWidgetBackground() }
+                .widgetURL(WidgetLink.water.url)
         case .accessoryRectangular:
             rectangular
                 .containerBackground(for: .widget) { Color.clear }
+                .widgetURL(WidgetLink.home.url)
         case .accessoryInline:
             inline
                 .containerBackground(for: .widget) { Color.clear }
+        case .systemLarge:
+            large
+                .dialedBackground(.paper)
+                .widgetURL(WidgetLink.home.url)
         case .systemMedium:
             medium
-                .containerBackground(for: .widget) { Palette.paper(scheme) }
+                .dialedBackground(.paper)
+                .widgetURL(WidgetLink.home.url)
         default:
             small
-                .containerBackground(for: .widget) { Palette.paper(scheme) }
+                .dialedBackground(.paper)
+                .widgetURL(WidgetLink.home.url)
         }
     }
 
     // MARK: Home Screen
 
     private var small: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center, spacing: 10) {
-                scoreDial(size: 62)
-                VStack(alignment: .leading, spacing: 4) {
-                    stat(value: s.waterOz, unit: "oz", caption: "of \(Int(s.waterTargetOz)) oz water", tint: Palette.sky)
-                    stat(value: s.proteinLeft, unit: "g", caption: "protein left", tint: Palette.green)
+        VStack(alignment: .leading, spacing: 0) {
+            header(compact: true)
+            Spacer(minLength: 4)
+            HStack(spacing: 10) {
+                dial(size: 66)
+                VStack(alignment: .leading, spacing: 5) {
+                    legend(Theme.water, Fmt.int(s.waterOz), "oz")
+                    legend(Theme.protein, Fmt.int(s.protein), "g")
+                    legend(Theme.calories, Fmt.compact(Int(abs(s.caloriesLeft).rounded())),
+                           s.caloriesLeft < 0 ? "over" : "left")
                 }
             }
-            Spacer(minLength: 0)
-            waterButton
+            Spacer(minLength: 6)
+            waterButton(16, height: 28)
         }
     }
 
     private var medium: some View {
         HStack(spacing: 14) {
-            VStack(spacing: 6) {
-                scoreDial(size: 84)
-                Text("\(Int(s.waterOz.rounded())) / \(Int(s.waterTargetOz)) oz water")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Palette.inkSecondary(scheme))
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 14) {
-                    stat(value: s.proteinLeft, unit: "g", caption: "protein left", tint: Palette.green)
-                    caloriesStat
+            dial(size: 112)
+            VStack(alignment: .leading, spacing: 0) {
+                header(compact: false)
+                Spacer(minLength: 6)
+                VStack(spacing: 7) {
+                    metricRow("Water", value: "\(Fmt.int(s.waterOz))/\(Fmt.int(s.waterTargetOz)) oz",
+                              progress: s.waterProgress, tint: Theme.water, pace: entry.pace)
+                    metricRow("Protein", value: "\(Fmt.int(s.protein))/\(Fmt.int(s.proteinTarget)) g",
+                              progress: s.proteinProgress, tint: Theme.protein, pace: entry.pace)
+                    metricRow("Calories", value: caloriesShort,
+                              progress: s.calorieProgress, tint: s.caloriesLeft < 0 ? Theme.rose : Theme.calories)
                 }
-                Spacer(minLength: 0)
-                HStack(spacing: 8) {
-                    waterButton
-                    if let top = s.favorites.first {
-                        Button(intent: LogFavoriteWidgetIntent(favoriteID: top.id)) {
-                            pill(icon: "star.fill", text: top.name, fill: Palette.greenSoft(scheme))
-                        }
-                        .buttonStyle(.plain)
-                    }
+                Spacer(minLength: 8)
+                HStack(spacing: 6) {
+                    waterButton(16, height: 28)
+                    favoriteButton(height: 28)
                 }
             }
         }
     }
 
-    /// Today's Dialed score on the same dial as the app icon.
-    private func scoreDial(size: CGFloat) -> some View {
+    private var large: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(Fmt.weekday(entry.date))
+                        .font(Theme.micro)
+                        .foregroundStyle(Theme.inkSecondary)
+                        .tracking(0.6)
+                    Text(score?.title ?? "Today")
+                        .font(Theme.display(22))
+                        .foregroundStyle(Theme.ink)
+                    if let tagline = score?.tagline {
+                        Text(tagline)
+                            .font(Theme.caption)
+                            .foregroundStyle(Theme.inkSecondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 4)
+                if let score {
+                    MoodFace(avatar: entry.avatar, emoji: score.emoji,
+                             accent: Color(hexString: score.accentHex), size: 50)
+                }
+            }
+
+            HStack(spacing: 16) {
+                dial(size: 112)
+                VStack(spacing: 9) {
+                    metricRow("Water", value: "\(Fmt.int(s.waterOz))/\(Fmt.int(s.waterTargetOz)) oz",
+                              progress: s.waterProgress, tint: Theme.water, pace: entry.pace)
+                    metricRow("Protein", value: "\(Fmt.int(s.protein))/\(Fmt.int(s.proteinTarget)) g",
+                              progress: s.proteinProgress, tint: Theme.protein, pace: entry.pace)
+                    metricRow("Calories", value: caloriesShort,
+                              progress: s.calorieProgress, tint: s.caloriesLeft < 0 ? Theme.rose : Theme.calories)
+                }
+            }
+
+            if let i = entry.insights {
+                HStack(spacing: 8) {
+                    miniTile(icon: "figure.walk", title: "Steps", tint: Theme.green, wash: .mint,
+                             value: Fmt.compact(i.steps), unit: nil,
+                             note: i.stepProgress >= 1 ? "Goal hit 🎉" : "\(Fmt.compact(max(0, i.stepGoal - i.steps))) to go") {
+                        CapsuleBar(progress: i.stepProgress, tint: Theme.green, height: 5, pace: entry.pace)
+                    }
+                    miniTile(icon: "moon.fill", title: "Sleep", tint: Theme.lavender, wash: .lavender,
+                             value: i.sleepHours.map { String(format: "%.1f", $0) } ?? "—", unit: "h",
+                             note: i.sleepHours.map { $0 >= 7 ? "Solid night" : "A bit short" }) {
+                        WeekBars(values: i.sleepWeek, tint: Theme.lavender, goal: 7, showsDays: false, today: entry.date)
+                    }
+                    miniTile(icon: "scalemass.fill", title: "Weight", tint: Theme.sky, wash: .sky,
+                             value: i.weight.map { String(format: "%.1f", $0) } ?? "—", unit: "lb",
+                             note: i.weightChange.map { "\(Fmt.signed($0)) lb" }) {
+                        Sparkline(values: i.weightTrend, tint: Theme.sky)
+                    }
+                }
+                .frame(height: 104)
+            } else {
+                SyncHint(text: "Open Dialed to add steps, sleep and weight")
+                    .frame(maxWidth: .infinity, minHeight: 104)
+            }
+
+            Spacer(minLength: 0)
+            HStack(spacing: 6) {
+                waterButton(8, height: 32)
+                waterButton(16, height: 32)
+                favoriteButton(height: 32)
+                Link(destination: WidgetLink.meal.url) {
+                    ActionChip(icon: "fork.knife", text: "Meal", tint: Theme.orangeText,
+                               fill: Theme.orangeSoft, height: 32)
+                }
+            }
+        }
+    }
+
+    // MARK: Pieces
+
+    private func header(compact: Bool) -> some View {
+        HStack(spacing: 6) {
+            Text(compact ? "Today" : Fmt.weekday(entry.date))
+                .font(.system(size: compact ? 13 : 11, weight: .semibold))
+                .foregroundStyle(compact ? Theme.ink : Theme.inkSecondary)
+                .tracking(compact ? 0 : 0.6)
+            Spacer(minLength: 2)
+            if let score {
+                HStack(spacing: 3) {
+                    Text(score.emoji).font(.system(size: 11))
+                    if !compact {
+                        Text(score.title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Theme.ink)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(Capsule().fill(Color(hexString: score.accentHex).opacity(0.2)))
+            }
+        }
+    }
+
+    /// Today's Dialed score on the same dial as the app icon and the Home card.
+    private func dial(size: CGFloat) -> some View {
         DialGauge(value: Double(s.dialedScore) / 100, label: "\(s.dialedScore)",
                   caption: size >= 80 ? "dialed" : nil, dark: scheme == .dark)
             .frame(width: size, height: size)
@@ -176,51 +211,90 @@ struct TodayWidgetView: View {
             .accessibilityLabel("Dialed score \(s.dialedScore)")
     }
 
-    private var caloriesStat: some View {
-        let over = s.caloriesLeft < 0
-        return stat(value: abs(s.caloriesLeft), unit: "kcal",
-                    caption: over ? "over" : "left", tint: over ? Palette.rose : Palette.orange)
-    }
-
-    private func stat(value: Double, unit: String, caption: String, tint: Color) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                Text("\(Int(value.rounded()))")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(Palette.ink(scheme))
-                    .minimumScaleFactor(0.7)
-                    .lineLimit(1)
-                Text(unit)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(tint)
-            }
-            Text(caption)
-                .font(.system(size: 10))
-                .foregroundColor(Palette.inkSecondary(scheme))
+    private func legend(_ tint: Color, _ value: String, _ unit: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Circle().fill(tint).frame(width: 7, height: 7).widgetAccentable()
+            Text(value)
+                .font(Theme.display(15))
+                .foregroundStyle(Theme.ink)
+                .contentTransition(.numericText())
+                .minimumScaleFactor(0.7)
                 .lineLimit(1)
+            Text(unit)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundStyle(Theme.inkSecondary)
         }
     }
 
-    private var waterButton: some View {
-        Button(intent: AddWaterWidgetIntent(ounces: 16)) {
-            pill(icon: "plus", text: "16 oz", fill: Palette.skySoft(scheme))
+    private func metricRow(_ title: String, value: String, progress: Double, tint: Color, pace: Double? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.inkSecondary)
+                Spacer(minLength: 4)
+                Text(value)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            CapsuleBar(progress: progress, tint: tint, height: 5, pace: pace)
+        }
+    }
+
+    private func miniTile<Chart: View>(icon: String, title: String, tint: Color, wash: Theme.Wash,
+                                       value: String, unit: String?, note: String?,
+                                       @ViewBuilder chart: () -> Chart) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(tint)
+                    .widgetAccentable()
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Theme.inkSecondary)
+                Spacer(minLength: 0)
+            }
+            ValueText(value: value, unit: unit, size: 18)
+            Text(note ?? " ")
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundStyle(Theme.inkSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            chart()
+                .frame(maxHeight: .infinity, alignment: .bottom)
+                .padding(.top, 2)
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .widgetTile(wash.tile, radius: 14)
+    }
+
+    private func waterButton(_ ounces: Double, height: CGFloat) -> some View {
+        Button(intent: AddWaterWidgetIntent(ounces: ounces)) {
+            ActionChip(icon: "drop.fill", text: "+\(Fmt.int(ounces)) oz", tint: Theme.skyText,
+                       fill: Theme.skySoft, height: height)
         }
         .buttonStyle(.plain)
     }
 
-    private func pill(icon: String, text: String, fill: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: icon)
-                .font(.system(size: 11, weight: .bold))
-            Text(text)
-                .font(.system(size: 12, weight: .semibold))
-                .lineLimit(1)
+    @ViewBuilder
+    private func favoriteButton(height: CGFloat) -> some View {
+        if let top = s.favorites.first {
+            Button(intent: LogFavoriteWidgetIntent(favoriteID: top.id)) {
+                ActionChip(icon: "star.fill", text: top.name, tint: Theme.greenText,
+                           fill: Theme.greenSoft, height: height)
+            }
+            .buttonStyle(.plain)
+        } else {
+            Link(destination: WidgetLink.meal.url) {
+                ActionChip(icon: "plus", text: "Log meal", tint: Theme.greenText,
+                           fill: Theme.greenSoft, height: height)
+            }
         }
-        .foregroundColor(Palette.ink(scheme))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity)
-        .background(Capsule().fill(fill))
     }
 
     // MARK: Lock Screen
@@ -229,20 +303,25 @@ struct TodayWidgetView: View {
         Gauge(value: min(s.waterOz, max(s.waterTargetOz, 1)), in: 0...max(s.waterTargetOz, 1)) {
             Image(systemName: "drop.fill")
         } currentValueLabel: {
-            Text("\(Int(s.waterOz.rounded()))")
+            Text(Fmt.int(s.waterOz))
         }
         .gaugeStyle(.accessoryCircularCapacity)
         .widgetAccentable()
     }
 
     private var rectangular: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Label("\(Int(s.waterOz.rounded())) / \(Int(s.waterTargetOz)) oz", systemImage: "drop.fill")
-                .font(.system(size: 13, weight: .semibold))
-                .widgetAccentable()
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: "drop.fill")
+                Text("\(Fmt.int(s.waterOz))/\(Fmt.int(s.waterTargetOz)) oz")
+                Spacer(minLength: 2)
+                Label("\(s.dialedScore)", systemImage: "gauge.with.dots.needle.67percent")
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .widgetAccentable()
             Gauge(value: s.waterProgress) { EmptyView() }
                 .gaugeStyle(.accessoryLinearCapacity)
-            Text("\(Int(s.proteinLeft.rounded())) g protein · \(caloriesShort)")
+            Text("\(Fmt.int(s.proteinLeft)) g protein · \(caloriesShort)")
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -250,12 +329,16 @@ struct TodayWidgetView: View {
     }
 
     private var inline: some View {
-        Label("\(Int(s.waterOz.rounded())) oz · \(caloriesShort)", systemImage: "drop.fill")
+        Label("\(Fmt.int(s.waterOz)) oz · \(Fmt.int(s.protein)) g · \(caloriesShort)", systemImage: "drop.fill")
     }
 
     private var caloriesShort: String {
         s.caloriesLeft >= 0
-            ? "\(Int(s.caloriesLeft.rounded())) kcal left"
-            : "\(Int((-s.caloriesLeft).rounded())) kcal over"
+            ? "\(Fmt.int(s.caloriesLeft)) kcal left"
+            : "\(Fmt.int(-s.caloriesLeft)) kcal over"
     }
 }
+
+#Preview("Small", as: .systemSmall) { DialedTodayWidget() } timeline: { DialedEntry.preview }
+#Preview("Medium", as: .systemMedium) { DialedTodayWidget() } timeline: { DialedEntry.preview }
+#Preview("Large", as: .systemLarge) { DialedTodayWidget() } timeline: { DialedEntry.preview }

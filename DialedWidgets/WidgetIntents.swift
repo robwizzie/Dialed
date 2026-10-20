@@ -31,6 +31,40 @@ struct AddWaterWidgetIntent: AppIntent {
     }
 }
 
+// MARK: - Water widget settings
+
+enum WaterPreset: String, AppEnum {
+    case sips, glasses, bottles
+
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Pour sizes"
+    static let caseDisplayRepresentations: [WaterPreset: DisplayRepresentation] = [
+        .sips: "Sips · 4, 8, 12 oz",
+        .glasses: "Glasses · 8, 16, 24 oz",
+        .bottles: "Bottles · 16, 24, 32 oz"
+    ]
+
+    /// Ounces on the widget's buttons, smallest first.
+    var amounts: [Double] {
+        switch self {
+        case .sips:    return [4, 8, 12]
+        case .glasses: return [8, 16, 24]
+        case .bottles: return [16, 24, 32]
+        }
+    }
+}
+
+struct WaterWidgetConfiguration: WidgetConfigurationIntent {
+    static let title: LocalizedStringResource = "Water"
+    static let description = IntentDescription("Choose the pour sizes on the buttons.")
+
+    @Parameter(title: "Pour sizes", default: .glasses)
+    var pours: WaterPreset
+
+    init() {}
+}
+
+// MARK: - Favorites
+
 struct LogFavoriteWidgetIntent: AppIntent {
     static let title: LocalizedStringResource = "Log favorite meal"
     static let isDiscoverable = false
