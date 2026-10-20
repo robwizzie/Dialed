@@ -35,6 +35,21 @@ enum ChallengeWire {
         var stats: [String: SideStats]?
         /// Weekly side bets (missing on servers from before side bets).
         var bets: [SideBets.Wire]?
+        /// Each side's latest Sunday report, keyed "owner" / "friend"
+        /// (missing on servers from before reports).
+        var reports: [String: ReportWire]?
+    }
+
+    /// A posted weekly report as the server echoes it back.
+    struct ReportWire: Codable, Equatable {
+        var week: String?
+        var weekNumber: Int?
+        var headline: String?
+        var subline: String?
+        var betLine: String?
+        var standing: String?
+        var nudge: String?
+        var updatedAt: String?
     }
 
     /// Optional, loosely-typed stats a side shares (all fields optional).

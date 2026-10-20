@@ -54,6 +54,9 @@ enum HabitDays {
         var proteinTarget: Double = 150
         var waterTarget: Double = 100
         var calorieBudget: Double = 2_200
+        /// A day off by design (the big day): it neither counts toward
+        /// nor breaks a streak.
+        var exempt = false
 
         var id: Date { date }
 
@@ -99,6 +102,8 @@ enum HabitDays {
             let consecutive = previous.flatMap { calendar.date(byAdding: .day, value: 1, to: $0) } == day
             if let d = byDay[day], test(d) {
                 run = consecutive ? run + 1 : 1
+            } else if byDay[day]?.exempt == true, consecutive {
+                // Skipped on purpose: the run carries over, unchanged.
             } else {
                 run = 0
             }
@@ -109,8 +114,8 @@ enum HabitDays {
         let start = calendar.startOfDay(for: today)
         var cursor = byDay[start].map(test) == true ? start : (calendar.date(byAdding: .day, value: -1, to: start) ?? start)
         var current = 0
-        while let d = byDay[cursor], test(d) {
-            current += 1
+        while let d = byDay[cursor], test(d) || d.exempt {
+            if test(d) { current += 1 }
             guard let prev = calendar.date(byAdding: .day, value: -1, to: cursor) else { break }
             cursor = prev
         }

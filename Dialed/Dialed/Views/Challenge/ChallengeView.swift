@@ -44,7 +44,7 @@ struct ChallengeView: View {
     @EnvironmentObject private var router: AppRouter
 
     enum Sheet: String, Identifiable {
-        case setup, edit, friend, weighIn, live
+        case setup, edit, friend, weighIn, live, report
         var id: String { rawValue }
     }
 
@@ -58,6 +58,7 @@ struct ChallengeView: View {
                         headToHead(c, p)
                         if let race = viewModel.race { RacePaceCard(report: race) }
                         wrappedButton(p)
+                        reportButton
                         SideBetsSection()
                         LiveChallengeCard(sync: liveSync, friendName: c.friendDisplayName) { sheet = .live }
                         TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
@@ -115,6 +116,8 @@ struct ChallengeView: View {
                 case .weighIn:
                     WeighInSheet(lastWeight: viewModel.readings.last?.pounds)
                         .presentationDetents([.medium])
+                case .report:
+                    WeeklyReportView()
                 case .live:
                     if let c = viewModel.challenge {
                         LiveChallengeSheet(challenge: c, ownerStart: viewModel.progress?.startWeight, readings: viewModel.readings)
@@ -208,6 +211,34 @@ struct ChallengeView: View {
                     .fill(LinearGradient(colors: [Neka.lavender, Neka.rose, Neka.amber],
                                          startPoint: .leading, endPoint: .trailing))
             )
+        }
+        .buttonStyle(.dialedScale)
+    }
+
+    /// "This week's report" — the Sunday you-vs-friend summary, any day.
+    private var reportButton: some View {
+        Button { sheet = .report } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "chart.bar.doc.horizontal.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Neka.lavenderText)
+                    .frame(width: 38, height: 38)
+                    .background(Circle().fill(Neka.lavenderSoft))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("This week's report")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                    Text("You vs \(viewModel.challenge?.friendDisplayName ?? "your friend") · lands Sunday at 7 PM")
+                        .font(.system(size: 12))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+            .padding(14)
+            .nekaCard()
         }
         .buttonStyle(.dialedScale)
     }

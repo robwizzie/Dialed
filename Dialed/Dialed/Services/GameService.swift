@@ -77,6 +77,11 @@ enum GameService {
 
     static func today(context: ModelContext, now: Date = Date()) async -> Today {
         let calendar = Calendar.current
+        // The big day (a wedding): no quests, nothing to miss.
+        if EventModeStore.isEventDay(now, calendar: calendar) {
+            let xp = GameStore.load().xp
+            return Today(quests: [], level: QuestEngine.level(xp: xp), xp: xp, xpToday: 0)
+        }
         let facts = await facts(context: context, now: now)
         let key = WeeklyReview.dayKey(now, calendar: calendar)
         var store = GameStore.load()
@@ -178,6 +183,7 @@ enum GameService {
         let settings = UserSettings.load()
         let budget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)
         let mileGoal = MileSettings.load().goalMiles
+        let eventDate = GoalEvent.load()?.date
 
         let health = HealthKitManager.shared
         async let hkEnergy = try? health.fetchDailySums(.dietaryEnergyConsumed, unit: .kilocalorie(), days: count)
@@ -217,6 +223,7 @@ enum GameService {
             day.proteinTarget = settings.proteinTargetGrams
             day.waterTarget = settings.waterTargetOz
             day.calorieBudget = budget
+            day.exempt = EventMode.isEventDay(event: eventDate, on: d, calendar: calendar)
             return day
         }
     }

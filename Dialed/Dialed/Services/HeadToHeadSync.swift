@@ -31,9 +31,11 @@ enum HeadToHeadSync {
     /// changed. At most every 5 minutes unless `force`.
     static func run(context: ModelContext, force: Bool = false) async {
         let live = ChallengeSync.shared
-        guard live.isLive, let challenge = WeightChallenge.load() else { return }
         let now = Date()
         if !force, let lastRun, now.timeIntervalSince(lastRun) < 300 { return }
+        // The Sunday report reminder works with or without the live server.
+        await WeeklyReportService.scheduleReminder()
+        guard live.isLive, let challenge = WeightChallenge.load() else { return }
         lastRun = now
 
         let calendar = Calendar.current
@@ -43,6 +45,8 @@ enum HeadToHeadSync {
         await live.sync(readings: readings, force: true)
         // Side bets: publish your running number, hear about proposals and results.
         await SideBetsStore.shared.refresh(context: context)
+        // Sunday evening: this week's report goes to your friend's page.
+        await WeeklyReportService.postIfDue(context: context, now: now)
         guard let updated = WeightChallenge.load() else { return }
 
         let progress = WeightChallengeEngine.progress(challenge: updated, readings: readings, now: now)
@@ -65,7 +69,7 @@ enum HeadToHeadSync {
             await post(id: "\(idPrefix)weighin_\(HeadToHead.key(newest))", title: alert.title, body: alert.body, at: nil)
         }
 
-        if nudgesOn, let reason = HeadToHead.nudgeReason(before: before, after: after, newest: newest, prior: prior),
+        if nudgesOn, !EventModeStore.isEventDay(now), let reason = HeadToHead.nudgeReason(before: before, after: after, newest: newest, prior: prior),
            let at = HeadToHead.nudgeTime(now: now, sent: sentDates) {
             let snapshot = HealthSnapshot.challenge(updated, progress)
             let line = await DialedAI.trashTalk(snapshot, tone: .savage) ?? HeadToHead.cannedLine(reason, friendName: name)

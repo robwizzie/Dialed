@@ -279,25 +279,40 @@ struct HomeFuelCard: View {
                 }
                 .buttonStyle(.dialedScale)
             }
-            row(
-                title: "Protein",
-                value: "\(Int(protein)) / \(Int(proteinTarget)) g",
-                progress: proteinTarget > 0 ? protein / proteinTarget : 0,
-                tint: Neka.orange
-            )
-            row(
-                title: "Calories",
-                value: "\(Int(calories).formatted()) / \(Int(calorieTarget).formatted())",
-                progress: calorieTarget > 0 ? calories / calorieTarget : 0,
-                tint: calories > calorieTarget ? Neka.rose : Neka.green
-            )
-            if earned.earned > 0 {
-                EarnedCaloriesPill(earned: earned)
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            if let event = eventDay {
+                // The big day: no budget, no bars.
+                Label("\(event): nothing to count today. Enjoy every bite.", systemImage: "party.popper.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.amberSoft))
+            } else {
+                row(
+                    title: "Protein",
+                    value: "\(Int(protein)) / \(Int(proteinTarget)) g",
+                    progress: proteinTarget > 0 ? protein / proteinTarget : 0,
+                    tint: Neka.orange
+                )
+                row(
+                    title: "Calories",
+                    value: "\(Int(calories).formatted()) / \(Int(calorieTarget).formatted())",
+                    progress: calorieTarget > 0 ? calories / calorieTarget : 0,
+                    tint: calories > calorieTarget ? Neka.rose : Neka.green
+                )
+                if earned.earned > 0 {
+                    EarnedCaloriesPill(earned: earned)
+                        .transition(.scale(scale: 0.9).combined(with: .opacity))
+                }
+                Text(calorieNote)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+                if let line = lookYourBestLine {
+                    Label(line, systemImage: "sparkles")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Neka.lavenderText)
+                }
             }
-            Text(calorieNote)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Neka.inkSecondary)
             Button(action: onEatingOut) {
                 HStack(spacing: 10) {
                     Text("🍽️").font(.system(size: 18))
@@ -323,6 +338,18 @@ struct HomeFuelCard: View {
         }
         .padding(16)
         .nekaCard()
+    }
+
+    /// The event's name on its day (a wedding): the card drops the budget.
+    private var eventDay: String? {
+        guard let current = EventModeStore.current(), current.phase == .eventDay else { return nil }
+        return current.event.name
+    }
+
+    /// Carbs and sodium for the last week before the event.
+    private var lookYourBestLine: String? {
+        guard let current = EventModeStore.current(), case .lookYourBest(let days) = current.phase else { return nil }
+        return EventMode.fuelLine(daysLeft: days)
     }
 
     /// Final push has tightened today's target (the last 14 days of the challenge).

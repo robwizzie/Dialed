@@ -13,6 +13,8 @@ import SwiftUI
 struct WakeScheduleView: View {
     @State private var schedule = WakeSchedule.load()
     @State private var editingDay: Date?
+    /// Calendar-based suggestions ("Dentist 8:15 → 7:15"), per day.
+    @State private var suggestions: [WakeSuggestionEngine.Suggestion] = []
     private let calendar = Calendar.current
 
     /// Monday-first week.
@@ -22,10 +24,12 @@ struct WakeScheduleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 tomorrowCard
+                section("Alarm") { WakeAlarmSettingsCard() }
                 section("Usual wake-up") { weeklyCard }
                 section("Next two weeks") { upcomingCard }
+                calendarLink
                 section("Sleep") { sleepCard }
-                Text("Dialed sends a wind-down note before bedtime and a good-morning note after you're up. It can't ring your iPhone alarm. Set that in the Clock app.")
+                Text("Dialed also sends a wind-down note before bedtime and a good-morning note after you're up.")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkTertiary)
             }
@@ -35,9 +39,20 @@ struct WakeScheduleView: View {
         .nekaPageBackground()
         .navigationTitle("Wake-up times")
         .navigationBarTitleDisplayMode(.inline)
-        .onChange(of: schedule) { _, s in s.save() }
+        .onChange(of: schedule) { _, s in
+            s.save()
+            suggestions = WakeSuggestionStore.current()
+        }
+        .task {
+            await CalendarService.shared.refresh()
+            suggestions = WakeSuggestionStore.current()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: CalendarService.didRefresh)) { _ in
+            suggestions = WakeSuggestionStore.current()
+        }
         .sheet(item: Binding(get: { editingDay.map { DayTarget(date: $0) } }, set: { editingDay = $0?.date })) { target in
-            WakeDaySheet(date: target.date, schedule: $schedule)
+            WakeDaySheet(date: target.date, schedule: $schedule,
+                         suggestion: suggestions.first { calendar.isDate($0.date, inSameDayAs: target.date) })
                 .presentationDetents([.medium])
         }
     }
@@ -157,7 +172,9 @@ struct WakeScheduleView: View {
                         Text(offset == 0 ? "Today" : offset == 1 ? "Tomorrow" : day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                             .font(.system(size: 14, weight: offset < 2 ? .semibold : .regular))
                             .foregroundColor(Neka.ink)
-                        if schedule.isChanged(on: day) {
+                        if let s = suggestions.first(where: { calendar.isDate($0.date, inSameDayAs: day) }) {
+                            suggestionChip(s)
+                        } else if schedule.isChanged(on: day) {
                             Text("CHANGED")
                                 .font(.system(size: 9, weight: .bold))
                                 .tracking(0.5)
@@ -185,6 +202,49 @@ struct WakeScheduleView: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 4)
         .nekaCard()
+    }
+
+    /// "Suggested 7:15" on an upcoming day; tapping the day shows why,
+    /// with a one-tap Use.
+    private func suggestionChip(_ s: WakeSuggestionEngine.Suggestion) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: s.kind == .earlier ? "sunrise.fill" : "bed.double.fill")
+            Text("Suggested \(WakeSchedule.clock(s.suggested))")
+        }
+        .font(.system(size: 9, weight: .bold))
+        .foregroundColor(s.kind == .earlier ? Neka.orangeText : Neka.lavenderText)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(Capsule().fill(s.kind == .earlier ? Neka.orangeSoft : Neka.lavenderSoft))
+        .accessibilityLabel("Suggested wake-up \(WakeSchedule.clock(s.suggested)). \(s.reason)")
+    }
+
+    private var calendarLink: some View {
+        NavigationLink { CalendarSettingsView() } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "calendar")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Neka.track))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(CalendarService.shared.isConnected ? "Calendar-based suggestions" : "Connect your calendar")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                    Text("Early plans move your wake-up earlier; days off let you sleep in. You accept each one.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Neka.inkSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+            .padding(14)
+            .nekaCard()
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Sleep
@@ -245,6 +305,8 @@ struct WakeScheduleView: View {
 struct WakeDaySheet: View {
     let date: Date
     @Binding var schedule: WakeSchedule
+    /// A calendar-based suggestion for this day, if there is one.
+    var suggestion: WakeSuggestionEngine.Suggestion? = nil
     @Environment(\.dismiss) private var dismiss
     @State private var time = Date()
     @State private var sleepIn = false
@@ -254,6 +316,32 @@ struct WakeDaySheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 18) {
+                if let suggestion {
+                    HStack(spacing: 10) {
+                        Image(systemName: suggestion.kind == .earlier ? "sunrise.fill" : "bed.double.fill")
+                            .foregroundColor(suggestion.kind == .earlier ? Neka.orangeText : Neka.lavenderText)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Suggested \(WakeSchedule.clock(suggestion.suggested))")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Neka.ink)
+                            Text(suggestion.reason)
+                                .font(.system(size: 12))
+                                .foregroundColor(Neka.inkSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 4)
+                        Button("Use") {
+                            schedule.setDay(suggestion.suggested, on: date)
+                            dismiss()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Neka.ink)
+                        .controlSize(.small)
+                    }
+                    .padding(14)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(suggestion.kind == .earlier ? Neka.orangeSoft : Neka.lavenderSoft))
+                }
                 Toggle("Sleep in (no wake-up)", isOn: $sleepIn)
                     .tint(Neka.green)
                     .padding(16)
@@ -335,6 +423,11 @@ struct HomeTomorrowWakeCard: View {
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundColor(Neka.inkSecondary)
+                    if let alarm = alarmLine {
+                        Text(alarm)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Neka.lavenderText)
+                    }
                 }
                 Spacer(minLength: 0)
                 Text("Change")
@@ -357,6 +450,13 @@ struct HomeTomorrowWakeCard: View {
             let fresh = WakeSchedule.load()
             if fresh != schedule { schedule = fresh }
         }
+    }
+
+    /// "⏰ Alarm · Math mission"
+    private var alarmLine: String? {
+        let alarm = WakeAlarmSettings.load()
+        guard alarm.enabled, schedule.wake(on: tomorrow) != nil else { return nil }
+        return "⏰ Alarm · \(alarm.effectiveMission.title) mission"
     }
 
     private var subtitle: String {

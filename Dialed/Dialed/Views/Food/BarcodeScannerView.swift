@@ -252,15 +252,17 @@ struct BarcodeScanView: View {
 
 // MARK: - VisionKit scanner
 
-/// Live barcode scanner; reports the first code it recognizes.
-private struct DataScannerRepresentable: UIViewControllerRepresentable {
+/// Live barcode scanner; reports the first code it recognizes. (Also used
+/// by the wake-up alarm's barcode mission, which adds QR codes.)
+struct DataScannerRepresentable: UIViewControllerRepresentable {
+    var symbologies: [VNBarcodeSymbology] = [.ean13, .ean8, .upce, .code128]
     var onCode: (String) -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onCode: onCode) }
 
     func makeUIViewController(context: Context) -> DataScannerViewController {
         let scanner = DataScannerViewController(
-            recognizedDataTypes: [.barcode(symbologies: [.ean13, .ean8, .upce, .code128])],
+            recognizedDataTypes: [.barcode(symbologies: symbologies)],
             qualityLevel: .balanced,
             recognizesMultipleItems: false,
             isHighlightingEnabled: true

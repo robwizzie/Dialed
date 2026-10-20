@@ -10,7 +10,7 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, finalPush, wrapped, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
+    case morning, wakeSuggestion, event, finalPush, wrapped, suggestions, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
          weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
@@ -18,6 +18,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .morning:      return "Morning brief"
+        case .wakeSuggestion: return "Wake-up suggestion"
+        case .event:        return "Big day countdown"
         case .finalPush:    return "Final push"
         case .wrapped:      return "Dialed Wrapped"
         case .hero:         return "Photo & vitals"
@@ -29,7 +31,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .sideBet:      return "Side bet"
         case .futureYou:    return "Future you"
         case .workout:      return "Today's workout"
-        case .fun:          return "Fun stuff"
+        case .fun:          return "Suggested activity"
+        case .suggestions:  return "Waiting for you"
         case .tomorrow:     return "Tomorrow's wake-up"
         case .weeklyReview: return "Week in review"
         case .patterns:     return "Patterns"
@@ -49,6 +52,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .morning:      return "sun.horizon.fill"
+        case .wakeSuggestion: return "alarm.waves.left.and.right"
+        case .event:        return "sparkles"
         case .finalPush:    return "flame.fill"
         case .wrapped:      return "gift.fill"
         case .hero:         return "person.crop.circle.fill"
@@ -61,6 +66,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .futureYou:    return "sparkles"
         case .workout:      return "dumbbell.fill"
         case .fun:          return "figure.pickleball"
+        case .suggestions:  return "clock.arrow.circlepath"
         case .tomorrow:     return "alarm.fill"
         case .weeklyReview: return "calendar.badge.checkmark"
         case .patterns:     return "chart.bar.xaxis"
@@ -81,11 +87,14 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var note: String? {
         switch self {
         case .morning:      return "Mornings until noon"
+        case .wakeSuggestion: return "When your calendar changes a morning"
+        case .event:        return "Before, on and after your event"
         case .finalPush:    return "Last 14 days of a challenge"
         case .wrapped:      return "Around the challenge's end"
         case .tomorrow:     return "Evenings"
         case .weeklyReview: return "Sundays and Mondays"
         case .race:         return "During a challenge"
+        case .suggestions:  return "When something's waiting"
         case .patterns:     return "Once there's enough data"
         default:            return nil
         }
@@ -141,13 +150,24 @@ struct HomeLayout: Equatable {
     static let didChange = Notification.Name("HomeLayoutDidChange")
 
     static func load(_ defaults: UserDefaults = .standard) -> HomeLayout {
-        guard let order = defaults.stringArray(forKey: orderKey) else { return .standard }
+        guard var order = defaults.stringArray(forKey: orderKey) else { return .standard }
+        // Once: suggestions to name or dismiss belong near the top.
+        if !defaults.bool(forKey: suggestionsTopKey) {
+            defaults.set(true, forKey: suggestionsTopKey)
+            order.removeAll { $0 == HomeSection.suggestions.rawValue }
+            let anchor = [HomeSection.wrapped, .finalPush, .morning].compactMap { order.firstIndex(of: $0.rawValue) }.first
+            order.insert(HomeSection.suggestions.rawValue, at: anchor.map { $0 + 1 } ?? 0)
+            defaults.set(order, forKey: orderKey)
+        }
         return HomeLayout(savedOrder: order, savedHidden: defaults.stringArray(forKey: hiddenKey) ?? [])
     }
+
+    private static let suggestionsTopKey = "home.layout.suggestionsTop.v1"
 
     func save(_ defaults: UserDefaults = .standard) {
         defaults.set(order.map(\.rawValue), forKey: Self.orderKey)
         defaults.set(hidden.map(\.rawValue).sorted(), forKey: Self.hiddenKey)
+        defaults.set(true, forKey: Self.suggestionsTopKey)
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 

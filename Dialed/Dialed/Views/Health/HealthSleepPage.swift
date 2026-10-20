@@ -15,6 +15,7 @@ struct HealthSleepPage: View {
     @ObservedObject var model: HealthDetailModel
     @State private var scrubbedNight: Date?
     @State private var scrubbedTime: Date?
+    @State private var explaining: HealthInsights.Night?
 
     private let deepBlue = Color(hex: "4C6FE0")
     private let calendar = Calendar.current
@@ -23,7 +24,7 @@ struct HealthSleepPage: View {
         VStack(spacing: 16) {
             if let night = model.lastNight {
                 scoreCard(night)
-                if model.isToday, let plan = model.sleepPlan { tonightCard(plan) }
+                if model.isToday, let tonight = tonightPlan { tonightCard(tonight) }
                 totalCard(night)
                 stagesCard(night)
                 timelineCard(night)
@@ -59,7 +60,18 @@ struct HealthSleepPage: View {
     private func scoreCard(_ night: HealthInsights.Night) -> some View {
         let score = HealthInsights.sleepScore(night)
         return VStack(alignment: .leading, spacing: 12) {
-            HealthCardHeader(title: "Sleep Score", trailing: night.vendorScore != nil ? "from your watch" : "Dialed estimate")
+            HStack(alignment: .firstTextBaseline) {
+                Text("Sleep Score")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Button { explaining = night } label: {
+                    Label("Dialed vs Google", systemImage: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                .buttonStyle(.plain)
+            }
             HStack(alignment: .center, spacing: 10) {
                 Text("\(score)")
                     .font(.system(size: 44, weight: .semibold))
@@ -67,63 +79,131 @@ struct HealthSleepPage: View {
                     .contentTransition(.numericText())
                 NekaPill(text: HealthInsights.label(for: score), tint: .white, fill: score >= 70 ? Neka.skyText : Neka.orangeText)
                 Spacer()
+                if let google = night.vendorScore {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("Google")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Neka.inkTertiary)
+                        Text("\(google)")
+                            .font(.system(size: 17, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                }
             }
             HealthScoreBar(score: score)
-            if night.vendorScore == nil {
-                Text("Duration, time asleep in bed, deep + REM share and wake-ups.")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-            }
+            Text("Duration, time asleep in bed, deep + REM share and wake-ups.")
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
         }
         .padding(16)
         .nekaCard()
+        .sheet(item: Binding(get: { explaining.map { ExplainTarget(night: $0) } }, set: { explaining = $0?.night })) { target in
+            SleepScoreExplainer(night: target.night)
+                .presentationDetents([.large])
+        }
+    }
+
+    private struct ExplainTarget: Identifiable {
+        let night: HealthInsights.Night
+        var id: Date { night.wakeDay }
     }
 
     // MARK: - Tonight
 
-    private func tonightCard(_ plan: HealthInsights.SleepPlan) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HealthCardHeader(title: "Tonight", trailing: "from your last 7 nights")
-            HStack(alignment: .center, spacing: 14) {
-                Image(systemName: "moon.stars.fill")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Neka.lavenderText)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(Neka.lavenderSoft))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Be asleep by")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Neka.inkSecondary)
-                    Text(clock(plan.bedtimeMinutes))
-                        .font(.system(size: 30, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 6) {
-                    planStat("Target", String(format: "%.1f h", plan.targetHours))
-                    planStat("Wake", clock(plan.wakeMinutes))
-                }
-            }
-            Text(plan.debtHours >= 0.5
-                 ? String(format: "You're %.1f h short this week, so tonight's target includes a little extra to pay it back.", plan.debtHours)
-                 : "No sleep debt this week. Keep the same window to stay there.")
-                .font(.system(size: 12))
-                .foregroundColor(plan.debtHours >= 2 ? Neka.orangeText : Neka.inkSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(16)
-        .nekaCard(wash: .lavender)
+    /// Wake from your wake-up schedule when you've set one, else your usual
+    /// from the last week; bedtime pays back a capped slice of sleep debt.
+    private var tonightPlan: SleepVisuals.Tonight? {
+        SleepVisuals.tonight(schedule: WakeSchedule.load(),
+                             learnedWakeMinutes: model.sleepPlan?.wakeMinutes,
+                             debtHours: model.sleepPlan?.debtHours ?? 0)
     }
 
-    private func planStat(_ title: String, _ value: String) -> some View {
-        HStack(spacing: 6) {
-            Text(title)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Neka.inkSecondary)
-            Text(value)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Neka.ink)
+    private func tonightCard(_ t: SleepVisuals.Tonight) -> some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let now = context.date
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("TONIGHT")
+                            .font(.system(size: 10, weight: .heavy))
+                            .tracking(1)
+                            .foregroundColor(.white.opacity(0.65))
+                        Text("Be asleep by")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.8))
+                        Text(t.bedtime.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 40, weight: .bold, design: .rounded))
+                            .foregroundColor(.white)
+                            .contentTransition(.numericText())
+                        Text(SleepVisuals.countdown(t, now: now))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(hex: "FFD38A"))
+                    }
+                    Spacer()
+                    Label(t.wake.formatted(date: .omitted, time: .shortened),
+                          systemImage: t.fromSchedule ? "alarm.fill" : "sun.horizon.fill")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.white.opacity(0.16)))
+                        .padding(.top, 26)
+                }
+
+                NightArc(tonight: t, now: now)
+                    .frame(height: 86)
+
+                HStack(spacing: 8) {
+                    nightStat("Wind down", t.windDown.formatted(date: .omitted, time: .shortened), "sparkles")
+                    nightStat("Sleep", hoursText(t.targetHours), "bed.double.fill")
+                    nightStat(t.fromSchedule ? "Alarm" : "Usual wake", t.wake.formatted(date: .omitted, time: .shortened),
+                              t.fromSchedule ? "alarm.fill" : "sun.max.fill")
+                }
+
+                Text(debtLine(t))
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.82))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .background(NightSky(debtHours: t.debtHours))
+            .clipShape(RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous))
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Tonight: be asleep by \(t.bedtime.formatted(date: .omitted, time: .shortened)), \(t.fromSchedule ? "alarm" : "wake") at \(t.wake.formatted(date: .omitted, time: .shortened))")
+    }
+
+    private func nightStat(_ title: String, _ value: String, _ symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title.uppercased(), systemImage: symbol)
+                .font(.system(size: 8.5, weight: .heavy))
+                .tracking(0.4)
+                .foregroundColor(.white.opacity(0.7))
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 14, weight: .bold))
+                .monospacedDigit()
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.1)))
+    }
+
+    private func hoursText(_ hours: Double) -> String {
+        let m = Int((hours * 60).rounded())
+        return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) m"
+    }
+
+    private func debtLine(_ t: SleepVisuals.Tonight) -> String {
+        let source = t.fromSchedule ? "Planned around your alarm." : "Planned around your usual wake time. Set a wake-up in Settings to lock it in."
+        if t.debtHours >= 0.5 {
+            return String(format: "You're %.1f h short this week, so tonight adds %d min to pay some back. ", t.debtHours, t.extraMinutes) + source
+        }
+        return "No sleep debt this week. Same window keeps it that way. " + source
     }
 
     /// Minutes past midnight → "10:45 PM".

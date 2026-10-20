@@ -79,18 +79,41 @@ enum HealthInsights {
         var hours: Double { Double(asleepMinutes) / 60 }
     }
 
-    /// 0–100: duration (50), efficiency (20), deep + REM share (20),
-    /// awakenings (10). Uses the watch's score when it has one.
+    /// Dialed's score, 0–100: duration (50), efficiency (20), deep + REM
+    /// share (20), awakenings (10). Always Dialed's own number; the watch's
+    /// score (Google / Fitbit) stays on `Night.vendorScore` for comparison.
     static func sleepScore(_ n: Night) -> Int {
-        if let v = n.vendorScore { return v }
+        scoreBreakdown(n).total
+    }
+
+    /// The four parts of Dialed's sleep score, in points.
+    struct ScoreBreakdown: Equatable {
+        /// Time asleep toward 7.5 h, out of 50.
+        var duration: Double
+        /// Share of time in bed actually asleep (75 % → 0, 95 % → full), out of 20.
+        var efficiency: Double
+        /// Deep + REM share of sleep (40 % → full), out of 20. 12 when stages are unknown.
+        var restorative: Double
+        /// 10 minus 1.5 per wake-up, out of 10. 7 when unknown.
+        var wakeUps: Double
+        var stagesKnown: Bool
+        var wakeUpsKnown: Bool
+
+        var total: Int { Int((duration + efficiency + restorative + wakeUps).rounded()) }
+    }
+
+    static func scoreBreakdown(_ n: Night) -> ScoreBreakdown {
         let duration = min(1, Double(n.asleepMinutes) / 450) * 50
         let efficiency = max(0, min(1, (n.efficiency - 0.75) / 0.2)) * 20
         var restorative = 12.0
+        var stagesKnown = false
         if let deep = n.deepMinutes, let rem = n.remMinutes, n.asleepMinutes > 0 {
             restorative = max(0, min(1, Double(deep + rem) / Double(n.asleepMinutes) / 0.4)) * 20
+            stagesKnown = true
         }
         let wakes = n.awakenings.map { max(0, 10 - Double($0) * 1.5) } ?? 7
-        return Int((duration + efficiency + restorative + wakes).rounded())
+        return ScoreBreakdown(duration: duration, efficiency: efficiency, restorative: restorative, wakeUps: wakes,
+                              stagesKnown: stagesKnown, wakeUpsKnown: n.awakenings != nil)
     }
 
     /// One night from every session that woke you on the same day. Watches

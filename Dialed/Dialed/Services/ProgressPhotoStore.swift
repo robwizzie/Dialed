@@ -61,17 +61,19 @@ final class ProgressPhotoStore: ObservableObject {
 
     /// Saves a new photo (or replaces `replacing`'s image, keeping its id).
     @discardableResult
-    func add(_ image: UIImage, date: Date = Date(), weightLbs: Double?, note: String?, replacing: ProgressPhotoEntry? = nil) -> ProgressPhotoEntry? {
+    func add(_ image: UIImage, date: Date = Date(), weightLbs: Double?, note: String?, pose: ProgressPose? = nil,
+             replacing: ProgressPhotoEntry? = nil) -> ProgressPhotoEntry? {
         let full = Self.resized(image, maxDimension: 1600)
         let thumb = Self.resized(image, maxDimension: 400)
         guard let fullData = full.jpegData(compressionQuality: 0.85),
               let thumbData = thumb.jpegData(compressionQuality: 0.8) else { return nil }
 
-        var entry = replacing ?? ProgressPhotoEntry(date: date, weightLbs: weightLbs, note: note)
+        var entry = replacing ?? ProgressPhotoEntry(date: date, weightLbs: weightLbs, note: note, pose: pose)
         if replacing != nil {
             entry.date = date
             entry.weightLbs = weightLbs ?? entry.weightLbs
             entry.note = note ?? entry.note
+            entry.pose = pose ?? entry.pose
         }
         do {
             try fullData.write(to: url(entry.fileName), options: [.atomic, .completeFileProtection])

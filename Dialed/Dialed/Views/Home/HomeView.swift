@@ -43,6 +43,8 @@ struct HomeView: View {
     @State private var sheet: HomeSheet?
     @State private var watchWorkouts: [DetectedWorkout] = []
     @State private var layout = HomeLayout.load()
+    /// A past day opened from the header's date control.
+    @State private var recapDate: Date?
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
 
@@ -58,7 +60,7 @@ struct HomeView: View {
     }
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout, customize
+        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout, customize, pickDay
         var id: String { rawValue }
     }
 
@@ -68,6 +70,9 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     header
                         .padding(.top, 8)
+                    if let illness = signals.illness {
+                        HomeIllnessBanner(check: illness, onOpen: { router.openHealth(.body) })
+                    }
                     ForEach(layout.visible) { section in
                         sectionView(section)
                     }
@@ -112,6 +117,9 @@ struct HomeView: View {
                 path = [request]
                 router.homePush = nil
             }
+            .navigationDestination(item: $recapDate) { day in
+                DayRecapView(date: day)
+            }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
                 case .workout:
@@ -136,6 +144,8 @@ struct HomeView: View {
                     TrendWeightView()
                 case .mealPlan:
                     MealPlanView()
+                case .schedule:
+                    ScheduleView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -184,9 +194,7 @@ struct HomeView: View {
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(viewModel.dateLine)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Neka.inkTertiary)
+                dayControl
                     .padding(.bottom, 10)
                 Text("Hello,")
                     .font(Neka.display(30, weight: .light))
@@ -222,6 +230,48 @@ struct HomeView: View {
             }
             .padding(.top, 2)
         }
+    }
+
+    // MARK: - Day control
+
+    /// "‹  Tue, Oct 20  ›": back a day, or tap the date to jump to any day.
+    /// Home is always today, so › only shows its place.
+    private var dayControl: some View {
+        HStack(spacing: 6) {
+            Button { openDay(DayNavigation.step(Date(), by: -1)) } label: {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Neka.ink)
+                    .frame(width: 26, height: 26)
+                    .background(Circle().fill(Neka.surface.opacity(0.9)))
+            }
+            .buttonStyle(.dialedScale)
+            .accessibilityLabel("Yesterday")
+            Button { sheet = .pickDay } label: {
+                HStack(spacing: 4) {
+                    Text(viewModel.dateLine)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Go to a day")
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Neka.inkTertiary.opacity(0.5))
+                .frame(width: 26, height: 26)
+                .accessibilityHidden(true)
+        }
+    }
+
+    private func openDay(_ day: Date) {
+        #if os(iOS)
+        UISelectionFeedbackGenerator().selectionChanged()
+        #endif
+        recapDate = Calendar.current.startOfDay(for: day)
     }
 
     private var avatar: some View {
@@ -500,6 +550,10 @@ struct HomeView: View {
                 )
                 .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
             }
+        case .wakeSuggestion:
+            HomeWakeSuggestionCard()
+        case .event:
+            HomeEventCard(weightReadings: viewModel.weightReadings)
         case .finalPush:
             HomeFinalPushCard(challenge: viewModel.challenge, race: viewModel.race,
                               target: viewModel.calorieBudget, usualTarget: viewModel.finalPushUsualTarget)
@@ -561,6 +615,8 @@ struct HomeView: View {
             })
         case .fun:
             HomeFunCard()
+        case .suggestions:
+            HomeRecentSuggestionsCard(onOpenDay: { openDay($0) })
         case .tomorrow:
             if HomeTomorrowWakeCard.isShowing {
                 HomeTomorrowWakeCard()
@@ -733,6 +789,11 @@ struct HomeView: View {
         case .customize:
             HomeLayoutEditor()
                 .presentationDetents([.large])
+        case .pickDay:
+            DayPickerSheet(selection: Date()) { picked in
+                if !Calendar.current.isDateInToday(picked) { openDay(picked) }
+            }
+            .presentationDetents([.medium, .large])
         case .logWorkout:
             WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),
                               session: WorkoutPlanStore.session(on: Date()),

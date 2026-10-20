@@ -17,10 +17,8 @@ struct ChecklistSetupView: View {
     @State private var showingTimePicker: Constants.ChecklistType?
 
     private let defaultTimes: [Constants.ChecklistType: (hour: Int, minute: Int)] = [
-        .amSkincare: (7, 0),
         .lunchVitamins: (12, 0),
         .creatine: (16, 0),
-        .pmSkincare: (21, 0),
         .postWorkoutLog: (19, 0),
         .closeTheDay: (20, 30)
     ]
@@ -45,7 +43,7 @@ struct ChecklistSetupView: View {
             // Checklist items
             ScrollView {
                 VStack(spacing: 12) {
-                    ForEach(Constants.ChecklistType.allCases, id: \.self) { item in
+                    ForEach(Constants.ChecklistType.active, id: \.self) { item in
                         ChecklistItemRow(
                             item: item,
                             isSelected: selectedItems.contains(item),
@@ -130,7 +128,7 @@ struct ChecklistSetupView: View {
 
 #Preview {
     ChecklistSetupView(
-        selectedItems: .constant([.amSkincare, .lunchVitamins, .creatine]),
+        selectedItems: .constant([.lunchVitamins, .creatine]),
         customTimes: .constant([:]),
         onContinue: {},
         onBack: {}

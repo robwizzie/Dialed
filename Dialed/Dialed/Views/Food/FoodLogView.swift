@@ -13,7 +13,7 @@ import SwiftData
 
 struct FoodLogView: View {
     @Environment(\.modelContext) private var modelContext
-    @State private var day = Calendar.current.startOfDay(for: Date())
+    @State private var day: Date
     @State private var foods: [LoggedFood] = []
     @State private var recents: [FoodDraft] = []
     @State private var favorites: [SavedMeal] = SavedMealsManager.load()
@@ -27,6 +27,11 @@ struct FoodLogView: View {
 
     private let calendar = Calendar.current
     private var settings: UserSettings { UserSettings.load() }
+
+    /// Opens on `day` (today by default), e.g. from a past day's recap.
+    init(day: Date = Date()) {
+        _day = State(initialValue: Calendar.current.startOfDay(for: day))
+    }
 
     struct AddRequest: Identifiable {
         let method: AddFoodSheet.Method?
