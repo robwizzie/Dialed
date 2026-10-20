@@ -43,8 +43,13 @@ struct HomeView: View {
     @State private var sheet: HomeSheet?
     @State private var watchWorkouts: [DetectedWorkout] = []
     @State private var layout = HomeLayout.load()
-    /// A past day opened from the header's date control.
-    @State private var recapDate: Date?
+    /// The day Home shows. Today is the live dashboard; a past day swaps the
+    /// cards below the header for that day's recap, right here.
+    @State private var selectedDay = Calendar.current.startOfDay(for: Date())
+    /// -1 stepping back, +1 forward: which way the content slides.
+    @State private var dayDirection = -1
+
+    private var showingToday: Bool { Calendar.current.isDateInToday(selectedDay) }
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
 
@@ -66,21 +71,26 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                VStack(spacing: 16) {
-                    header
-                        .padding(.top, 8)
-                    if let illness = signals.illness {
-                        HomeIllnessBanner(check: illness, onOpen: { router.openHealth(.body) })
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: 16) {
+                        header
+                            .padding(.top, 8)
+                            .id("home-top")
+                            .contentShape(Rectangle())
+                            .simultaneousGesture(daySwipe)
+                        dayContent
+                            .id(DayLoadKit.key(selectedDay))
+                            .transition(.asymmetric(
+                                insertion: .move(edge: dayDirection < 0 ? .leading : .trailing).combined(with: .opacity),
+                                removal: .move(edge: dayDirection < 0 ? .trailing : .leading).combined(with: .opacity)))
                     }
-                    ForEach(layout.visible) { section in
-                        sectionView(section)
-                    }
-                    moreLinks
-                    customizeButton
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 24)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .onChange(of: selectedDay) { _, _ in
+                    withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("home-top", anchor: .top) }
+                }
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
@@ -90,7 +100,13 @@ struct HomeView: View {
                 await requestHealthAccessIfNeeded()
                 await refreshAll()
             }
-            .refreshable { await refreshAll(force: true) }
+            .refreshable {
+                if showingToday {
+                    await refreshAll(force: true)
+                } else {
+                    await DayRecapStore.shared.load(selectedDay, context: modelContext, force: true)
+                }
+            }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
                 Task { await refreshAll(force: true) }
             }
@@ -116,9 +132,6 @@ struct HomeView: View {
                 guard let request else { return }
                 path = [request]
                 router.homePush = nil
-            }
-            .navigationDestination(item: $recapDate) { day in
-                DayRecapView(date: day)
             }
             .navigationDestination(for: HomeDestination.self) { destination in
                 switch destination {
@@ -205,7 +218,7 @@ struct HomeView: View {
                     .foregroundColor(Neka.ink)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
-                Text("Here's your health today.")
+                Text(showingToday ? "Here's your health today." : "Here's \(pastDayPhrase).")
                     .font(.system(size: 15))
                     .foregroundColor(Neka.inkSecondary)
                     .padding(.top, 4)
@@ -234,24 +247,21 @@ struct HomeView: View {
 
     // MARK: - Day control
 
-    /// "‹  Tue, Oct 20  ›": back a day, or tap the date to jump to any day.
-    /// Home is always today, so › only shows its place.
+    /// "‹  Tue, Oct 20  ›": step a day, or tap the date to jump to any day.
+    /// The dashboard below changes in place.
     private var dayControl: some View {
         HStack(spacing: 6) {
-            Button { openDay(DayNavigation.step(Date(), by: -1)) } label: {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Neka.ink)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Neka.surface.opacity(0.9)))
+            Button { step(-1) } label: {
+                chevron("chevron.left", enabled: true)
             }
             .buttonStyle(.dialedScale)
-            .accessibilityLabel("Yesterday")
+            .accessibilityLabel("Previous day")
             Button { sheet = .pickDay } label: {
                 HStack(spacing: 4) {
-                    Text(viewModel.dateLine)
+                    Text(showingToday ? viewModel.dateLine : selectedDay.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                         .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Neka.inkSecondary)
+                        .foregroundColor(showingToday ? Neka.inkSecondary : Neka.ink)
+                        .contentTransition(.numericText())
                     Image(systemName: "calendar")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Neka.inkTertiary)
@@ -259,19 +269,89 @@ struct HomeView: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Go to a day")
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(Neka.inkTertiary.opacity(0.5))
-                .frame(width: 26, height: 26)
-                .accessibilityHidden(true)
+            Button { step(1) } label: {
+                chevron("chevron.right", enabled: !showingToday)
+            }
+            .buttonStyle(.dialedScale)
+            .disabled(showingToday)
+            .accessibilityLabel("Next day")
+            if !showingToday {
+                Button { goToDay(Date()) } label: {
+                    Text("Back to today")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Neka.onInk)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(Neka.ink))
+                }
+                .buttonStyle(.dialedScale)
+                .transition(.scale.combined(with: .opacity))
+            }
         }
     }
 
-    private func openDay(_ day: Date) {
+    /// "yesterday", or "Mon, Oct 19".
+    private var pastDayPhrase: String {
+        let label = DayNavigation.label(selectedDay)
+        return label == "Yesterday" ? "yesterday" : label
+    }
+
+    private func chevron(_ icon: String, enabled: Bool) -> some View {
+        Image(systemName: icon)
+            .font(.system(size: 11, weight: .bold))
+            .foregroundColor(enabled ? Neka.ink : Neka.inkTertiary.opacity(0.5))
+            .frame(width: 26, height: 26)
+            .background(Circle().fill(Neka.surface.opacity(enabled ? 0.9 : 0.5)))
+    }
+
+    private func step(_ days: Int) {
+        guard days < 0 || !showingToday else { return }
+        goToDay(DayNavigation.step(selectedDay, by: days))
+    }
+
+    /// Shows `day` in place (no new screen), sliding the content the way you went.
+    private func goToDay(_ day: Date) {
+        let target = Calendar.current.startOfDay(for: min(day, Date()))
+        guard target != selectedDay else { return }
+        dayDirection = target < selectedDay ? -1 : 1
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.88)) { selectedDay = target }
         #if os(iOS)
         UISelectionFeedbackGenerator().selectionChanged()
         #endif
-        recapDate = Calendar.current.startOfDay(for: day)
+    }
+
+    /// Swipe right for the day before, left for the day after. Mostly
+    /// horizontal drags only, so scrolling up and down is untouched.
+    private var daySwipe: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onEnded { value in
+                let dx = value.translation.width, dy = value.translation.height
+                guard abs(dx) > 70, abs(dx) > abs(dy) * 1.8 else { return }
+                step(dx > 0 ? -1 : 1)
+            }
+    }
+
+    // MARK: - What's below the header
+
+    @ViewBuilder
+    private var dayContent: some View {
+        if showingToday {
+            VStack(spacing: 16) {
+                if let illness = signals.illness {
+                    HomeIllnessBanner(check: illness, onOpen: { router.openHealth(.body) })
+                }
+                ForEach(layout.visible) { section in
+                    sectionView(section)
+                }
+                moreLinks
+                customizeButton
+            }
+        } else {
+            // Swipes only here and on the header: today's cards have their
+            // own horizontal scrollers that shouldn't change the day.
+            DayRecapContent(date: selectedDay)
+                .simultaneousGesture(daySwipe)
+        }
     }
 
     private var avatar: some View {
@@ -616,7 +696,7 @@ struct HomeView: View {
         case .fun:
             HomeFunCard()
         case .suggestions:
-            HomeRecentSuggestionsCard(onOpenDay: { openDay($0) })
+            HomeRecentSuggestionsCard(onOpenDay: { goToDay($0) })
         case .tomorrow:
             if HomeTomorrowWakeCard.isShowing {
                 HomeTomorrowWakeCard()
@@ -790,9 +870,7 @@ struct HomeView: View {
             HomeLayoutEditor()
                 .presentationDetents([.large])
         case .pickDay:
-            DayPickerSheet(selection: Date()) { picked in
-                if !Calendar.current.isDateInToday(picked) { openDay(picked) }
-            }
+            DayPickerSheet(selection: selectedDay) { picked in goToDay(picked) }
             .presentationDetents([.medium, .large])
         case .logWorkout:
             WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),

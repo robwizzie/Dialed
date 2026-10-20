@@ -172,6 +172,7 @@ struct HomeRecentSuggestionsCard: View {
     @State private var items: [DaySuggestions.Item] = []
     @State private var naming: HomeFunCard.NamingTarget?
     @State private var logging: DaySuggestions.Item?
+    @State private var reviewing: ActiveBouts.Bout?
     var onOpenDay: (Date) -> Void = { _ in }
 
     var body: some View {
@@ -202,7 +203,8 @@ struct HomeRecentSuggestionsCard: View {
                         }
                     }
                     ForEach(items.prefix(4)) { item in
-                        SuggestionRow(item: item, onAdd: { add(item) }, onDismiss: {
+                        SuggestionRow(item: item, onOpen: item.bout.map { b -> () -> Void in { reviewing = b } },
+                                      onAdd: { add(item) }, onDismiss: {
                             RecentSuggestions.dismiss(item)
                             withAnimation { items.removeAll { $0.id == item.id } }
                         })
@@ -228,6 +230,10 @@ struct HomeRecentSuggestionsCard: View {
                 Task { await refresh(force: true) }
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $reviewing) { bout in
+            ActivityReviewSheet(bout: bout) { Task { await refresh(force: true) } }
+                .presentationDetents([.large])
         }
         .sheet(item: $logging, onDismiss: {
             RecentSuggestions.invalidate()
