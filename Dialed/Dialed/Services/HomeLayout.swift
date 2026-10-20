@@ -29,7 +29,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .sideBet:      return "Side bet"
         case .futureYou:    return "Future you"
         case .workout:      return "Today's workout"
-        case .fun:          return "Bonus burn"
+        case .fun:          return "Suggested activity"
         case .suggestions:  return "Waiting for you"
         case .tomorrow:     return "Tomorrow's wake-up"
         case .weeklyReview: return "Week in review"
