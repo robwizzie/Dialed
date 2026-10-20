@@ -96,7 +96,7 @@ final class HomeViewModel: ObservableObject {
     @Published var proteinTarget: Double = 190
     @Published var caloriesIn: Double = 0
     @Published var calorieTarget: Double = 2_200
-    /// Calories fun activity earned back today (added to the budget on screen).
+    /// Calories every workout and activity burned today (added to the budget on screen).
     @Published var earned = EarnedCalories.Day()
     /// What you can eat today: the target plus what you've earned.
     var calorieBudget: Double { calorieTarget + earned.earned }
@@ -281,7 +281,7 @@ final class HomeViewModel: ObservableObject {
         caloriesIn = max(loggedCalories, hkEnergyToday)
         proteinTarget = settings.proteinTargetGrams
         calorieTarget = settings.calorieTarget ?? Self.estimatedCutCalories(weight: latestWeight?.pounds ?? settings.currentWeight)
-        earned = EarnedCalories.day(now, context: context)
+        earned = await EarnedCalories.day(now, context: context)
         currentWeightForPaths = latestWeight?.pounds ?? settings.currentWeight
 
         // ---- Past week of days for "if every day were like…"

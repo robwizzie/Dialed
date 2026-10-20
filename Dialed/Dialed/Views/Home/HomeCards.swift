@@ -235,7 +235,7 @@ struct HomeFuelCard: View {
     let proteinTarget: Double
     let calories: Double
     let calorieTarget: Double
-    /// Calories fun activity earned back (already inside `calorieTarget`).
+    /// Calories workouts and activity earned back (already inside `calorieTarget`).
     var earned = EarnedCalories.Day()
     var onLogMeal: () -> Void
     /// Opens the food log (see and edit everything eaten today).
@@ -281,7 +281,7 @@ struct HomeFuelCard: View {
                 progress: calorieTarget > 0 ? calories / calorieTarget : 0,
                 tint: calories > calorieTarget ? Neka.rose : Neka.green
             )
-            if earned.earned > 0 || earned.burned > 0 {
+            if earned.earned > 0 {
                 EarnedCaloriesPill(earned: earned)
                     .transition(.scale(scale: 0.9).combined(with: .opacity))
             }
