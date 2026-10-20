@@ -511,7 +511,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Dialed-Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and to take your progress photos.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and take your progress photos.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed saves the meals and water you log (calories, protein, carbs, fat and water) to Apple Health so every app sees the same intake. You can turn this off in the Food log.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
@@ -548,7 +549,8 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Dialed-Info.plist";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and to take your progress photos.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and take your progress photos.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed saves the meals and water you log (calories, protein, carbs, fat and water) to Apple Health so every app sees the same intake. You can turn this off in the Food log.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
