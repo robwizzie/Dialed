@@ -35,7 +35,7 @@ enum AppDirectory {
     enum Target: String, Equatable {
         case foodLog, mealPlan, eatingOut, scanBarcode
         case trendWeight, metabolism, progressPhotos, strength, sleep, body
-        case workoutPlan, mileHistory, suggestedActivity
+        case workoutPlan, mileHistory, suggestedActivity, pulse
         case schedule, wakeUp, calendars
         case challenge, weeklyReport, sideBets, wrapped
         case badges, habitHeatmap, weekInReview, scoreCalendar, timeline
@@ -88,6 +88,8 @@ enum AppDirectory {
               icon: "dumbbell.fill", keywords: ["gym", "lift", "training", "log workout"]),
         Entry(target: .mileHistory, group: .move, title: "Mile history", subtitle: "Your mile-a-day streak, day by day",
               icon: "figure.walk", keywords: ["streak", "walk", "run", "steps"]),
+        Entry(target: .pulse, group: .move, title: "Pulse Check", subtitle: "Track your heart through a scary movie, a game and more",
+              icon: "waveform.path.ecg", keywords: ["scary movie", "horror", "heart rate", "game", "meditation", "roller coaster"]),
         Entry(target: .suggestedActivity, group: .move, title: "Suggested activity", subtitle: "Active stretches your heart rate caught",
               icon: "figure.mixed.cardio", keywords: ["heart rate", "pickleball", "earned calories"]),
         // Plan
