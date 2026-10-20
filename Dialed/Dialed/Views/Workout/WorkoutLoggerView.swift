@@ -56,6 +56,9 @@ struct WorkoutLoggerView: View {
     /// PRs from the session just saved, shown before the summary.
     @State private var celebration: [StrengthMilestones.PR] = []
     @State private var pendingSummary: [String]?
+    /// Today's readiness advice (from the score Home cached) and what you chose.
+    @State private var readinessAdvice: ReadinessCoach.Recommendation?
+    @State private var readinessChoice: ReadinessChoiceStore.Choice?
     @FocusState private var typing: Bool
 
     private var isCardio: Bool { session.kind == .bike || session.kind == .walk }
@@ -89,6 +92,19 @@ struct WorkoutLoggerView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     header
+                    if let readinessAdvice {
+                        ReadinessAdviceView(
+                            advice: readinessAdvice, choice: readinessChoice,
+                            onUse: { takeReadinessAdvice(readinessAdvice) },
+                            onKeep: {
+                                ReadinessAdvice.choose(readinessAdvice, applied: false, day: day)
+                                withAnimation { readinessChoice = ReadinessChoiceStore.choice(for: day) }
+                            },
+                            onUndo: {
+                                ReadinessAdvice.undo(day: day)
+                                withAnimation { readinessChoice = nil }
+                            })
+                    }
                     typeCard
                     whenCard
                     if isCardio {
@@ -742,6 +758,14 @@ struct WorkoutLoggerView: View {
                 Spacer(minLength: 8)
                 NekaPill(text: ex.prescriptionText, tint: Neka.ink, fill: Neka.track)
             }
+            if let attempt = ReadinessChoiceStore.attempt(ex.name, on: day) {
+                Label("PR attempt · \(formatPounds(attempt.weight)) × \(attempt.reps) on the last set", systemImage: "trophy.fill")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Neka.lavenderText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Neka.lavenderSoft))
+            }
 
             if ex.tracksWeight {
                 if let s = ex.suggestion {
@@ -997,6 +1021,11 @@ struct WorkoutLoggerView: View {
         watch = detected
         prefillFromWatch(hasLog: existing != nil)
         defer { savedFingerprint = fingerprint }
+        // Readiness advice for today, from the score Home cached.
+        if Calendar.current.isDateInToday(day), let r = ReadinessChoiceStore.cachedReadiness(day: day) {
+            readinessAdvice = ReadinessAdvice.make(readiness: r.score, illness: r.illness, sleep: r.sleep, day: day, context: context)
+            readinessChoice = ReadinessChoiceStore.choice(for: day)
+        }
 
         guard !isCardio else { return }
         let rounds = Self.rounds(in: session)
@@ -1057,6 +1086,38 @@ struct WorkoutLoggerView: View {
                 equipment: StrengthProgression.equipment(for: name), suggestion: nil, lastSummary: nil,
                 checkOnly: false,
                 sets: mine.map { SetDraft(weight: $0.weightLbs > 0 ? $0.weightLbs : nil, reps: $0.reps, done: $0.completed) }))
+        }
+        prefillPRAttempts()
+    }
+
+    // MARK: - Readiness
+
+    /// Swaps today's session (then closes, so it reopens as the new one) or
+    /// sets the PR attempts and fills them in.
+    private func takeReadinessAdvice(_ advice: ReadinessCoach.Recommendation) {
+        ReadinessAdvice.choose(advice, applied: true, day: day)
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
+        if advice.swap != nil {
+            onSaved()
+            dismiss()
+            return
+        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            readinessChoice = ReadinessChoiceStore.choice(for: day)
+            prefillPRAttempts()
+        }
+    }
+
+    /// The top (last) set of a PR-attempt lift carries the target, until
+    /// you've started that lift.
+    private func prefillPRAttempts() {
+        for i in exercises.indices {
+            guard let a = ReadinessChoiceStore.attempt(exercises[i].name, on: day),
+                  !exercises[i].sets.contains(where: \.done), let last = exercises[i].sets.indices.last else { continue }
+            exercises[i].sets[last].weight = a.weight
+            exercises[i].sets[last].reps = a.reps
         }
     }
 

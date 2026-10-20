@@ -36,8 +36,13 @@ enum WorkoutPlanStore {
     }
 
     /// The session for a day, after any swaps you made by training
-    /// something else (see WeekPlanAdjuster).
+    /// something else (see WeekPlanAdjuster) or took on readiness advice.
     static func session(on date: Date) -> WorkoutProgram.Session {
+        ReadinessChoiceStore.overrideSession(for: date) ?? plannedSession(on: date)
+    }
+
+    /// The day's session from the plan and swaps, before readiness advice.
+    static func plannedSession(on date: Date) -> WorkoutProgram.Session {
         WorkoutProgram.session(on: source(for: date), start: startDate, goal: goalDate)
     }
 
@@ -399,6 +404,9 @@ struct HomeWorkoutCard: View {
     @Environment(\.modelContext) private var context
     @State private var detected: [DetectedWorkout] = []
     @State private var lookedAt: Date?
+    @StateObject private var signals = HealthDetailModel()
+    @State private var advice: ReadinessCoach.Recommendation?
+    @State private var choice: ReadinessChoiceStore.Choice?
     var onOpen: () -> Void
     var onLog: ([DetectedWorkout]) -> Void = { _ in }
 
@@ -436,6 +444,18 @@ struct HomeWorkoutCard: View {
                 }
             }
             .buttonStyle(.plain)
+
+            if let advice, !isDone {
+                ReadinessAdviceView(
+                    advice: advice, choice: choice,
+                    onUse: { decide(advice, applied: true) },
+                    onKeep: { decide(advice, applied: false) },
+                    onUndo: {
+                        ReadinessAdvice.undo(day: today)
+                        withAnimation { choice = nil }
+                    })
+                    .transition(.opacity)
+            }
 
             ForEach(detected) { w in
                 HStack(spacing: 8) {
@@ -484,5 +504,30 @@ struct HomeWorkoutCard: View {
         lookedAt = Date()
         let found = await WorkoutDetector.workouts(on: Date(), context: context)
         withAnimation(.easeOut(duration: 0.25)) { detected = found }
+        await loadAdvice()
+    }
+
+    /// Today's readiness → advice; cached so the logger shows the same.
+    private func loadAdvice() async {
+        let today = Calendar.current.startOfDay(for: Date())
+        signals.day = today
+        await signals.loadSignals(context: context)
+        let illness = (signals.illness?.level ?? .clear) >= .watch
+        let sleep = signals.lastNight.map(HealthInsights.sleepScore)
+        ReadinessChoiceStore.cacheReadiness(signals.readiness, illness: illness, sleep: sleep, day: today)
+        let made = ReadinessAdvice.make(readiness: signals.readiness, illness: illness, sleep: sleep, day: today, context: context)
+        withAnimation(.easeOut(duration: 0.25)) {
+            advice = made
+            choice = ReadinessChoiceStore.choice(for: today)
+        }
+    }
+
+    private func decide(_ advice: ReadinessCoach.Recommendation, applied: Bool) {
+        let today = Calendar.current.startOfDay(for: Date())
+        ReadinessAdvice.choose(advice, applied: applied, day: today)
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { choice = ReadinessChoiceStore.choice(for: today) }
+        #if os(iOS)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        #endif
     }
 }
