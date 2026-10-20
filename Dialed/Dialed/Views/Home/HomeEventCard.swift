@@ -425,7 +425,7 @@ private struct Celebration: View {
     private let colors: [Color] = [Neka.rose, Neka.amber, Neka.lavender, Neka.sky, Neka.green]
 
     var body: some View {
-        TimelineView(.animation(paused: reduceMotion)) { context in
+        SwiftUI.TimelineView(.animation(paused: reduceMotion)) { context in
             Canvas { ctx, size in
                 let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 for i in 0..<28 {
