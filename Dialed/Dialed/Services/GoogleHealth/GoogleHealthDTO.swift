@@ -78,6 +78,7 @@ struct GHDataPoint: Decodable {
     let dailyOxygenSaturation: DailyOxygenSaturation?
     let dailyRespiratoryRate: DailyRespiratoryRate?
     let sleep: Sleep?
+    let dailySleepTemperatureDerivations: DailySleepTemperature?
 
     struct Weight: Decodable {
         let weightGrams: Double?
@@ -109,10 +110,25 @@ struct GHDataPoint: Decodable {
         let breathsPerMinute: Double?
     }
 
+    /// Nightly skin temperature and the 30-day median it's judged against.
+    struct DailySleepTemperature: Decodable {
+        let date: GHDate?
+        let nightlyTemperatureCelsius: Double?
+        let baselineTemperatureCelsius: Double?
+    }
+
     struct Sleep: Decodable {
         let interval: GHInterval?
         let summary: Summary?
         let metadata: Metadata?
+        /// Contiguous stage segments covering the whole sleep period.
+        let stages: [StageSegment]?
+
+        struct StageSegment: Decodable {
+            let type: String?
+            let startTime: String?
+            let endTime: String?
+        }
 
         struct Summary: Decodable {
             let minutesAsleep: GHInt?

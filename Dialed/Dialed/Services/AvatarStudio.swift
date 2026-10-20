@@ -369,7 +369,8 @@ private struct AvatarPlaygroundSheetInner: ViewModifier {
 #endif
 
 extension View {
-    func avatarPlaygroundSheet(_ studio: AvatarStudio = .shared) -> some View {
-        modifier(AvatarPlaygroundSheet(studio: studio))
+    @MainActor
+    func avatarPlaygroundSheet(_ studio: AvatarStudio? = nil) -> some View {
+        modifier(AvatarPlaygroundSheet(studio: studio ?? .shared))
     }
 }

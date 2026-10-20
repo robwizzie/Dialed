@@ -333,7 +333,7 @@ struct ProgressPhotoSaveSheet: View {
         let since = Calendar.current.date(byAdding: .day, value: -4, to: day) ?? day
         let readings = await WeightDataSource.readings(context: context, since: since)
         let end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: day)) ?? day
-        return readings.filter { $0.date < end }.max { $0.date < $1.date }?.pounds
+        return (readings.filter { $0.date < end }.max { $0.date < $1.date }?.pounds)
             .map { ($0 * 10).rounded() / 10 }
     }
 

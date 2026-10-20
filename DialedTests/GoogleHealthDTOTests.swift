@@ -71,6 +71,28 @@ final class GoogleHealthDTOTests: XCTestCase {
         XCTAssertEqual(sleep.metadata?.mainSleep, true)
     }
 
+    @MainActor
+    func testDecodesStageTimelineAndSkinTemperature() throws {
+        let json = """
+        {"dataPoints":[
+          {"sleep":{"interval":{"startTime":"2026-10-18T03:30:00Z","endTime":"2026-10-18T05:00:00Z"},
+                    "stages":[{"type":"LIGHT","startTime":"2026-10-18T03:30:00Z","endTime":"2026-10-18T04:10:00Z"},
+                              {"type":"DEEP","startTime":"2026-10-18T04:10:00Z","endTime":"2026-10-18T04:40:00Z"},
+                              {"type":"RESTLESS","startTime":"2026-10-18T04:40:00Z","endTime":"2026-10-18T04:45:00Z"},
+                              {"type":"REM","startTime":"2026-10-18T04:45:00Z","endTime":"2026-10-18T05:00:00Z"},
+                              {"type":"SLEEP_STAGE_TYPE_UNSPECIFIED","startTime":"2026-10-18T05:00:00Z","endTime":"2026-10-18T05:01:00Z"}]}},
+          {"dailySleepTemperatureDerivations":{"date":{"year":2026,"month":10,"day":18},
+                                               "nightlyTemperatureCelsius":34.9,"baselineTemperatureCelsius":34.3}}
+        ]}
+        """.data(using: .utf8)!
+        let points = try XCTUnwrap(JSONDecoder().decode(GHListResponse.self, from: json).dataPoints)
+        let segments = GoogleHealthSyncService.segments(points[0].sleep?.stages)
+        XCTAssertEqual(segments.map(\.stage), [.light, .deep, .awake, .rem])
+        XCTAssertEqual(segments.first?.start, GHTime.parse("2026-10-18T03:30:00Z"))
+        let temp = try XCTUnwrap(points[1].dailySleepTemperatureDerivations)
+        XCTAssertEqual(temp.nightlyTemperatureCelsius! - temp.baselineTemperatureCelsius!, 0.6, accuracy: 0.001)
+    }
+
     func testDailyRollUpRoundTrip() throws {
         let request = GHDailyRollUpRequest(
             range: .init(start: GHCivilDateTime(date: GHDate(year: 2026, month: 10, day: 12)),

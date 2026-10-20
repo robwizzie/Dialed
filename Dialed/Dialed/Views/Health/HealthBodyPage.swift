@@ -2,7 +2,8 @@
 //  HealthBodyPage.swift
 //  Dialed
 //
-//  Body: resting heart rate, HRV, readiness and steps up top; calorie
+//  Body: resting heart rate, HRV, readiness and steps up top; illness
+//  watch and stress from your overnight vitals; calorie
 //  balance and activity by hour (drag across to read any hour); every
 //  body metric with a 14-day trend you can tap open.
 //
@@ -27,6 +28,8 @@ struct HealthBodyPage: View {
     var body: some View {
         VStack(spacing: 16) {
             tiles
+            HealthStressCard(stress: model.stress)
+            HealthIllnessCard(check: model.illness, isToday: model.isToday)
             calorieBalance
             metricsCard
             activityCard
@@ -60,7 +63,7 @@ struct HealthBodyPage: View {
                 title: "Resting Heart Rate", value: rhrText, unit: "bpm",
                 delta: HealthInsights.percentChange(rhr, baseline: baseline(model.restingHR)), goodWhenUp: false,
                 status: rhrStatus,
-                statusColor: (rhr ?? 0) > 75 ? Neka.orange : Neka.green,
+                statusColor: (rhr ?? 0) > 75 ? Neka.orangeText : Neka.greenText,
                 footnote: rhrAvg,
                 wash: .mint
             ) { HealthSparkline(values: upTo(model.restingHR), tint: Neka.green) }
@@ -68,7 +71,7 @@ struct HealthBodyPage: View {
             HealthTile(
                 title: "HRV", value: hrv.map { "\(Int($0.rounded()))" } ?? "--", unit: "ms",
                 delta: HealthInsights.percentChange(hrv, baseline: baseline(model.hrv)),
-                status: hrvStatus(hrv), statusColor: Neka.sky,
+                status: hrvStatus(hrv), statusColor: Neka.skyText,
                 footnote: HealthInsights.mean(baseline(model.hrv)).map { "avg \(Int($0))" },
                 wash: .sky
             ) { HealthMiniBars(values: upTo(model.hrv).suffix(14).map(\.value), tint: Neka.sky) }
@@ -76,7 +79,7 @@ struct HealthBodyPage: View {
             HealthTile(
                 title: "Readiness", value: model.readiness.map { "\($0)" } ?? "--", unit: "/100",
                 status: model.readiness.map { HealthInsights.label(for: $0) } ?? "Needs HRV + sleep",
-                statusColor: (model.readiness ?? 0) >= 70 ? Neka.green : Neka.orange,
+                statusColor: (model.readiness ?? 0) >= 70 ? Neka.greenText : Neka.orangeText,
                 footnote: "estimate",
                 wash: .lavender
             ) { readinessGauge }
@@ -85,7 +88,7 @@ struct HealthBodyPage: View {
                 title: "Steps", value: Int(steps).formatted(), unit: "",
                 delta: stepsDelta,
                 status: stepsStatus,
-                statusColor: steps >= 10_000 ? Neka.green : Neka.inkSecondary,
+                statusColor: steps >= 10_000 ? Neka.greenText : Neka.inkSecondary,
                 wash: .peach
             ) { HealthMiniBars(values: recentSteps, tint: Neka.orange, target: 10_000) }
         }
@@ -140,7 +143,7 @@ struct HealthBodyPage: View {
             }
             Text(net <= 0 ? "In a deficit — this is the direction you want." : "In a surplus so far. A walk with Peaches closes ~300 kcal.")
                 .font(.system(size: 12))
-                .foregroundColor(net <= 0 ? Neka.green : Neka.orange)
+                .foregroundColor(net <= 0 ? Neka.greenText : Neka.orangeText)
 
             Chart {
                 // Side by side: intake just left of the hour, burn just right.

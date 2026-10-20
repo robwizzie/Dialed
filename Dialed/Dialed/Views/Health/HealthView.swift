@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 import Charts
 
 struct HealthView: View {
@@ -154,7 +155,7 @@ struct HealthDeltaChip: View {
             Text("\(Int(abs(percent).rounded()))%")
         }
         .font(.system(size: 11, weight: .bold))
-        .foregroundColor(abs(percent) < 1 ? Neka.inkSecondary : (good ? Neka.green : Neka.rose))
+        .foregroundColor(abs(percent) < 1 ? Neka.inkSecondary : (good ? Neka.greenText : Neka.roseText))
         .padding(.horizontal, 7)
         .padding(.vertical, 4)
         .background(Capsule().fill(abs(percent) < 1 ? Neka.track : (good ? Neka.greenSoft : Neka.roseSoft)))
@@ -209,7 +210,7 @@ struct HealthScoreBar: View {
                 }
             }
             .font(.system(size: 10, weight: .medium))
-            .foregroundColor(Neka.inkTertiary)
+            .foregroundColor(Neka.inkSecondary)
         }
     }
 }
@@ -273,7 +274,7 @@ struct HealthTile<ChartContent: View>: View {
     var delta: Double? = nil
     var goodWhenUp = true
     var status: String? = nil
-    var statusColor: Color = Neka.green
+    var statusColor: Color = Neka.greenText
     var footnote: String? = nil
     var wash: Neka.Wash = .plain
     @ViewBuilder let chart: ChartContent
@@ -304,14 +305,16 @@ struct HealthTile<ChartContent: View>: View {
             HStack {
                 if let status {
                     Text(status)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(statusColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
                 }
                 Spacer(minLength: 4)
                 if let footnote {
                     Text(footnote)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Neka.inkTertiary)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Neka.inkSecondary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }

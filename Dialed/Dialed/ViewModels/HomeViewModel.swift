@@ -117,7 +117,8 @@ final class HomeViewModel: ObservableObject {
 
     private let health = HealthKitManager.shared
     private var watchConnected: Bool { GoogleHealthSyncService.isConnected }
-    private static let backfillKey = "home.googleHealthBackfilled.v1"
+    // v2: re-pull two weeks once for sleep stage timelines + skin temperature.
+    private static let backfillKey = "home.googleHealthBackfilled.v2"
     private static let lastWatchSyncKey = "home.lastGoogleHealthSync"
     /// Automatic refreshes (tab appear, sheet dismiss) reuse a recent sync.
     private static let watchSyncInterval: TimeInterval = 10 * 60

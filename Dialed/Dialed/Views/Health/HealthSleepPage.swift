@@ -2,9 +2,10 @@
 //  HealthSleepPage.swift
 //  Dialed
 //
-//  Sleep: score, total sleep across the last two weeks (tap a night to
-//  jump to it), stages (a full hypnogram when Apple Health has stage
-//  data, a stage breakdown otherwise), the night's timeline and insights.
+//  Sleep: score, tonight's bedtime plan, total sleep across the last two
+//  weeks (tap a night to jump to it), stages (a full-night hypnogram when
+//  the watch or Apple Health has stage data, a breakdown otherwise), the
+//  night's real timeline — split nights included — and insights.
 //
 
 import SwiftUI
@@ -13,6 +14,7 @@ import Charts
 struct HealthSleepPage: View {
     @ObservedObject var model: HealthDetailModel
     @State private var scrubbedNight: Date?
+    @State private var scrubbedTime: Date?
 
     private let deepBlue = Color(hex: "4C6FE0")
     private let calendar = Calendar.current
@@ -21,6 +23,7 @@ struct HealthSleepPage: View {
         VStack(spacing: 16) {
             if let night = model.lastNight {
                 scoreCard(night)
+                if model.isToday, let plan = model.sleepPlan { tonightCard(plan) }
                 totalCard(night)
                 stagesCard(night)
                 timelineCard(night)
@@ -62,18 +65,71 @@ struct HealthSleepPage: View {
                     .font(.system(size: 44, weight: .semibold))
                     .foregroundColor(Neka.ink)
                     .contentTransition(.numericText())
-                NekaPill(text: HealthInsights.label(for: score), tint: .white, fill: score >= 70 ? Neka.sky : Neka.orange)
+                NekaPill(text: HealthInsights.label(for: score), tint: .white, fill: score >= 70 ? Neka.skyText : Neka.orangeText)
                 Spacer()
             }
             HealthScoreBar(score: score)
             if night.vendorScore == nil {
                 Text("Duration, time asleep in bed, deep + REM share and wake-ups.")
-                    .font(.system(size: 11))
-                    .foregroundColor(Neka.inkTertiary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
             }
         }
         .padding(16)
         .nekaCard()
+    }
+
+    // MARK: - Tonight
+
+    private func tonightCard(_ plan: HealthInsights.SleepPlan) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HealthCardHeader(title: "Tonight", trailing: "from your last 7 nights")
+            HStack(alignment: .center, spacing: 14) {
+                Image(systemName: "moon.stars.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(Neka.lavenderText)
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Neka.lavenderSoft))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Be asleep by")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Neka.inkSecondary)
+                    Text(clock(plan.bedtimeMinutes))
+                        .font(.system(size: 30, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    planStat("Target", String(format: "%.1f h", plan.targetHours))
+                    planStat("Wake", clock(plan.wakeMinutes))
+                }
+            }
+            Text(plan.debtHours >= 0.5
+                 ? String(format: "You're %.1f h short this week, so tonight's target includes a little extra to pay it back.", plan.debtHours)
+                 : "No sleep debt this week. Keep the same window to stay there.")
+                .font(.system(size: 12))
+                .foregroundColor(plan.debtHours >= 2 ? Neka.orangeText : Neka.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .nekaCard(wash: .lavender)
+    }
+
+    private func planStat(_ title: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(Neka.inkSecondary)
+            Text(value)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Neka.ink)
+        }
+    }
+
+    /// Minutes past midnight → "10:45 PM".
+    private func clock(_ minutes: Int) -> String {
+        let date = calendar.date(byAdding: .minute, value: minutes, to: calendar.startOfDay(for: Date())) ?? Date()
+        return date.formatted(date: .omitted, time: .shortened)
     }
 
     // MARK: - Total sleep
@@ -164,8 +220,8 @@ struct HealthSleepPage: View {
         return VStack(alignment: .leading, spacing: 12) {
             HealthCardHeader(title: "Sleep Stages")
             if !model.hypnogram.isEmpty {
-                hypnogram
-                    .frame(height: 150)
+                hypnogram(night)
+                    .frame(height: 170)
             } else if parts.dropFirst().contains(where: { $0.minutes != nil }) {
                 // No stage-by-stage data — show the night's proportions.
                 GeometryReader { geo in
@@ -180,9 +236,9 @@ struct HealthSleepPage: View {
                     }
                 }
                 .frame(height: 22)
-                Text("Your watch reports stage totals; the minute-by-minute graph needs stage data in Apple Health.")
-                    .font(.system(size: 10))
-                    .foregroundColor(Neka.inkTertiary)
+                Text("Only stage totals for this night — the full-night graph appears once your watch's stage timeline syncs.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkSecondary)
             } else {
                 Text("Your watch didn't report stages for this night.")
                     .font(.system(size: 12))
@@ -201,8 +257,8 @@ struct HealthSleepPage: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(Neka.ink)
                         Text(part.minutes.map { "\(Int((Double($0) / Double(total) * 100).rounded()))%" } ?? "")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Neka.inkTertiary)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Neka.inkSecondary)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -219,23 +275,60 @@ struct HealthSleepPage: View {
         var label: String { stage == .rem ? "REM" : stage.rawValue.capitalized }
     }
 
-    private var hypnogram: some View {
+    private func stageName(_ stage: HealthKitManager.SleepStage) -> String {
+        stage == .rem ? "REM" : stage.rawValue.capitalized
+    }
+
+    /// The whole night, bedtime to wake-up, one row per stage. Drag across
+    /// it to read the stage at any minute.
+    private func hypnogram(_ night: HealthInsights.Night) -> some View {
+        let segments = model.hypnogram
+        let start = min(night.bedtime, segments.first?.start ?? night.bedtime)
+        let end = max(night.wakeTime, segments.map(\.end).max() ?? night.wakeTime)
+        let hours = end.timeIntervalSince(start) / 3600
         let order: [HealthKitManager.SleepStage] = [.awake, .rem, .light, .deep]
-        return Chart(Array(model.hypnogram.enumerated()), id: \.offset) { _, seg in
-            RectangleMark(
-                xStart: .value("Start", seg.start), xEnd: .value("End", seg.end),
-                y: .value("Stage", seg.stage.rawValue == "rem" ? "REM" : seg.stage.rawValue.capitalized),
-                height: .ratio(0.75)
-            )
-            .foregroundStyle(stageColor(seg.stage))
-            .cornerRadius(2)
-        }
-        .chartYScale(domain: order.map { $0.rawValue == "rem" ? "REM" : $0.rawValue.capitalized })
-        .chartXAxis {
-            AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
-                AxisGridLine()
-                AxisValueLabel(format: .dateTime.hour())
+        let scrubbed = scrubbedTime.flatMap { t in segments.first { $0.start <= t && t < $0.end } }
+        return VStack(spacing: 6) {
+            Chart {
+                ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                    RectangleMark(
+                        xStart: .value("Start", seg.start), xEnd: .value("End", seg.end),
+                        y: .value("Stage", stageName(seg.stage)),
+                        height: .ratio(0.8)
+                    )
+                    .foregroundStyle(stageColor(seg.stage).opacity(scrubbed == nil || scrubbed == seg ? 1 : 0.45))
+                    .cornerRadius(2)
+                }
+                if let t = scrubbedTime, let seg = scrubbed {
+                    RuleMark(x: .value("Time", t))
+                        .foregroundStyle(Neka.ink.opacity(0.35))
+                        .annotation(position: .top, overflowResolution: .init(x: .fit, y: .disabled)) {
+                            chartBubble("\(t.formatted(date: .omitted, time: .shortened)) · \(stageName(seg.stage)) \(duration(Int(seg.end.timeIntervalSince(seg.start) / 60)))")
+                        }
+                }
             }
+            .chartXSelection(value: $scrubbedTime)
+            .chartXScale(domain: start...end)
+            .chartYScale(domain: order.map(stageName))
+            .chartXAxis {
+                AxisMarks(values: .stride(by: .hour, count: hours > 9 ? 3 : 2)) { _ in
+                    AxisGridLine()
+                    AxisValueLabel(format: .dateTime.hour())
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading) { _ in
+                    AxisValueLabel()
+                        .font(.system(size: 11, weight: .medium))
+                }
+            }
+            HStack {
+                Label(night.bedtime.formatted(date: .omitted, time: .shortened), systemImage: "bed.double.fill")
+                Spacer()
+                Label(night.wakeTime.formatted(date: .omitted, time: .shortened), systemImage: "sun.max.fill")
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(Neka.inkSecondary)
         }
     }
 
@@ -247,17 +340,18 @@ struct HealthSleepPage: View {
 
     private func timelineCard(_ night: HealthInsights.Night) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HealthCardHeader(title: "Sleep Timeline")
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Neka.track)
-                    Capsule()
-                        .fill(LinearGradient(colors: [Neka.rose.opacity(0.7), Color(hex: "7C95EC"), deepBlue, Color(hex: "B9C6F7")],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .padding(.horizontal, geo.size.width * 0.06)
-                }
+            HealthCardHeader(title: "Sleep Timeline",
+                             trailing: night.periods.count > 1 ? "split into \(night.periods.count) sessions" : nil)
+            nightStrip(night)
+                .frame(height: 16)
+            HStack {
+                Text(night.bedtime.formatted(date: .omitted, time: .shortened))
+                Spacer()
+                Text(night.wakeTime.formatted(date: .omitted, time: .shortened))
             }
-            .frame(height: 14)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(Neka.inkSecondary)
+            .padding(.top, -6)
             HStack {
                 timelineStat("bed.double.fill", "Fell asleep", night.bedtime.formatted(date: .omitted, time: .shortened), Neka.rose)
                 Spacer()
@@ -277,6 +371,38 @@ struct HealthSleepPage: View {
         .nekaCard()
     }
 
+    /// Bedtime → wake-up drawn to scale: stage colors when known, otherwise
+    /// the stretches you were asleep, with any time up in between left as
+    /// a gap.
+    private func nightStrip(_ night: HealthInsights.Night) -> some View {
+        let start = night.bedtime
+        let total = max(60, night.wakeTime.timeIntervalSince(start))
+        let staged = model.hypnogram.filter { $0.end > start && $0.start < night.wakeTime }
+        return GeometryReader { geo in
+            let w = geo.size.width
+            let x = { (d: Date) -> CGFloat in w * CGFloat(max(0, min(total, d.timeIntervalSince(start))) / total) }
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Neka.track)
+                if staged.isEmpty {
+                    ForEach(night.periods, id: \.start) { p in
+                        Rectangle()
+                            .fill(LinearGradient(colors: [Neka.lavender, deepBlue], startPoint: .leading, endPoint: .trailing))
+                            .frame(width: max(2, x(p.end) - x(p.start)))
+                            .offset(x: x(p.start))
+                    }
+                } else {
+                    ForEach(Array(staged.enumerated()), id: \.offset) { _, seg in
+                        Rectangle()
+                            .fill(stageColor(seg.stage))
+                            .frame(width: max(1, x(seg.end) - x(seg.start)))
+                            .offset(x: x(seg.start))
+                    }
+                }
+            }
+            .clipShape(Capsule())
+        }
+    }
+
     private func timelineStat(_ icon: String, _ title: String, _ value: String, _ tint: Color) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
@@ -286,10 +412,10 @@ struct HealthSleepPage: View {
                 .background(Circle().fill(tint.opacity(0.15)))
             VStack(alignment: .leading, spacing: 1) {
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Neka.inkTertiary)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
                 Text(value)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Neka.ink)
             }
         }

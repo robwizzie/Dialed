@@ -23,8 +23,9 @@ struct ProfileSheet: View {
                 VStack(spacing: 20) {
                     preview
 
+                    let hasPhoto = photos.original != nil
                     PhotosPicker(selection: $pickerItem, matching: .images) {
-                        Label(photos.original == nil ? "Choose a photo" : "Change photo", systemImage: "photo.on.rectangle.angled")
+                        Label(hasPhoto ? "Change photo" : "Choose a photo", systemImage: "photo.on.rectangle.angled")
                     }
                     .buttonStyle(.nekaPrimary)
 

@@ -163,7 +163,7 @@ struct WorkoutLoggerView: View {
     }
 
     private func restBanner(until end: Date) -> some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        SwiftUI.TimelineView(.periodic(from: .now, by: 1)) { context in
             let left = Int(end.timeIntervalSince(context.date).rounded(.up))
             let label: String = left > 0
                 ? "Rest \(left / 60):" + String(format: "%02d", left % 60)
