@@ -16,6 +16,10 @@
 //  back to presenting the system Image Playground sheet pre-filled with
 //  the prompt (see `AvatarPlaygroundSheet`).
 //
+//  Looks also carry your fitness stage (AvatarEvolution): when you reach
+//  a new one, the mood looks are redrawn at that stage and the old look is
+//  kept for a before/after "leveled up" moment.
+//
 
 import SwiftUI
 import UIKit
@@ -38,6 +42,29 @@ final class AvatarStudio: ObservableObject {
     @Published private(set) var focusPoints: [String: CGPoint] = [:]
     /// Per-look reference photos, keyed like `images`.
     @Published private(set) var references: [String: UIImage] = [:]
+
+    /// Where you are on the fitness stages right now (nil until there's a
+    /// weight to read from).
+    @Published private(set) var evolution: AvatarEvolution.Reading?
+    /// Set when you reach a new stage; cleared once you've seen it.
+    @Published private(set) var levelUp: LevelUp?
+
+    struct LevelUp: Equatable {
+        let from: Int
+        let to: Int
+        /// The look before the redraw, for the before/after.
+        let before: UIImage?
+
+        static func == (a: LevelUp, b: LevelUp) -> Bool { a.from == b.from && a.to == b.to && a.before === b.before }
+    }
+
+    private static let stageKey = "avatar.stage"
+    private static let levelUpKey = "avatar.levelUpPending"
+
+    /// The stage looks are drawn at (the best reached), 1 by default.
+    static var drawnLevel: Int {
+        max(1, UserDefaults.standard.integer(forKey: stageKey))
+    }
 
     /// Set when generation needs the interactive Image Playground sheet.
     @Published var sheetRequest: SheetRequest?
@@ -69,6 +96,42 @@ final class AvatarStudio: ObservableObject {
                 references[key] = image
             }
         }
+        if let pending = UserDefaults.standard.array(forKey: Self.levelUpKey) as? [Int], pending.count == 2 {
+            let before = (try? Data(contentsOf: Self.beforeURL)).flatMap(UIImage.init(data:))
+            levelUp = LevelUp(from: pending[0], to: pending[1], before: before)
+        }
+    }
+
+    // MARK: - Evolution
+
+    /// Called with fresh numbers (Home refresh). Moves the drawn stage up
+    /// when you reach a new one: keeps the current look as "before", clears
+    /// the mood looks so they redraw at the new stage, and flags the moment.
+    func syncEvolution(_ inputs: AvatarEvolution.Inputs) {
+        let reading = AvatarEvolution.read(inputs)
+        if reading != evolution { evolution = reading }
+        let defaults = UserDefaults.standard
+        let stored = defaults.object(forKey: Self.stageKey) as? Int
+        let settled = AvatarEvolution.settle(stored: stored, reached: reading.stage.level)
+        guard settled.level != stored else { return }
+        defaults.set(settled.level, forKey: Self.stageKey)
+        guard settled.leveledUp, let from = stored else { return }
+
+        let before = AvatarMood.allCases.lazy.compactMap { self.images[$0.rawValue] }.first
+        if let data = before?.pngData() {
+            try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
+            try? data.write(to: Self.beforeURL, options: .atomic)
+        }
+        defaults.set([from, settled.level], forKey: Self.levelUpKey)
+        levelUp = LevelUp(from: from, to: settled.level, before: before)
+        // Redraw at the new stage; today's look fills in on the next ensure().
+        for mood in AvatarMood.allCases { removeImage(mood.rawValue) }
+    }
+
+    func dismissLevelUp() {
+        levelUp = nil
+        UserDefaults.standard.removeObject(forKey: Self.levelUpKey)
+        try? FileManager.default.removeItem(at: Self.beforeURL)
     }
 
     // MARK: - Reference photos
@@ -154,12 +217,14 @@ final class AvatarStudio: ObservableObject {
     // MARK: - Prompts
 
     static func prompt(for mood: AvatarMood) -> String {
-        "A friendly illustrated portrait of this person, \(mood.prompt)"
+        let stage = AvatarEvolution.stage(level: drawnLevel)
+        return "A friendly illustrated portrait of this person, \(stage.prompt), \(mood.prompt)"
     }
 
     static func futurePrompt(event: GoalEvent?) -> String {
         let place = event.map { "at \($0.name.lowercased())" } ?? "at a celebration"
-        return "A friendly illustrated portrait of this person wearing a sharp tailored suit \(place), confident and happy, warm string lights"
+        let peak = AvatarEvolution.stages[AvatarEvolution.stages.count - 1].prompt
+        return "A friendly illustrated portrait of this person \(peak), wearing a sharp tailored suit \(place), happy, warm string lights"
     }
 
     // MARK: - Generate
@@ -312,6 +377,10 @@ final class AvatarStudio: ObservableObject {
 
     private static func url(for key: String) -> URL {
         directory.appendingPathComponent("\(key).png")
+    }
+
+    private static var beforeURL: URL {
+        directory.appendingPathComponent("levelup-before.png")
     }
 
     private static var referenceDirectory: URL {

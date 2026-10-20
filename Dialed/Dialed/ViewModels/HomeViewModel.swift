@@ -314,6 +314,15 @@ final class HomeViewModel: ObservableObject {
         earned = await EarnedCalories.day(now, context: context)
         currentWeightForPaths = latestWeight?.pounds ?? settings.currentWeight
 
+        // ---- Avatar stage: trend weight toward the goal, glow from streaks.
+        if let trend = WeightChallengeEngine.dailySeries(merged, calendar: calendar).last?.trend {
+            let start = progress?.startWeight ?? merged.first?.pounds ?? trend
+            let goal = progress.map { start - $0.goalLossLbs } ?? settings.goalWeight
+            AvatarStudio.shared.syncEvolution(AvatarEvolution.Inputs(
+                startWeight: start, goalWeight: goal, trendWeight: trend,
+                streakDays: max(mileStreak, progress?.weighInStreak ?? 0)))
+        }
+
         // ---- Past week of days for "if every day were like…"
         let pastMeals = fetchMealEvents(context: context, since: calendar.date(byAdding: .day, value: -7, to: today) ?? today)
         pathDays = (1...7).compactMap { back -> PathProjection.DayRecord? in
