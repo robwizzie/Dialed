@@ -93,29 +93,4 @@ class PhotoManager {
         }
     }
 
-    // MARK: - Storage Info
-
-    /// Get total size of all photos in bytes
-    func getTotalPhotoStorageSize() -> Int64 {
-        let filenames = getAllPhotoFilenames()
-        var totalSize: Int64 = 0
-
-        for filename in filenames {
-            let fileURL = documentsDirectory.appendingPathComponent(filename)
-            if let attributes = try? fileManager.attributesOfItem(atPath: fileURL.path),
-               let fileSize = attributes[.size] as? Int64 {
-                totalSize += fileSize
-            }
-        }
-
-        return totalSize
-    }
-
-    /// Format bytes to readable string (e.g., "2.5 MB")
-    func formatBytes(_ bytes: Int64) -> String {
-        let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB]
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
-    }
 }

@@ -238,22 +238,6 @@ struct NekaPill: View {
     }
 }
 
-/// Section title used above cards ("Today's Timeline", "Coach").
-struct NekaSectionTitle: View {
-    let title: String
-    var trailing: AnyView? = nil
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(Neka.ink)
-            Spacer()
-            if let trailing { trailing }
-        }
-    }
-}
-
 /// Pastel circular icon used in insight rows and device rows.
 struct NekaIconBadge: View {
     let systemName: String

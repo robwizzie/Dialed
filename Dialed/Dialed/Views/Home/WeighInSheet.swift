@@ -15,10 +15,16 @@ struct WeighInSheet: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var pounds: Double
+    /// The dial covers ±5 lb round a centre that follows the ±1 buttons.
+    @State private var dialCenter: Double
 
     init(lastWeight: Double?) {
-        _pounds = State(initialValue: ((lastWeight ?? UserSettings.load().currentWeight) * 10).rounded() / 10)
+        let start = ((lastWeight ?? UserSettings.load().currentWeight) * 10).rounded() / 10
+        _pounds = State(initialValue: start)
+        _dialCenter = State(initialValue: start.rounded())
     }
+
+    private var dialRange: ClosedRange<Double> { max(50, dialCenter - 5)...min(600, dialCenter + 5) }
 
     var body: some View {
         VStack(spacing: 22) {
@@ -36,16 +42,9 @@ struct WeighInSheet: View {
                     .foregroundColor(Neka.inkSecondary)
             }
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(String(format: "%.1f", pounds))
-                    .font(.system(size: 64, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                    .contentTransition(.numericText(value: pounds))
-                    .animation(.snappy(duration: 0.2), value: pounds)
-                Text("lb")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundColor(Neka.inkSecondary)
-            }
+            // Twist to fine-tune: each click is 0.1 lb.
+            DialPicker(value: $pounds, range: dialRange, step: 0.1, unit: "lb", format: "%.1f")
+                .frame(width: 230, height: 230)
 
             HStack(spacing: 12) {
                 step("−1", -1)
@@ -70,6 +69,7 @@ struct WeighInSheet: View {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             #endif
             pounds = max(50, min(600, ((pounds + delta) * 10).rounded() / 10))
+            if !dialRange.contains(pounds) { dialCenter = pounds.rounded() }
         } label: {
             Text(label)
                 .font(.system(size: 15, weight: .semibold))

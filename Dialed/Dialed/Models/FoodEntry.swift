@@ -68,19 +68,6 @@ struct SavedMeal: Codable, Identifiable {
         self.fatGrams = fatGrams
     }
 
-    // Create FoodEntry from saved meal
-    func toFoodEntry(for date: Date) -> FoodEntry {
-        FoodEntry(
-            dayDate: date,
-            name: name,
-            calories: calories,
-            proteinGrams: proteinGrams,
-            carbsGrams: carbsGrams,
-            fatGrams: fatGrams,
-            isSavedMeal: true
-        )
-    }
-
     // Default saved meals for Rob
     static let defaults: [SavedMeal] = [
         SavedMeal(name: "Clear Whey Shake", calories: 90, proteinGrams: 20),

@@ -2,10 +2,10 @@
 //  SplashScreenView.swift
 //  Dialed
 //
-//  Launch moment in the Neka style: a dial "dials in" — tick marks sweep
-//  around the ring as a gradient arc fills and the knob's indicator
-//  rides its leading edge — then the wordmark and a personal line rise
-//  in, and the splash lifts away to reveal Home.
+//  Launch moment in the Neka style: the Dialed mark "dials in" — the
+//  scale's ticks light up as the gradient arc fills and the glass knob's
+//  pointer turns with it, then clicks into place — while the wordmark
+//  and a personal line rise in, and the splash lifts away to reveal Home.
 //
 //  The app is built *underneath* from the first frame, so Home starts
 //  loading your data while the splash plays instead of after it. The
@@ -24,7 +24,7 @@ struct SplashScreenView: View {
     @State private var progress: CGFloat = 0
     @State private var showWordmark = false
     @State private var showLine = false
-    @State private var showCheck = false
+    @State private var settled = false
     @State private var finished = false
 
     private let personalLine = SplashScreenView.makePersonalLine()
@@ -59,12 +59,11 @@ struct SplashScreenView: View {
             VStack(spacing: 34) {
                 Spacer()
                 dial
-                    .frame(width: 196, height: 196)
+                    .frame(width: 212, height: 212)
                 VStack(spacing: 10) {
-                    Text("Dialed.")
+                    (Text("Dialed").foregroundColor(Neka.ink) + Text(".").foregroundColor(Neka.green))
                         .font(Neka.display(46, weight: .bold))
                         .tracking(-1.2)
-                        .foregroundColor(Neka.ink)
                     Text("Dial in your day.")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Neka.inkSecondary)
@@ -111,86 +110,12 @@ struct SplashScreenView: View {
 
     // MARK: - Dial
 
+    /// The Dialed mark, turning from empty to "dialed in". Same drawing as
+    /// the app icon; it gives a small click of a bounce when it lands.
     private var dial: some View {
-        GeometryReader { geo in
-            let size = min(geo.size.width, geo.size.height)
-            let ringWidth: CGFloat = 10
-            let radius = size / 2 - ringWidth / 2
-            // Arc runs from 7 o'clock clockwise to 5 o'clock (300°), like a knob.
-            let sweep: CGFloat = 300.0 / 360.0
-            let startAngle: Double = 120
-
-            ZStack {
-                // Tick ring, revealed by the same progress as the arc.
-                DialTicks(count: 50, sweepFraction: sweep, startAngle: startAngle)
-                    .stroke(Neka.inkTertiary, style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-                    .padding(-14)
-                    .mask(
-                        Circle()
-                            .trim(from: 0, to: progress * sweep)
-                            .stroke(style: StrokeStyle(lineWidth: 40))
-                            .rotationEffect(.degrees(startAngle))
-                            .padding(-14)
-                    )
-
-                // Track
-                Circle()
-                    .trim(from: 0, to: sweep)
-                    .stroke(Neka.track, style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
-                    .rotationEffect(.degrees(startAngle))
-
-                // Fill
-                Circle()
-                    .trim(from: 0, to: max(0.001, progress * sweep))
-                    .stroke(
-                        AngularGradient(
-                            colors: [Neka.green, Neka.sky, Neka.lavender, Neka.orange],
-                            center: .center,
-                            startAngle: .degrees(startAngle),
-                            endAngle: .degrees(startAngle + 300)
-                        ),
-                        style: StrokeStyle(lineWidth: ringWidth, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(startAngle))
-
-                // Knob
-                Circle()
-                    .fill(Neka.surface)
-                    .frame(width: size * 0.62, height: size * 0.62)
-                    .shadow(color: Neka.shadow, radius: 12, y: 6)
-                    .overlay(
-                        Circle().stroke(Neka.hairline, lineWidth: 0.5)
-                            .frame(width: size * 0.62, height: size * 0.62)
-                    )
-
-                // Knob indicator — rides the arc's leading edge.
-                Capsule()
-                    .fill(Neka.ink)
-                    .frame(width: 5, height: size * 0.12)
-                    .offset(y: -size * 0.2)
-                    .rotationEffect(.degrees(startAngle + 90 + Double(progress * sweep) * 360))
-                    // Hands off to the check once the dial is in.
-                    .opacity(showCheck ? 0 : 1)
-                    .scaleEffect(showCheck ? 0.6 : 1)
-
-                // Check that lands when the dial is "in".
-                Image(systemName: "checkmark")
-                    .font(.system(size: size * 0.16, weight: .bold))
-                    .foregroundColor(Neka.green)
-                    .scaleEffect(showCheck ? 1 : 0.4)
-                    .opacity(showCheck ? 1 : 0)
-
-                // Leading-edge dot on the ring.
-                Circle()
-                    .fill(Neka.surface)
-                    .frame(width: ringWidth + 6, height: ringWidth + 6)
-                    .overlay(Circle().stroke(Neka.ink, lineWidth: 2.5))
-                    .offset(x: radius)
-                    .rotationEffect(.degrees(startAngle + Double(progress * sweep) * 360))
-                    .opacity(progress > 0.02 ? 1 : 0)
-            }
-            .frame(width: size, height: size)
-        }
+        DialedMark(value: 0.74 * Double(progress))
+            .scaleEffect(settled ? 1 : 0.965)
+            .motionTilt(8)
     }
 
     // MARK: - Choreography
@@ -200,7 +125,7 @@ struct SplashScreenView: View {
             progress = 1
             showWordmark = true
             showLine = true
-            showCheck = true
+            settled = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                 withAnimation(.easeOut(duration: 0.25)) { finished = true }
             }
@@ -217,7 +142,7 @@ struct SplashScreenView: View {
             showLine = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.6)) { showCheck = true }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.45)) { settled = true }
             #if os(iOS)
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             #endif
@@ -255,28 +180,6 @@ struct SplashScreenView: View {
         default:      greeting = "Late one"
         }
         return "\(greeting), \(name)."
-    }
-}
-
-/// Evenly spaced radial ticks along an arc of the circle.
-private struct DialTicks: Shape {
-    let count: Int
-    let sweepFraction: CGFloat
-    let startAngle: Double
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let center = CGPoint(x: rect.midX, y: rect.midY)
-        let outer = min(rect.width, rect.height) / 2
-        for i in 0...count {
-            let t = Double(i) / Double(count)
-            let angle = (startAngle + t * Double(sweepFraction) * 360) * .pi / 180
-            let major = i % 5 == 0
-            let inner = outer - (major ? 9 : 5)
-            path.move(to: CGPoint(x: center.x + cos(angle) * inner, y: center.y + sin(angle) * inner))
-            path.addLine(to: CGPoint(x: center.x + cos(angle) * outer, y: center.y + sin(angle) * outer))
-        }
-        return path
     }
 }
 
