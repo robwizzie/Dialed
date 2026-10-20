@@ -503,6 +503,8 @@ struct HomeView: View {
         case .finalPush:
             HomeFinalPushCard(challenge: viewModel.challenge, race: viewModel.race,
                               target: viewModel.calorieBudget, usualTarget: viewModel.finalPushUsualTarget)
+        case .wrapped:
+            HomeWrappedCard()
         case .hero:
             hero
         case .today:
