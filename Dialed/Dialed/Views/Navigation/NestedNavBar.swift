@@ -186,7 +186,8 @@ struct NestedNavBar: View {
         }
     }
 
-    /// "Log ▸ Water / Weigh in / Meal / Voice note" — on every tab.
+    /// "Log ▸ Add food / Snap a meal / Scan barcode / Water / Weigh in /
+    /// Voice note" — on every tab.
     private var logMenu: some View {
         Menu {
             ForEach(QuickLog.allCases) { item in
