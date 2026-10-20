@@ -144,6 +144,8 @@ struct HomeView: View {
                     TrendWeightView()
                 case .mealPlan:
                     MealPlanView()
+                case .schedule:
+                    ScheduleView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -548,6 +550,8 @@ struct HomeView: View {
                 )
                 .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
             }
+        case .wakeSuggestion:
+            HomeWakeSuggestionCard()
         case .event:
             HomeEventCard(weightReadings: viewModel.weightReadings)
         case .finalPush:
