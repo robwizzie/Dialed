@@ -17,6 +17,10 @@
 			</array>
 		</dict>
 	</array>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Dialed rings your wake-up alarm at the times you set, even on Silent, until you finish your wake-up mission.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Dialed counts shakes and steps for your wake-up alarm missions.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>

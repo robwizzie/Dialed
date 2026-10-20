@@ -22,10 +22,11 @@ struct WakeScheduleView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 tomorrowCard
+                section("Alarm") { WakeAlarmSettingsCard() }
                 section("Usual wake-up") { weeklyCard }
                 section("Next two weeks") { upcomingCard }
                 section("Sleep") { sleepCard }
-                Text("Dialed sends a wind-down note before bedtime and a good-morning note after you're up. It can't ring your iPhone alarm. Set that in the Clock app.")
+                Text("Dialed also sends a wind-down note before bedtime and a good-morning note after you're up.")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkTertiary)
             }
@@ -335,6 +336,11 @@ struct HomeTomorrowWakeCard: View {
                     Text(subtitle)
                         .font(.system(size: 12))
                         .foregroundColor(Neka.inkSecondary)
+                    if let alarm = alarmLine {
+                        Text(alarm)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Neka.lavenderText)
+                    }
                 }
                 Spacer(minLength: 0)
                 Text("Change")
@@ -357,6 +363,13 @@ struct HomeTomorrowWakeCard: View {
             let fresh = WakeSchedule.load()
             if fresh != schedule { schedule = fresh }
         }
+    }
+
+    /// "⏰ Alarm · Math mission"
+    private var alarmLine: String? {
+        let alarm = WakeAlarmSettings.load()
+        guard alarm.enabled, schedule.wake(on: tomorrow) != nil else { return nil }
+        return "⏰ Alarm · \(alarm.effectiveMission.title) mission"
     }
 
     private var subtitle: String {
