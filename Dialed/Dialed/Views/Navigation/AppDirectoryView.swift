@@ -128,6 +128,7 @@ extension AppRouter {
         case .workoutPlan:       openHome(HomeDestination.workout)
         case .mileHistory:       openHome(HomeDestination.mileHistory)
         case .suggestedActivity: openHome(HomeDestination.activity)
+        case .pulse:             openHome(HomeDestination.pulse)
         case .schedule:          openHome(HomeDestination.schedule)
         case .wakeUp:            openHome(HomeDestination.wakeUp)
         case .calendars:         openHome(HomeDestination.calendars)

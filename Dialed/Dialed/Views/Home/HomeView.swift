@@ -159,6 +159,8 @@ struct HomeView: View {
                     MealPlanView()
                 case .schedule:
                     ScheduleView()
+                case .pulse:
+                    PulseCheckView()
                 case .metabolism:
                     MetabolismView()
                 case .wakeUp:
@@ -707,6 +709,8 @@ struct HomeView: View {
                 watchWorkouts = found
                 sheet = .logWorkout
             })
+        case .pulse:
+            HomePulseCard(onOpen: { path.append(.pulse) })
         case .fun:
             HomeFunCard()
         case .suggestions:
