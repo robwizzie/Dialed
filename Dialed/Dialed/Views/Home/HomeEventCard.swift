@@ -2,39 +2,31 @@
 //  HomeEventCard.swift
 //  Dialed
 //
-//  The big-day card (your brother's wedding). More than a week out it's
-//  the suit-fit countdown: days to go, trend weight now vs when the
-//  countdown started, where the trend lands you on the day, your waist,
-//  and the fitting date. The last week turns into a look-your-best
-//  checklist. On the day it just says have fun; the day after, back on it.
+//  The big-day card (your brother's wedding). It stays out of the way
+//  until the last week, then it's a look-your-best checklist. On the day
+//  it just says have fun; the day after, back on it.
 //
 
 import SwiftUI
 
 struct HomeEventCard: View {
-    /// Weigh-ins for the trend and the projection (Home already has them).
-    let weightReadings: [WeightReading]
+    /// Home's weigh-ins (kept for the call site; the card no longer charts them).
+    var weightReadings: [WeightReading] = []
 
     @State private var current = EventModeStore.current()
     @State private var checks = EventModeStore.checks()
-    @State private var waist = EventModeStore.waist
-    @State private var fitting = EventModeStore.fittingDate
-    @State private var editingWaist = false
-    @State private var editingFitting = false
 
     var body: some View {
         Group {
             if let current {
                 switch current.phase {
-                case .countdown(let days):
-                    countdown(current.event, days: days)
                 case .lookYourBest(let days):
                     lookYourBest(current.event, days: days)
                 case .eventDay:
                     eventDay(current.event)
                 case .recovery:
                     recovery(current.event)
-                case .none:
+                case .ahead, .none:
                     EmptyView()
                 }
             }
@@ -47,41 +39,18 @@ struct HomeEventCard: View {
         .onReceive(NotificationCenter.default.publisher(for: GoalEvent.didChangeNotification)) { _ in
             withAnimation { current = EventModeStore.current() }
         }
-        .sheet(isPresented: $editingWaist) {
-            WaistSheet(last: waist.last?.inches) { inches in
-                EventModeStore.logWaist(inches)
-                withAnimation { waist = EventModeStore.waist }
-            }
-            .presentationDetents([.height(320)])
-        }
-        .sheet(isPresented: $editingFitting) {
-            FittingSheet(date: fitting, eventDate: current?.event.date ?? Date()) { date in
-                EventModeStore.setFitting(date, eventName: current?.event.name ?? "")
-                withAnimation { fitting = date }
-            }
-            .presentationDetents([.height(420)])
-        }
     }
 
-    // MARK: - Countdown
-
-    private func countdown(_ event: GoalEvent, days: Int) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header(event, days: days, subtitle: EventMode.countdownTitle(event.name).uppercased())
-            weightStrip(event)
-            HStack(spacing: 10) {
-                waistTile
-                fittingTile
-            }
-        }
-        .padding(16)
-        .nekaCard(wash: .lavender)
-    }
+    // MARK: - Header
 
     private func header(_ event: GoalEvent, days: Int, subtitle: String) -> some View {
         HStack(alignment: .center, spacing: 14) {
-            SuitIllustration(isWedding: EventMode.isWedding(event.name))
-                .frame(width: 64, height: 76)
+            Image(systemName: "sparkles")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 54, height: 54)
+                .background(Circle().fill(LinearGradient(colors: [Neka.lavender, Neka.rose],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing)))
             VStack(alignment: .leading, spacing: 3) {
                 Text(subtitle)
                     .font(.system(size: 10, weight: .bold))
@@ -104,109 +73,6 @@ struct HomeEventCard: View {
             }
             Spacer(minLength: 0)
         }
-    }
-
-    /// Trend now vs at the countdown start, and where the trend lands you.
-    @ViewBuilder
-    private func weightStrip(_ event: GoalEvent) -> some View {
-        let series = WeightChallengeEngine.dailySeries(weightReadings)
-        let start = EventMode.countdownStart(event: event.date)
-        if let now = series.last {
-            let then = series.last(where: { $0.day <= start }) ?? series.first(where: { $0.day >= start }) ?? now
-            let projection = WeightChallengeEngine.projection(readings: weightReadings, to: event.date)
-            HStack(spacing: 8) {
-                stat("Trend now", String(format: "%.1f", now.trend), sub: change(now.trend - then.trend, since: then.day))
-                if let p = projection {
-                    stat("On the day", String(format: "%.1f", p.weight),
-                         sub: String(format: "%@%.1f lb/wk pace", p.weeklyRate <= 0 ? "−" : "+", abs(p.weeklyRate)))
-                }
-            }
-        }
-    }
-
-    private func change(_ delta: Double, since: Date) -> String {
-        guard abs(delta) >= 0.05 else { return "even since \(since.formatted(.dateTime.month(.abbreviated).day()))" }
-        return (delta < 0 ? "−" : "+") + String(format: "%.1f", abs(delta)) + " since \(since.formatted(.dateTime.month(.abbreviated).day()))"
-    }
-
-    private func stat(_ title: String, _ value: String, sub: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title.uppercased())
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.6)
-                .foregroundColor(Neka.inkTertiary)
-            Text(value + " lb")
-                .font(.system(size: 17, weight: .bold))
-                .monospacedDigit()
-                .foregroundColor(Neka.ink)
-            Text(sub)
-                .font(.system(size: 10))
-                .foregroundColor(Neka.inkSecondary)
-                .lineLimit(1)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.surface.opacity(0.8)))
-    }
-
-    private var waistTile: some View {
-        Button { editingWaist = true } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Label("WAIST", systemImage: "ruler")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(0.6)
-                    .foregroundColor(Neka.inkTertiary)
-                if let last = waist.last {
-                    Text(String(format: "%.1f in", last.inches))
-                        .font(.system(size: 15, weight: .bold))
-                        .monospacedDigit()
-                        .foregroundColor(Neka.ink)
-                    if let first = waist.first, first.date < last.date {
-                        let d = last.inches - first.inches
-                        Text((d <= 0 ? "−" : "+") + String(format: "%.1f in", abs(d)))
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(d <= 0 ? Neka.greenText : Neka.roseText)
-                    } else {
-                        Text("Tap to update").font(.system(size: 10)).foregroundColor(Neka.inkSecondary)
-                    }
-                } else {
-                    Text("Add")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                    Text("Tape at the belly button").font(.system(size: 10)).foregroundColor(Neka.inkSecondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.surface.opacity(0.8)))
-        }
-        .buttonStyle(.dialedScale)
-    }
-
-    private var fittingTile: some View {
-        Button { editingFitting = true } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                Label("FITTING", systemImage: "scissors")
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(0.6)
-                    .foregroundColor(Neka.inkTertiary)
-                if let fitting {
-                    Text(fitting.formatted(.dateTime.month(.abbreviated).day()))
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                    Text("Reminder the day before").font(.system(size: 10)).foregroundColor(Neka.inkSecondary)
-                } else {
-                    Text("Set date")
-                        .font(.system(size: 15, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                    Text("We'll remind you").font(.system(size: 10)).foregroundColor(Neka.inkSecondary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.surface.opacity(0.8)))
-        }
-        .buttonStyle(.dialedScale)
     }
 
     // MARK: - Look your best
@@ -439,71 +305,5 @@ private struct Celebration: View {
             }
         }
         .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Sheets
-
-private struct WaistSheet: View {
-    let last: Double?
-    var onSave: (Double) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var inches: Double = 38
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 16) {
-                Text(String(format: "%.1f in", inches))
-                    .font(Neka.display(40, weight: .bold))
-                    .monospacedDigit()
-                Stepper("Waist", value: $inches, in: 20...70, step: 0.25)
-                    .labelsHidden()
-                Text("Measure at the belly button, relaxed, first thing in the morning.")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            .padding(20)
-            .navigationTitle("Waist")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave(inches); dismiss() }.fontWeight(.semibold)
-                }
-            }
-            .onAppear { if let last { inches = last } }
-        }
-    }
-}
-
-private struct FittingSheet: View {
-    let date: Date?
-    let eventDate: Date
-    var onSave: (Date?) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var picked = Date()
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 12) {
-                DatePicker("Fitting", selection: $picked, in: Date()...max(eventDate, Date()))
-                    .datePickerStyle(.graphical)
-                if date != nil {
-                    Button("Remove fitting", role: .destructive) { onSave(nil); dismiss() }
-                        .font(.system(size: 14, weight: .semibold))
-                }
-            }
-            .padding(.horizontal, 16)
-            .navigationTitle("Suit fitting")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave(picked); dismiss() }.fontWeight(.semibold)
-                }
-            }
-            .onAppear { picked = date ?? min(eventDate, Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date()) }
-        }
     }
 }

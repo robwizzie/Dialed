@@ -307,6 +307,8 @@ struct WakeDaySheet: View {
     @Binding var schedule: WakeSchedule
     /// A calendar-based suggestion for this day, if there is one.
     var suggestion: WakeSuggestionEngine.Suggestion? = nil
+    /// Opened from somewhere else (the Sleep tab): link to the full schedule.
+    var showsAllSettings = false
     @Environment(\.dismiss) private var dismiss
     @State private var time = Date()
     @State private var sleepIn = false
@@ -362,6 +364,16 @@ struct WakeDaySheet: View {
                         dismiss()
                     }
                     .font(.system(size: 14, weight: .semibold))
+                }
+                if showsAllSettings {
+                    NavigationLink { WakeScheduleView() } label: {
+                        Label("All wake-up times & alarm settings", systemImage: "alarm")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Capsule().fill(Neka.track))
+                    }
                 }
                 Spacer(minLength: 0)
             }

@@ -18,6 +18,8 @@ struct HomeFunCard: View {
     @State private var day = FunActivityService.Day()
     @State private var lookedAt: Date?
     @State private var naming: NamingTarget?
+    /// A stretch opened for review (heart rate and other evidence).
+    @State private var reviewing: ActiveBouts.Bout?
     @State private var earned = EarnedCalories.Day()
     /// "+280 calories added to today" for a moment after you name one.
     @State private var celebrate: Double?
@@ -79,7 +81,7 @@ struct HomeFunCard: View {
             header
             ActiveMomentsStrip(items: moments.map { .init(id: $0.id, kind: $0.kind, start: $0.start, end: $0.end) },
                      pulse: pulse && !reduceMotion) { id in
-                if let b = moments.first(where: { $0.id == id })?.bout { naming = .bout(b) }
+                if let b = moments.first(where: { $0.id == id })?.bout { reviewing = b }
             }
             if moments.isEmpty {
                 emptyState
@@ -123,6 +125,10 @@ struct HomeFunCard: View {
         .sheet(item: $naming) { target in
             FunActivitySheet(target: target) { Task { await refresh() } }
                 .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $reviewing) { bout in
+            ActivityReviewSheet(bout: bout) { Task { await refresh() } }
+                .presentationDetents([.large])
         }
     }
 
@@ -173,29 +179,37 @@ struct HomeFunCard: View {
     @ViewBuilder
     private func row(_ m: Moment) -> some View {
         if m.kind == .unnamed {
-            Button { if let b = m.bout { naming = .bout(b) } } label: {
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle().fill(Neka.roseSoft)
-                        Circle().stroke(Neka.rose.opacity(0.5), lineWidth: 2)
-                            .scaleEffect(pulse && !reduceMotion ? 1.2 : 1)
-                            .opacity(pulse && !reduceMotion ? 0 : 1)
-                        Text("?")
-                            .font(.system(size: 18, weight: .heavy, design: .rounded))
-                            .foregroundColor(Neka.rose)
+            // Tap the row to review the heart rate; "Name it" names it straight away.
+            HStack(spacing: 6) {
+                Button { if let b = m.bout { reviewing = b } } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(Neka.roseSoft)
+                            Circle().stroke(Neka.rose.opacity(0.5), lineWidth: 2)
+                                .scaleEffect(pulse && !reduceMotion ? 1.2 : 1)
+                                .opacity(pulse && !reduceMotion ? 0 : 1)
+                            Text("?")
+                                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                                .foregroundColor(Neka.rose)
+                        }
+                        .frame(width: 40, height: 40)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("You were moving \(Self.timeRange(m.start, m.end))")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Neka.ink)
+                                .lineLimit(1)
+                            Text("\(Int(m.minutes.rounded())) min · \(m.detail ?? "") · earns ~\(Int(m.calories ?? 0))")
+                                .font(.system(size: 12))
+                                .foregroundColor(Neka.inkSecondary)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 6)
                     }
-                    .frame(width: 40, height: 40)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("You were moving \(Self.timeRange(m.start, m.end))")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Neka.ink)
-                            .lineLimit(1)
-                        Text("\(Int(m.minutes.rounded())) min · \(m.detail ?? "") · earns ~\(Int(m.calories ?? 0))")
-                            .font(.system(size: 12))
-                            .foregroundColor(Neka.inkSecondary)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 6)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Unnamed active stretch, \(Self.timeRange(m.start, m.end)). Review it.")
+                Button { if let b = m.bout { naming = .bout(b) } } label: {
                     Text("Name it")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Neka.onInk)
@@ -203,11 +217,10 @@ struct HomeFunCard: View {
                         .padding(.vertical, 7)
                         .background(Capsule().fill(Neka.ink))
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.roseSoft.opacity(0.45)))
+                .buttonStyle(.dialedScale)
             }
-            .buttonStyle(.dialedScale)
-            .accessibilityLabel("Unnamed active stretch, \(Self.timeRange(m.start, m.end)). Name it.")
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.roseSoft.opacity(0.45)))
         } else {
             HStack(spacing: 12) {
                 Image(systemName: ActiveBouts.symbol(for: m.name))

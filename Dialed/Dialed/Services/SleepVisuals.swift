@@ -37,6 +37,12 @@ enum SleepVisuals {
             }
         }
 
+        /// The verdict with how the night compares to your week folded in.
+        func verdict(weekDelta: Int?) -> String {
+            guard let d = weekDelta, abs(d) >= 3 else { return verdict }
+            return verdict + (d > 0 ? " \(d) above your week." : " \(-d) under your week.")
+        }
+
         var symbol: String {
             switch self {
             case .radiant: return "sun.max.fill"
@@ -45,6 +51,11 @@ enum SleepVisuals {
             case .drizzly: return "cloud.drizzle.fill"
             }
         }
+    }
+
+    /// How high the morning sun sits on its arc: the score as 0…1.
+    static func arcProgress(score: Int) -> Double {
+        min(1, max(0.04, Double(score) / 100))
     }
 
     // MARK: - Tonight
@@ -133,5 +144,12 @@ enum SleepVisuals {
         if now < t.bedtime { return "Lights out in \(span(t.bedtime.timeIntervalSince(now)))" }
         if now < t.wake { return "Past bedtime. Lights out now" }
         return "Morning!"
+    }
+
+    /// The countdown only once wind-down is within `hours` (and through the
+    /// night); earlier than that a "12 h 49 m" is just noise.
+    static func countdownIfSoon(_ t: Tonight, now: Date = Date(), hours: Double = 3) -> String? {
+        guard now >= t.windDown.addingTimeInterval(-hours * 3600), now < t.wake else { return nil }
+        return countdown(t, now: now)
     }
 }
