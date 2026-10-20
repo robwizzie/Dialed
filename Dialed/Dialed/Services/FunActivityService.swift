@@ -62,13 +62,13 @@ enum FunActivityService {
 
     // MARK: - Naming
 
-    static func name(_ bout: ActiveBouts.Bout, as name: String, protectionUsed: Bool? = nil, context: ModelContext) {
+    static func name(_ bout: ActiveBouts.Bout, as name: String, context: ModelContext) {
         add(name: name, start: bout.start, minutes: bout.minutes.rounded(), calories: bout.calories,
-            averageBPM: bout.averageBPM, externalID: bout.id, protectionUsed: protectionUsed, context: context)
+            averageBPM: bout.averageBPM, externalID: bout.id, context: context)
     }
 
     static func add(name: String, start: Date, minutes: Double, calories: Double?, averageBPM: Double? = nil,
-                    externalID: String? = nil, protectionUsed: Bool? = nil, context: ModelContext) {
+                    externalID: String? = nil, context: ModelContext) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, minutes > 0 else { return }
         let json = averageBPM.map { "{\"averageBPM\":\(Int($0))}" }
@@ -81,7 +81,7 @@ enum FunActivityService {
             let id = event.id
             Task {
                 await HealthWriteBack.requestAccessIfNeeded()
-                HealthWriteBack.syncIntimacy(eventID: id, start: start, minutes: minutes, protectionUsed: protectionUsed)
+                HealthWriteBack.syncIntimacy(eventID: id, start: start, minutes: minutes)
             }
         }
         NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
@@ -158,5 +158,52 @@ extension GoogleHealthSyncService {
                   let t = GHTime.parse(hr.sampleTime?.physicalTime), t < end else { return nil }
             return ActiveBouts.Sample(date: t, bpm: Double(bpm))
         }
+    }
+}
+
+// MARK: - Earned calories
+
+/// Fun activity earns calories back into the day's budget. Burn numbers
+/// are estimates and tend to run high, so by default half goes back;
+/// you can pick none, half or all.
+@MainActor
+enum EarnedCalories {
+    static let shareKey = "fun.eatBackShare"
+
+    static let shares: [(label: String, value: Double)] = [("None", 0), ("Half", 0.5), ("All", 1)]
+
+    static var share: Double {
+        get { UserDefaults.standard.object(forKey: shareKey) as? Double ?? 0.5 }
+        set {
+            UserDefaults.standard.set(newValue, forKey: shareKey)
+            NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+        }
+    }
+
+    struct Day: Equatable {
+        var burned: Double = 0
+        var earned: Double = 0
+        /// "Pickleball", "Intimacy"… what earned it.
+        var sources: [String] = []
+
+        var note: String? {
+            guard earned > 0 else { return nil }
+            let what = sources.count == 1 ? sources[0] : "\(sources.count) activities"
+            return "+\(Int(earned)) earned · \(what)"
+        }
+    }
+
+    static func day(_ date: Date = Date(), context: ModelContext) -> Day {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: date)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? date
+        let workout = ContextEvent.Kind.workout.rawValue, fun = FunActivityService.subtype
+        let desc = FetchDescriptor<ContextEvent>(
+            predicate: #Predicate { $0.kindRaw == workout && $0.subtype == fun && $0.timestamp >= start && $0.timestamp < end })
+        let events = (try? context.fetch(desc)) ?? []
+        let burned = events.reduce(0) { $0 + ($1.secondaryValue ?? 0) }
+        var names: [String] = []
+        for e in events { if let n = e.text, !names.contains(n) { names.append(n) } }
+        return Day(burned: burned, earned: (burned * share).rounded(), sources: names)
     }
 }

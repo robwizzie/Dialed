@@ -27,8 +27,10 @@ struct EatingOutView: View {
     @FocusState private var searching: Bool
 
     private var settings: UserSettings { UserSettings.load() }
+    /// Today's target plus anything fun activity earned back.
     private var calorieTarget: Double {
-        settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)
+        (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight))
+            + EarnedCalories.day(context: modelContext).earned
     }
     private var proteinTarget: Double { settings.proteinTargetGrams }
 

@@ -193,11 +193,15 @@ struct FoodLogView: View {
     private var summary: some View {
         let calories = foods.reduce(0) { $0 + $1.calories }
         let protein = foods.reduce(0) { $0 + $1.protein }
-        let calTarget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)
+        let earned = EarnedCalories.day(day, context: modelContext)
+        let calTarget = (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)) + earned.earned
         let proteinTarget = settings.proteinTargetGrams
-        return HStack(spacing: 12) {
-            total("Calories", value: calories, target: calTarget, unit: "calories", tint: calories > calTarget ? Neka.rose : Neka.orange)
-            total("Protein", value: protein, target: proteinTarget, unit: "g", tint: Neka.green)
+        return VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                total("Calories", value: calories, target: calTarget, unit: "calories", tint: calories > calTarget ? Neka.rose : Neka.orange)
+                total("Protein", value: protein, target: proteinTarget, unit: "g", tint: Neka.green)
+            }
+            if earned.burned > 0 { EarnedCaloriesPill(earned: earned) }
         }
     }
 

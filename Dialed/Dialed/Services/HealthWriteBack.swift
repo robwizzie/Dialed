@@ -136,17 +136,15 @@ enum HealthWriteBack {
 
     // MARK: - Sexual activity
 
-    /// Intimacy logged as a fun activity → Health's Sexual Activity, with
-    /// protection used when you said.
-    static func syncIntimacy(eventID: UUID, start: Date, minutes: Double, protectionUsed: Bool?) {
+    /// Intimacy logged as a fun activity → Health's Sexual Activity.
+    static func syncIntimacy(eventID: UUID, start: Date, minutes: Double) {
         guard isEnabled, HKHealthStore.isHealthDataAvailable() else { return }
         let type = HKCategoryType(.sexualActivity)
         guard store.authorizationStatus(for: type) == .sharingAuthorized else { return }
-        var metadata: [String: Any] = [
+        let metadata: [String: Any] = [
             HKMetadataKeySyncIdentifier: syncIdentifier(eventID: eventID, suffix: "intimacy"),
             HKMetadataKeySyncVersion: NSNumber(value: Int64(Date().timeIntervalSince1970 * 1000))
         ]
-        if let protectionUsed { metadata[HKMetadataKeySexualActivityProtectionUsed] = protectionUsed }
         let sample = HKCategorySample(type: type, value: HKCategoryValue.notApplicable.rawValue,
                                       start: start, end: start.addingTimeInterval(max(1, minutes) * 60), metadata: metadata)
         store.save(sample) { _, error in

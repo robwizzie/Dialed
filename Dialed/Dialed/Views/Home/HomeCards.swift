@@ -235,6 +235,8 @@ struct HomeFuelCard: View {
     let proteinTarget: Double
     let calories: Double
     let calorieTarget: Double
+    /// Calories fun activity earned back (already inside `calorieTarget`).
+    var earned = EarnedCalories.Day()
     var onLogMeal: () -> Void
     /// Opens the food log (see and edit everything eaten today).
     var onOpenLog: () -> Void = {}
@@ -279,6 +281,10 @@ struct HomeFuelCard: View {
                 progress: calorieTarget > 0 ? calories / calorieTarget : 0,
                 tint: calories > calorieTarget ? Neka.rose : Neka.green
             )
+            if earned.earned > 0 || earned.burned > 0 {
+                EarnedCaloriesPill(earned: earned)
+                    .transition(.scale(scale: 0.9).combined(with: .opacity))
+            }
             Text(calorieNote)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
@@ -312,6 +318,9 @@ struct HomeFuelCard: View {
     private var calorieNote: String {
         let left = calorieTarget - calories
         if calories == 0 { return "Nothing logged yet today." }
+        if left >= 0, earned.earned > 0 {
+            return "\(Int(left).formatted()) calories left, \(Int(earned.earned)) of them earned by moving."
+        }
         if left >= 0 { return "\(Int(left).formatted()) calories left in today's deficit budget." }
         return "\(Int(-left).formatted()) calories over budget — a walk claws some back."
     }
