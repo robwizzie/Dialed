@@ -38,6 +38,7 @@ struct WorkoutTypeSettingsView: View {
                 } footer: {
                     Text("When enabled, only Traditional Strength Training workouts will be tracked. Other workout types will be ignored.")
                 }
+                .listRowBackground(Neka.surface)
 
                 // Built-in workout types
                 Section {
@@ -55,7 +56,7 @@ struct WorkoutTypeSettingsView: View {
                         )) {
                             HStack {
                                 Image(systemName: "figure.strengthtraining.traditional")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Neka.green)
                                 Text(tag.shortName)
                             }
                         }
@@ -65,6 +66,7 @@ struct WorkoutTypeSettingsView: View {
                 } footer: {
                     Text("Select which workout types to show in the workout log")
                 }
+                .listRowBackground(Neka.surface)
 
                 // Custom workout types
                 Section {
@@ -106,7 +108,10 @@ struct WorkoutTypeSettingsView: View {
                 } footer: {
                     Text("Create your own workout categories (e.g., Cardio, Yoga, Sports)")
                 }
+                .listRowBackground(Neka.surface)
             }
+            .scrollContentBackground(.hidden)
+            .nekaPageBackground()
             .navigationTitle("Workout Types")
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showAddCustomType) {
