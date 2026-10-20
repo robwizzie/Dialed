@@ -269,7 +269,7 @@ enum WeeklyReview {
         switch top.0 {
         case .calories:
             return Fix(area: .calories, headline: "Stay inside the calorie budget",
-                       detail: "Under \(i(targets.calories)) kcal on \(s.calorieDays) of 7 days, averaging \(i(s.avgCalories)). Decide dinner before 5 PM and leave 500 kcal for it.")
+                       detail: "Under \(i(targets.calories)) calories on \(s.calorieDays) of 7 days, averaging \(i(s.avgCalories)). Decide dinner before 5 PM and leave 500 calories for it.")
         case .protein:
             return Fix(area: .protein, headline: "Hit protein earlier",
                        detail: "Averaged \(i(s.avgProtein)) g of \(i(targets.protein)) g and hit it \(s.proteinDays) of 7 days. Start with 40 g at breakfast — a shake or eggs + Greek yogurt.")

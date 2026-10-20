@@ -75,4 +75,29 @@ enum PlanWorkoutLogStore {
         if done { set.insert(dayKey) } else { set.remove(dayKey) }
         defaults.set(set.sorted().joined(separator: ","), forKey: WorkoutPlanStore.doneKey)
     }
+
+    // MARK: - Your exercises
+
+    /// Exercises you've added that aren't in the plan ("Pec deck fly"),
+    /// remembered so typing them next time lands on the same name.
+    static let customKey = "workout.customExercises"
+
+    static var customExercises: [String] {
+        (UserDefaults.standard.stringArray(forKey: customKey) ?? [])
+    }
+
+    static func remember(_ names: [String]) {
+        let plan = Set(WorkoutLoggerView.allPlanExercises)
+        var list = customExercises
+        for n in names where !plan.contains(n) && !list.contains(n) { list.append(n) }
+        UserDefaults.standard.set(list, forKey: customKey)
+    }
+
+    /// Every name to match typed text against: the plan, your own, and
+    /// anything you've logged before.
+    static func knownExercises(context: ModelContext) -> [String] {
+        var seen = Set<String>()
+        let logged = allSets(context: context).map(\.exerciseName)
+        return (WorkoutLoggerView.allPlanExercises + customExercises + logged).filter { seen.insert($0).inserted }
+    }
 }

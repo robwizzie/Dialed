@@ -41,6 +41,7 @@ struct HomeView: View {
     var onOpenChallenge: () -> Void = {}
 
     @State private var sheet: HomeSheet?
+    @State private var watchWorkouts: [DetectedWorkout] = []
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
 
@@ -56,7 +57,7 @@ struct HomeView: View {
     }
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, weighIn, voice, profile, challengeSetup, ask, avatar
+        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout
         var id: String { rawValue }
     }
 
@@ -120,7 +121,10 @@ struct HomeView: View {
                         image: studio.futureImage ?? photos.thumbnail,
                         onOpen: { sheet = .avatar }
                     )
-                    HomeWorkoutCard(onOpen: { path.append(.workout) })
+                    HomeWorkoutCard(onOpen: { path.append(.workout) }, onLog: { found in
+                        watchWorkouts = found
+                        sheet = .logWorkout
+                    })
                     if HomeWeeklyReviewCard.isShowing() {
                         HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
                     }
@@ -149,7 +153,8 @@ struct HomeView: View {
                         calories: viewModel.caloriesIn,
                         calorieTarget: viewModel.calorieTarget,
                         onLogMeal: { sheet = .meal },
-                        onOpenLog: { path.append(.foodLog) }
+                        onOpenLog: { path.append(.foodLog) },
+                        onEatingOut: { sheet = .eatingOut }
                     )
                     HomeTimelineCard(items: viewModel.timeline)
                     HomeCoachCard(insights: viewModel.insights)
@@ -619,6 +624,9 @@ struct HomeView: View {
         case .meal:
             AddFoodSheet()
                 .presentationDetents([.large])
+        case .eatingOut:
+            EatingOutSheet()
+                .presentationDetents([.large])
         case .ask:
             AskDialedSheet(snapshot: viewModel.snapshot)
                 .presentationDetents([.large])
@@ -642,6 +650,11 @@ struct HomeView: View {
                 .presentationDetents([.large])
         case .challengeSetup:
             ChallengeSetupSheet(existing: nil, suggestedStartWeight: viewModel.latestWeight?.pounds)
+                .presentationDetents([.large])
+        case .logWorkout:
+            WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),
+                              session: WorkoutPlanStore.session(on: Date()),
+                              detected: watchWorkouts)
                 .presentationDetents([.large])
         }
     }

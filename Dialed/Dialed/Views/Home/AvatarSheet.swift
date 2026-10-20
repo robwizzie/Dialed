@@ -439,7 +439,7 @@ struct AvatarSheet: View {
                             .font(.system(size: 12))
                             .foregroundColor(Neka.inkSecondary)
                             .fixedSize(horizontal: false, vertical: true)
-                        Text(p.weeklyRate < -0.3 ? "Keep this pace and that's you walking in." : "Pick the pace up — a 500 kcal/day deficit is about 1 lb a week.")
+                        Text(p.weeklyRate < -0.3 ? "Keep this pace and that's you walking in." : "Pick the pace up — a 500 calories/day deficit is about 1 lb a week.")
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(Neka.ink)
                             .fixedSize(horizontal: false, vertical: true)

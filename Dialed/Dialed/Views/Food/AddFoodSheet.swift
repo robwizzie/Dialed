@@ -15,7 +15,7 @@ import PhotosUI
 
 struct AddFoodSheet: View {
     enum Method: String, Equatable {
-        case photo, scan, describe, manual
+        case photo, scan, describe, manual, eatingOut
     }
 
     /// Jump straight into a method (e.g. the + menu's "Scan barcode").
@@ -37,14 +37,15 @@ struct AddFoodSheet: View {
         case photo
         case scan
         case describe
+        case eatingOut
         case review(FoodDraft, Source)
     }
 
     /// Where the numbers came from — shown on the review screen.
     enum Source: Equatable {
-        case photo(seen: [String], assumption: String?)
+        case photo(seen: [String], assumption: String?, parts: [MealPart] = [])
         case barcode
-        case described(assumption: String?)
+        case described(assumption: String?, parts: [MealPart] = [])
         case manual
         case saved
     }
@@ -57,8 +58,8 @@ struct AddFoodSheet: View {
                     case .pick:
                         picker
                     case .photo:
-                        MealPhotoStep { draft, seen, note in
-                            go(.review(stamped(draft), .photo(seen: seen, assumption: note)))
+                        MealPhotoStep { draft, seen, estimate in
+                            go(.review(stamped(draft), .photo(seen: seen, assumption: estimate.assumption, parts: estimate.parts)))
                         } onManual: { draft in
                             go(.review(stamped(draft), .manual))
                         }
@@ -68,11 +69,13 @@ struct AddFoodSheet: View {
                         }
                         .frame(minHeight: 560)
                     case .describe:
-                        DescribeMealStep { draft, note in
-                            go(.review(stamped(draft), .described(assumption: note)))
+                        DescribeMealStep { draft, estimate in
+                            go(.review(stamped(draft), .described(assumption: estimate.assumption, parts: estimate.parts)))
                         } onManual: { draft in
                             go(.review(stamped(draft), .manual))
                         }
+                    case .eatingOut:
+                        EatingOutView { _ in dismiss() }
                     case .review(let draft, let source):
                         FoodReviewStep(draft: draft, source: source) { final in
                             log(final)
@@ -121,6 +124,7 @@ struct AddFoodSheet: View {
         case .photo:    return "Snap a meal"
         case .scan:     return "Scan barcode"
         case .describe: return "Describe it"
+        case .eatingOut: return "Eating out"
         case .review:   return "Review & log"
         }
     }
@@ -130,6 +134,7 @@ struct AddFoodSheet: View {
         case .photo:    return .photo
         case .scan:     return .scan
         case .describe: return .describe
+        case .eatingOut: return .eatingOut
         case .manual:   return .review(stamped(FoodDraft()), .manual)
         }
     }
@@ -181,6 +186,34 @@ struct AddFoodSheet: View {
                 }
             }
 
+            // Eating out: pick a restaurant, get an order that fits today.
+            Button { go(.eatingOut) } label: {
+                HStack(spacing: 14) {
+                    Text("🍽️")
+                        .font(.system(size: 26))
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Neka.surface))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Eating out?")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Pick a restaurant — get an order that fits today")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing))
+                )
+            }
+            .buttonStyle(.dialedScale)
+
             if !favorites.isEmpty {
                 savedList(title: "Favorites", icon: "star.fill", items: favorites.map(FoodDraft.init))
             }
@@ -205,7 +238,7 @@ struct AddFoodSheet: View {
                                     .font(.system(size: 15, weight: .semibold))
                                     .foregroundColor(Neka.ink)
                                     .lineLimit(1)
-                                Text("\(Int(item.calories)) kcal · \(Int(item.protein)) g protein")
+                                Text("\(Int(item.calories)) calories · \(Int(item.protein)) g protein")
                                     .font(.system(size: 12))
                                     .foregroundColor(Neka.inkSecondary)
                             }
@@ -279,7 +312,7 @@ private struct MethodTile: View {
 /// what's right and add anything it can't see, then Apple Intelligence
 /// estimates the meal.
 private struct MealPhotoStep: View {
-    var onEstimate: (FoodDraft, [String], String?) -> Void
+    var onEstimate: (FoodDraft, [String], AIMealEstimate) -> Void
     var onManual: (FoodDraft) -> Void
 
     @State private var image: UIImage?
@@ -396,23 +429,17 @@ private struct MealPhotoStep: View {
                     .padding(12)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface))
 
-                if DialedAI.isAvailable {
-                    Button {
-                        Task { await estimate() }
-                    } label: {
-                        HStack {
-                            if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
-                            Text(estimating ? "Estimating on-device…" : "Estimate with Apple Intelligence")
-                        }
-                        .frame(maxWidth: .infinity)
+                Button {
+                    Task { await estimate() }
+                } label: {
+                    HStack {
+                        if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
+                        Text(estimating ? "Estimating on-device…" : "Estimate it")
                     }
-                    .buttonStyle(.nekaPrimary)
-                    .disabled(estimating || (chosen.isEmpty && extra.trimmingCharacters(in: .whitespaces).isEmpty))
-                } else {
-                    Text(DialedAI.availability.explanation)
-                        .font(.system(size: 12))
-                        .foregroundColor(Neka.inkSecondary)
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.nekaPrimary)
+                .disabled(estimating || (chosen.isEmpty && extra.trimmingCharacters(in: .whitespaces).isEmpty))
                 if failed {
                     Text("Couldn't estimate that one — add a detail or two, or fill it in yourself.")
                         .font(.system(size: 12))
@@ -476,7 +503,7 @@ private struct MealPhotoStep: View {
         d.protein = Double(r.proteinGrams)
         d.carbs = r.carbsGrams.map(Double.init)
         d.fat = r.fatGrams.map(Double.init)
-        onEstimate(d, keptItems, r.assumption)
+        onEstimate(d, keptItems, r)
     }
 }
 
@@ -546,7 +573,7 @@ struct CameraPicker: UIViewControllerRepresentable {
 // MARK: - Describe
 
 private struct DescribeMealStep: View {
-    var onEstimate: (FoodDraft, String?) -> Void
+    var onEstimate: (FoodDraft, AIMealEstimate) -> Void
     var onManual: (FoodDraft) -> Void
 
     @State private var text = ""
@@ -567,23 +594,17 @@ private struct DescribeMealStep: View {
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.surface))
                 .overlay(IntelligenceRim(cornerRadius: 16, active: estimating).allowsHitTesting(false))
 
-            if DialedAI.isAvailable {
-                Button {
-                    Task { await estimate() }
-                } label: {
-                    HStack {
-                        if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
-                        Text(estimating ? "Estimating on-device…" : "Estimate with Apple Intelligence")
-                    }
-                    .frame(maxWidth: .infinity)
+            Button {
+                Task { await estimate() }
+            } label: {
+                HStack {
+                    if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
+                    Text(estimating ? "Estimating on-device…" : "Estimate it")
                 }
-                .buttonStyle(.nekaPrimary)
-                .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || estimating)
-            } else {
-                Text(DialedAI.availability.explanation)
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
+                .frame(maxWidth: .infinity)
             }
+            .buttonStyle(.nekaPrimary)
+            .disabled(text.trimmingCharacters(in: .whitespaces).isEmpty || estimating)
             if failed {
                 Text("Couldn't estimate that one — try adding portion sizes, or fill it in yourself.")
                     .font(.system(size: 12))
@@ -615,7 +636,7 @@ private struct DescribeMealStep: View {
         d.protein = Double(r.proteinGrams)
         d.carbs = r.carbsGrams.map(Double.init)
         d.fat = r.fatGrams.map(Double.init)
-        onEstimate(d, r.assumption)
+        onEstimate(d, r)
     }
 }
 
@@ -629,11 +650,17 @@ private struct FoodReviewStep: View {
     var onLog: (FoodDraft) -> Void
 
     @State private var saveFavorite = false
+    /// What's in it, when the estimate was itemized.
+    @State private var parts: [MealPart]
 
     init(draft: FoodDraft, source: AddFoodSheet.Source, onLog: @escaping (FoodDraft) -> Void) {
         _draft = State(initialValue: draft)
         self.source = source
         self.onLog = onLog
+        switch source {
+        case .photo(_, _, let parts), .described(_, let parts): _parts = State(initialValue: parts)
+        default: _parts = State(initialValue: [])
+        }
     }
 
     var body: some View {
@@ -650,6 +677,8 @@ private struct FoodReviewStep: View {
             .padding(16)
             .nekaCard()
 
+            if !parts.isEmpty { breakdown }
+
             VStack(spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
                     TextField("0", value: $draft.calories, format: .number.precision(.fractionLength(0)))
@@ -657,7 +686,7 @@ private struct FoodReviewStep: View {
                         .font(.system(size: 44, weight: .bold, design: .rounded))
                         .foregroundColor(Neka.ink)
                         .fixedSize()
-                    Text("kcal")
+                    Text("calories")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(Neka.inkSecondary)
                     Spacer()
@@ -701,7 +730,7 @@ private struct FoodReviewStep: View {
                 }
                 onLog(draft)
             } label: {
-                Label("Log \(Int(draft.calories)) kcal", systemImage: "checkmark")
+                Label("Log \(Int(draft.calories)) calories", systemImage: "checkmark")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.nekaPrimary)
@@ -709,13 +738,100 @@ private struct FoodReviewStep: View {
         }
     }
 
+    // MARK: Breakdown
+
+    /// Each food with its amount and calories; nudge a portion or drop an
+    /// item and the totals follow.
+    private var breakdown: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("What's in it")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Text("\(Int(parts.reduce(0) { $0 + $1.calories })) calories")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            ForEach(parts) { part in
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(part.name)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text(part.fromTable ? part.amount : "\(part.amount) · estimated")
+                            .font(.system(size: 11.5))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer(minLength: 6)
+                    Text("\(Int(part.calories.rounded()))")
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundColor(Neka.ink)
+                        .monospacedDigit()
+                    if part.calories > 0 {
+                        portionButton("minus") { adjust(part, by: -1) }
+                        portionButton("plus") { adjust(part, by: 1) }
+                    }
+                    Button { remove(part) } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Neka.inkTertiary)
+                            .frame(width: 24, height: 24)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove \(part.name)")
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private func portionButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(Neka.ink)
+                .frame(width: 26, height: 26)
+                .background(Circle().fill(Neka.track))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// One step more or less of a food: whole units at 2+, halves below.
+    private func adjust(_ part: MealPart, by direction: Double) {
+        guard let i = parts.firstIndex(where: { $0.id == part.id }) else { return }
+        let fractions: [String: Double] = ["¼": 0.25, "½": 0.5, "¾": 0.75, "1½": 1.5, "2½": 2.5]
+        let first = String(part.amount.split(separator: " ").first ?? "")
+        let current = Double(first) ?? fractions[first] ?? 1
+        let step = current > 2 || (current == 2 && direction > 0) ? 1.0 : 0.5
+        let next = max(step == 1 ? 1 : 0.5, current + direction * step)
+        guard next != current, current > 0 else { return }
+        withAnimation(.snappy) { parts[i] = part.scaled(next / current) }
+        recalc()
+    }
+
+    private func remove(_ part: MealPart) {
+        withAnimation(.snappy) { parts.removeAll { $0.id == part.id } }
+        recalc()
+    }
+
+    private func recalc() {
+        draft.calories = parts.reduce(0) { $0 + $1.calories }.rounded()
+        draft.protein = parts.reduce(0) { $0 + $1.protein }.rounded()
+        draft.carbs = parts.reduce(0) { $0 + $1.carbs }.rounded()
+        draft.fat = parts.reduce(0) { $0 + $1.fat }.rounded()
+    }
+
     @ViewBuilder
     private var sourceNote: some View {
         switch source {
-        case .photo(let seen, let assumption):
-            note("sparkles", "Estimated by Apple Intelligence from your photo\(seen.isEmpty ? "" : " (\(seen.joined(separator: ", ")))")." + (assumption.map { " \($0)" } ?? ""))
-        case .described(let assumption):
-            note("sparkles", "Estimated by Apple Intelligence." + (assumption.map { " \($0)" } ?? ""))
+        case .photo(let seen, let assumption, _):
+            note("sparkles", "From your photo\(seen.isEmpty ? "" : " (\(seen.joined(separator: ", ")))")." + (assumption.map { " \($0)" } ?? ""))
+        case .described(let assumption, let parts):
+            note(parts.allSatisfy(\.fromTable) && !parts.isEmpty ? "list.bullet.rectangle" : "sparkles",
+                 assumption ?? "Estimated by Apple Intelligence.")
         case .barcode:
             note("barcode", "From the label via Open Food Facts — double-check the serving.")
         case .saved:

@@ -25,6 +25,13 @@ final class PlanWorkoutLog {
     var durationMinutes: Double?
     var distanceMiles: Double?
     var savedAt: Date = Date()
+    /// When you actually trained ("6:15–6:45 PM"), typed or from a watch.
+    var startedAt: Date?
+    var endedAt: Date?
+    /// Cardio done alongside lifting ("ran 1 mi on the treadmill").
+    var cardioKind: String?
+    var cardioMinutes: Double?
+    var cardioMiles: Double?
 
     init(dayKey: String, date: Date, title: String, kindRaw: String) {
         self.id = UUID()

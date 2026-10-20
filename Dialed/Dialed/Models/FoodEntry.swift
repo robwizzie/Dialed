@@ -18,6 +18,8 @@ final class FoodEntry {
     var proteinGrams: Double
     var carbsGrams: Double?
     var fatGrams: Double?
+    /// How many servings the numbers are for (nil = 1).
+    var servings: Double?
 
     // For saved meals / quick add
     var isSavedMeal: Bool

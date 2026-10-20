@@ -32,6 +32,19 @@ struct AIBrief: Codable, Equatable {
     var actions: [String]
 }
 
+/// An order Apple Intelligence suggests at a restaurant Dialed doesn't
+/// have a menu for.
+struct AIRestaurantPick: Equatable, Identifiable {
+    var title: String
+    var items: [String]
+    var calories: Int
+    var proteinGrams: Int
+    var carbsGrams: Int
+    var fatGrams: Int
+    var tips: [String]
+    var id: String { title + items.joined() }
+}
+
 struct AIMealEstimate: Equatable {
     var name: String
     var calories: Int
@@ -39,6 +52,10 @@ struct AIMealEstimate: Equatable {
     var carbsGrams: Int? = nil
     var fatGrams: Int? = nil
     var assumption: String
+    /// Itemized: each food, its amount and numbers.
+    var parts: [MealPart] = []
+    /// Every number came from Dialed's food table (no model math).
+    var fromTable = false
 }
 
 enum AIAvailability: Equatable {
@@ -129,33 +146,119 @@ enum DialedAI {
 
     /// Estimate a meal from a description, and/or from what Vision found in
     /// a photo of it (`seen`, e.g. ["grilled chicken", "rice", "broccoli"]).
+    ///
+    /// The on-device model is small and poor at nutrition arithmetic, so it
+    /// never does the math here. First Dialed's food table itemizes the
+    /// description itself; only if something isn't in the table does the
+    /// model list the ingredients and portions — then the table prices
+    /// every one it knows, and the model's own numbers (sanity-checked) are
+    /// used only for the rest.
     static func estimateMeal(_ description: String, seen: [String] = []) async -> AIMealEstimate? {
         let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !seen.isEmpty else { return nil }
+        let combined = ([text] + seen).filter { !$0.isEmpty }.joined(separator: ", ")
+
+        let local = MealMath.estimate(combined)
+        if local.isComplete {
+            return estimate(name: tidyName(text.isEmpty ? seen.joined(separator: ", ") : text), parts: local.parts,
+                            assumption: "Itemized from Dialed's food table — adjust any portion below.", fromTable: true)
+        }
+
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isAvailable {
             let session = LanguageModelSession(instructions: """
-            You estimate nutrition for meals people describe in plain language or photograph. \
-            Assume typical US restaurant or home portions unless sizes are given. \
-            Be realistic, not optimistic — people underestimate calories. \
-            When items come from a photo, treat them as one plate of food; ignore anything \
-            that isn't food (tableware, the table, hands).
+            You break a meal into its ingredients with realistic single-serving amounts. \
+            Use household units: cup, tbsp, tsp, oz, piece, slice, can, scoop. \
+            Only list what the person ate — don't add sides or drinks they didn't mention. \
+            A dish that's one thing stays one item: "5 pieces of a sushi roll" is sushi roll, 5 piece. \
+            Example: "broccoli with olive oil and hot honey" → broccoli 1 cup; olive oil 1 tsp; hot honey 1 tsp. \
+            Give honest per-ingredient calories: 1 cup broccoli is about 30, 1 tsp olive oil about 40, \
+            1 cup cooked rice about 205, 4 oz chicken breast about 185, one piece of sushi roll about 45.
             """)
             var prompt = ""
             if !seen.isEmpty { prompt += "A photo of the meal shows: \(seen.joined(separator: ", ")). " }
             if !text.isEmpty { prompt += "The person says: \(text). " }
-            prompt += "Estimate this meal."
-            do {
-                let response = try await session.respond(to: prompt, generating: GeneratedMeal.self)
+            prompt += "List the ingredients."
+            if let response = try? await session.respond(to: prompt, generating: GeneratedMealBreakdown.self) {
                 let m = response.content
-                return AIMealEstimate(
-                    name: m.name,
-                    calories: max(0, min(4_000, m.calories)),
-                    proteinGrams: max(0, min(300, m.proteinGrams)),
-                    carbsGrams: max(0, min(600, m.carbsGrams)),
-                    fatGrams: max(0, min(300, m.fatGrams)),
-                    assumption: m.assumption
-                )
+                let parts = m.ingredients.prefix(12).compactMap { ing -> MealPart? in
+                    let unit = MealMath.normalizedUnit(ing.unit) ?? ing.unit.lowercased()
+                    let amount = ing.amount > 0 ? min(ing.amount, 50) : 1
+                    if let food = NutritionTable.match(ing.food),
+                       let part = MealMath.part(food, amount: amount, unit: MealMath.normalizedUnit(ing.unit)) {
+                        return part
+                    }
+                    // Not in the table: the model's numbers, kept honest.
+                    let protein = Double(max(0, min(150, ing.proteinGrams)))
+                    let carbs = Double(max(0, min(250, ing.carbsGrams)))
+                    let fat = Double(max(0, min(120, ing.fatGrams)))
+                    let calories = MealMath.reconciled(calories: Double(max(0, min(1_500, ing.calories))),
+                                                       protein: protein, carbs: carbs, fat: fat)
+                    return MealPart(name: ing.food.capitalized, amount: MealMath.describe(amount, unit),
+                                    grams: 0, calories: calories, protein: protein, carbs: carbs, fat: fat, fromTable: false)
+                }
+                if !parts.isEmpty {
+                    let known = parts.filter(\.fromTable).count
+                    let note = known == parts.count
+                        ? "Portions by Apple Intelligence, numbers from Dialed's food table."
+                        : "Portions by Apple Intelligence; \(known) of \(parts.count) items priced from Dialed's food table, the rest estimated."
+                    return estimate(name: m.name, parts: parts,
+                                    assumption: [note, m.assumption].filter { !$0.isEmpty }.joined(separator: " "),
+                                    fromTable: known == parts.count)
+                }
+            }
+        }
+        #endif
+
+        // No model (or it failed): whatever the table could itemize.
+        guard !local.parts.isEmpty else { return nil }
+        return estimate(name: tidyName(text), parts: local.parts,
+                        assumption: "Couldn't price \(local.unknown.joined(separator: ", ")) — add it below or adjust the total.",
+                        fromTable: true)
+    }
+
+    private static func estimate(name: String, parts: [MealPart], assumption: String, fromTable: Bool) -> AIMealEstimate {
+        let total = { (key: KeyPath<MealPart, Double>) in Int(parts.reduce(0) { $0 + $1[keyPath: key] }.rounded()) }
+        return AIMealEstimate(name: name, calories: total(\.calories), proteinGrams: total(\.protein),
+                              carbsGrams: total(\.carbs), fatGrams: total(\.fat),
+                              assumption: assumption, parts: parts, fromTable: fromTable)
+    }
+
+    /// "broccoli with olive oil, salt…" → "Broccoli with olive oil, salt…"
+    private static func tidyName(_ text: String) -> String {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.prefix(1).uppercased() + t.dropFirst()
+    }
+
+    // MARK: Eating out
+
+    /// Up to three orders at `restaurant` that fit the calories and
+    /// protein this meal has to work with.
+    static func restaurantPicks(_ restaurant: String, calories: Int, protein: Int) async -> [AIRestaurantPick]? {
+        let place = restaurant.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !place.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You help someone on a weight-loss cut order at restaurants. Suggest real, \
+            orderable items that this restaurant (or this kind of restaurant) commonly has, \
+            with realistic calorie and macro estimates — be honest, not optimistic. \
+            Favor lean protein, vegetables and sauces on the side. Never suggest skipping meals.
+            """)
+            let prompt = """
+            Restaurant: \(place). This meal should be about \(calories) calories or less \
+            with about \(protein) g of protein. Give three different orders: the best fit for \
+            those numbers, a lighter one, and a more filling one.
+            """
+            do {
+                let response = try await session.respond(to: prompt, generating: GeneratedRestaurantPicks.self)
+                let picks = response.content.orders.prefix(3).map {
+                    AIRestaurantPick(title: $0.title, items: $0.items,
+                                     calories: max(0, min(3_000, $0.calories)), proteinGrams: max(0, min(250, $0.proteinGrams)),
+                                     carbsGrams: max(0, min(400, $0.carbsGrams)), fatGrams: max(0, min(250, $0.fatGrams)),
+                                     tips: Array($0.tips.prefix(3)))
+                }
+                return picks.isEmpty ? nil : Array(picks)
             } catch {
                 return nil
             }
@@ -169,15 +272,23 @@ enum DialedAI {
     /// Read a typed gym log ("bench 185 for 8 then 7, squats felt heavy at
     /// 225, five sets of five") into exercises and sets. Used when the rule
     /// parser can't make sense of it.
-    static func parseWorkout(_ text: String) async -> [WorkoutTextParser.ParsedExercise]? {
+    static func parseWorkout(_ text: String, known knownNames: [String] = []) async -> [WorkoutTextParser.ParsedExercise]? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isAvailable {
             let session = LanguageModelSession(instructions: """
-            You turn a person's quick gym notes into a list of exercises with their sets. \
+            You turn a person's gym notes into a list of exercises with their sets. \
             Only include what they actually wrote — never invent exercises, weights or reps. \
-            Weights are in pounds. Bodyweight exercises have weight 0.
+            Weights are in pounds. Bodyweight exercises have weight 0. \
+            List one entry per set: "3 sets of 10 at 100" is reps [10, 10, 10] and weights [100, 100, 100]; \
+            "1 set of 10 for 135, 1 set of 8 for 155" is reps [10, 8] and weights [135, 155]. \
+            When they describe a machine instead of naming it, use its gym name: pulling the two \
+            sides together for the inner chest is "Pec deck fly", sitting and pushing a sled with the \
+            legs is "Leg press", pulling a bar down to the chest is "Lat pulldown". \
+            Keep variants distinct: incline bench press is not bench press. \
+            Runs, walks and bike rides go in minutes and miles with no sets. \
+            Use the names from this list when one fits: \(knownNames.prefix(60).joined(separator: ", ")).
             """)
             do {
                 let response = try await session.respond(to: "Gym notes: \(trimmed)", generating: GeneratedWorkout.self)
@@ -320,6 +431,76 @@ struct GeneratedBrief {
 
 @available(iOS 26.0, *)
 @Generable
+struct GeneratedMealBreakdown {
+    @Guide(description: "Short, tidy name for the meal")
+    var name: String
+
+    @Guide(description: "Each ingredient the person ate, with its amount")
+    var ingredients: [GeneratedIngredient]
+
+    @Guide(description: "One short sentence on the biggest portion assumption")
+    var assumption: String
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedIngredient {
+    @Guide(description: "The food, plainly named, e.g. broccoli, olive oil, chicken breast, sushi roll")
+    var food: String
+
+    @Guide(description: "How much, as a number")
+    var amount: Double
+
+    @Guide(description: "Unit: cup, tbsp, tsp, oz, piece, slice, can or scoop")
+    var unit: String
+
+    @Guide(description: "Calories for this amount of this ingredient only")
+    var calories: Int
+
+    @Guide(description: "Grams of protein for this amount")
+    var proteinGrams: Int
+
+    @Guide(description: "Grams of carbohydrate for this amount")
+    var carbsGrams: Int
+
+    @Guide(description: "Grams of fat for this amount")
+    var fatGrams: Int
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedRestaurantPicks {
+    @Guide(description: "Three different orders: best fit, lighter, more filling")
+    var orders: [GeneratedRestaurantOrder]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedRestaurantOrder {
+    @Guide(description: "Two to four words, e.g. Best fit, Lighter, More filling")
+    var title: String
+
+    @Guide(description: "The items to order, as they'd appear on the menu")
+    var items: [String]
+
+    @Guide(description: "Estimated total calories as a whole number")
+    var calories: Int
+
+    @Guide(description: "Estimated grams of protein as a whole number")
+    var proteinGrams: Int
+
+    @Guide(description: "Estimated grams of carbohydrate as a whole number")
+    var carbsGrams: Int
+
+    @Guide(description: "Estimated grams of fat as a whole number")
+    var fatGrams: Int
+
+    @Guide(description: "One or two short ordering tips, e.g. dressing on the side")
+    var tips: [String]
+}
+
+@available(iOS 26.0, *)
+@Generable
 struct GeneratedWorkout {
     @Guide(description: "Every exercise the person wrote, in order")
     var exercises: [GeneratedExercise]
@@ -328,7 +509,7 @@ struct GeneratedWorkout {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedExercise {
-    @Guide(description: "The exercise name as written, e.g. bench press, squat, lat pulldown")
+    @Guide(description: "The exercise's gym name, e.g. Bench press, Incline bench press, Pec deck fly, Lat pulldown")
     var name: String
 
     @Guide(description: "Weight in pounds for each set, one number per set; 0 for bodyweight")
@@ -344,25 +525,4 @@ struct GeneratedExercise {
     var miles: Double
 }
 
-@available(iOS 26.0, *)
-@Generable
-struct GeneratedMeal {
-    @Guide(description: "Short, tidy name for the meal")
-    var name: String
-
-    @Guide(description: "Estimated total calories as a whole number")
-    var calories: Int
-
-    @Guide(description: "Estimated grams of protein as a whole number")
-    var proteinGrams: Int
-
-    @Guide(description: "Estimated grams of carbohydrate as a whole number")
-    var carbsGrams: Int
-
-    @Guide(description: "Estimated grams of fat as a whole number")
-    var fatGrams: Int
-
-    @Guide(description: "One short sentence naming the biggest portion assumption")
-    var assumption: String
-}
 #endif

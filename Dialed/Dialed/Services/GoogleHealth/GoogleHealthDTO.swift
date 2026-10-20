@@ -79,6 +79,7 @@ struct GHDataPoint: Decodable {
     let dailyRespiratoryRate: DailyRespiratoryRate?
     let sleep: Sleep?
     let dailySleepTemperatureDerivations: DailySleepTemperature?
+    let exercise: Exercise?
 
     struct Weight: Decodable {
         let weightGrams: Double?
@@ -115,6 +116,20 @@ struct GHDataPoint: Decodable {
         let date: GHDate?
         let nightlyTemperatureCelsius: Double?
         let baselineTemperatureCelsius: Double?
+    }
+
+    /// A workout session (Fitbit / Pixel Watch / Google Fit). Lenient:
+    /// only the interval is needed; the rest is a bonus.
+    struct Exercise: Decodable {
+        let interval: GHInterval?
+        let exerciseType: String?
+        let displayName: String?
+        let metricsSummary: Metrics?
+
+        struct Metrics: Decodable {
+            let caloriesKcal: Double?
+            let distanceMillimeters: Double?
+        }
     }
 
     struct Sleep: Decodable {
