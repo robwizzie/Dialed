@@ -118,7 +118,7 @@ enum QuickLogService {
             waterOz: deviceWater + water,
             waterTargetOz: settings.waterTargetOz,
             calories: calories,
-            calorieTarget: settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight),
+            calorieTarget: CalorieTarget.current(settings: settings, weight: settings.currentWeight),
             protein: protein,
             proteinTarget: settings.proteinTargetGrams
         )
