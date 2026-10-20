@@ -96,7 +96,7 @@ enum BadgeEngine {
             s("water7", "Hydrated", "Hit your water 7 days in a row", "drop.fill", .bronze, water, 7, "days"),
             s("workout4", "Four-a-Week", "Train 4 times in 7 days", "dumbbell.fill", .silver, workoutWeek, 4, "workouts"),
             s("perfect1", "Perfect Day", "Every habit, water and budget in one day", "star.fill", .silver, perfect, 1, "days"),
-            s("fun1", "Play Counts", "Name your first active moment", "figure.pickleball", .bronze, Double(i.funActivities), 1, "activities"),
+            s("fun1", "Play Counts", "Name your first bonus burn", "figure.pickleball", .bronze, Double(i.funActivities), 1, "activities"),
             s("lead7", "Front-runner", "Lead your friend for 7 days straight", "flag.checkered", .gold, Double(i.daysLeading), 7, "days"),
             s("sweep3", "Triple Threat", "Finish all three quests on 3 days", "target", .silver, Double(i.questSweeps), 3, "days"),
             s("level5", "Locked In", "Reach level 5", "lock.circle.fill", .silver, Double(i.level), 5, "level"),

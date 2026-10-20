@@ -189,9 +189,9 @@ enum WrappedBuilder {
             let byName = Dictionary(grouping: fun, by: \.name)
             if let top = byName.max(by: { $0.value.count < $1.value.count }) {
                 let minutes = Int(top.value.reduce(0) { $0 + $1.minutes })
-                cards.append(Card(kind: .fun, eyebrow: "ACTIVE MOMENTS", value: "\(top.value.count)×", unit: "",
+                cards.append(Card(kind: .fun, eyebrow: "BONUS BURN", value: "\(top.value.count)×", unit: "",
                                   title: top.key,
-                                  detail: ["\(minutes) minutes of it", "\(fun.count) active moments in all"]))
+                                  detail: ["\(minutes) minutes of it", "\(fun.count) bonus activities in all"]))
             }
         }
 

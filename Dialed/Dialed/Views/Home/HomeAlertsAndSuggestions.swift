@@ -180,11 +180,11 @@ struct HomeRecentSuggestionsCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(alignment: .firstTextBaseline) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("FROM RECENT DAYS")
+                            Text("WAITING FOR YOU")
                                 .font(.system(size: 10, weight: .bold))
                                 .tracking(0.8)
                                 .foregroundColor(Neka.inkTertiary)
-                            Text(items.count == 1 ? "1 thing to add" : "\(items.count) things to add")
+                            Text(items.count == 1 ? "1 activity to add or dismiss" : "\(items.count) activities to add or dismiss")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(Neka.ink)
                         }

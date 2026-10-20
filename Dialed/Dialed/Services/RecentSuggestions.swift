@@ -16,12 +16,12 @@ enum RecentSuggestions {
     private static let dismissedKey = "suggestions.dismissedWorkouts"
     private static var cache: (at: Date, items: [DaySuggestions.Item])?
 
-    /// What's waiting from the `days` before today.
+    /// What's waiting from today and the `days` before it.
     static func recent(context: ModelContext, days: Int = 6, force: Bool = false, now: Date = Date()) async -> [DaySuggestions.Item] {
         if !force, let cache, now.timeIntervalSince(cache.at) < 10 * 60 { return cache.items }
         let calendar = Calendar.current
         var items: [DaySuggestions.Item] = []
-        for back in 1...max(1, days) {
+        for back in 0...max(1, days) {
             guard let day = calendar.date(byAdding: .day, value: -back, to: calendar.startOfDay(for: now)) else { continue }
             items += await forDay(day, context: context)
         }
