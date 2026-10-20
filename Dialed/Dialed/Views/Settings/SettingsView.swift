@@ -48,6 +48,9 @@ struct SettingsView: View {
                         row("alarm", "Wake-up times", wakeSummary,
                             tint: Neka.amber, fill: Neka.amberSoft) { WakeScheduleView() }
                         divider
+                        row("slider.horizontal.3", "Home screen", "Reorder or hide Home's cards",
+                            tint: Neka.sky, fill: Neka.skySoft) { HomeLayoutEditor(inSheet: false) }
+                        divider
                         row("figure.walk", "Mile a day", "\(MileADay.format(MileSettings.load().goalMiles)) goal · recalibrate steps per mile",
                             tint: Neka.lavender, fill: Neka.lavenderSoft) { MileSettingsView() }
                         divider

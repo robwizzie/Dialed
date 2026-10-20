@@ -64,6 +64,9 @@ final class HomeViewModel: ObservableObject {
     @Published var latestWeight: WeightReading?
     @Published var challenge: WeightChallenge?
     @Published var progress: WeightChallengeEngine.Progress?
+    /// "You need 1.3 lb/week to beat Dave" — refreshed every 10 minutes at most.
+    @Published var race: RacePace.Report?
+    private var raceCheckedAt: Date?
 
     // MARK: - Tiles
 
@@ -236,8 +239,13 @@ final class HomeViewModel: ObservableObject {
         latestWeight = merged.last
         if let challenge {
             progress = WeightChallengeEngine.progress(challenge: challenge, readings: merged, now: now)
+            if force || race == nil || now.timeIntervalSince(raceCheckedAt ?? .distantPast) > 600 {
+                raceCheckedAt = now
+                race = await RacePace.report(challenge: challenge, readings: merged, context: context, now: now)
+            }
         } else {
             progress = nil
+            race = nil
         }
 
         // ---- Water: devices report running totals, quick-captures add on top.
