@@ -548,6 +548,8 @@ struct HomeView: View {
                 )
                 .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
             }
+        case .event:
+            HomeEventCard(weightReadings: viewModel.weightReadings)
         case .finalPush:
             HomeFinalPushCard(challenge: viewModel.challenge, race: viewModel.race,
                               target: viewModel.calorieBudget, usualTarget: viewModel.finalPushUsualTarget)
