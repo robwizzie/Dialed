@@ -45,10 +45,10 @@ struct ProfileSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .weight)
@@ -74,10 +74,10 @@ struct ProfileSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .height)
@@ -103,10 +103,10 @@ struct ProfileSettingsView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(.ultraThinMaterial)
+                                    .fill(Neka.surface)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                                            .stroke(Neka.hairline, lineWidth: 0.5)
                                     )
                             )
                             .focused($focusedField, equals: .goal)
@@ -142,16 +142,16 @@ struct ProfileSettingsView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(.blue.opacity(0.1))
+                        .fill(Neka.skySoft)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(.blue.opacity(0.2), lineWidth: 1)
+                                .stroke(Neka.sky.opacity(0.3), lineWidth: 1)
                         )
                 )
             }
             .padding()
         }
-        .background(AppColors.background.ignoresSafeArea())
+        .nekaPageBackground()
         .navigationTitle("Profile")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
