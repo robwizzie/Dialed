@@ -15,6 +15,7 @@ struct HealthSleepPage: View {
     @ObservedObject var model: HealthDetailModel
     @State private var scrubbedNight: Date?
     @State private var scrubbedTime: Date?
+    @State private var explaining: HealthInsights.Night?
 
     private let deepBlue = Color(hex: "4C6FE0")
     private let calendar = Calendar.current
@@ -59,7 +60,18 @@ struct HealthSleepPage: View {
     private func scoreCard(_ night: HealthInsights.Night) -> some View {
         let score = HealthInsights.sleepScore(night)
         return VStack(alignment: .leading, spacing: 12) {
-            HealthCardHeader(title: "Sleep Score", trailing: night.vendorScore != nil ? "from your watch" : "Dialed estimate")
+            HStack(alignment: .firstTextBaseline) {
+                Text("Sleep Score")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Button { explaining = night } label: {
+                    Label("Dialed vs Google", systemImage: "info.circle")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                .buttonStyle(.plain)
+            }
             HStack(alignment: .center, spacing: 10) {
                 Text("\(score)")
                     .font(.system(size: 44, weight: .semibold))
@@ -67,16 +79,34 @@ struct HealthSleepPage: View {
                     .contentTransition(.numericText())
                 NekaPill(text: HealthInsights.label(for: score), tint: .white, fill: score >= 70 ? Neka.skyText : Neka.orangeText)
                 Spacer()
+                if let google = night.vendorScore {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text("Google")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Neka.inkTertiary)
+                        Text("\(google)")
+                            .font(.system(size: 17, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                }
             }
             HealthScoreBar(score: score)
-            if night.vendorScore == nil {
-                Text("Duration, time asleep in bed, deep + REM share and wake-ups.")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-            }
+            Text("Duration, time asleep in bed, deep + REM share and wake-ups.")
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
         }
         .padding(16)
         .nekaCard()
+        .sheet(item: Binding(get: { explaining.map { ExplainTarget(night: $0) } }, set: { explaining = $0?.night })) { target in
+            SleepScoreExplainer(night: target.night)
+                .presentationDetents([.large])
+        }
+    }
+
+    private struct ExplainTarget: Identifiable {
+        let night: HealthInsights.Night
+        var id: Date { night.wakeDay }
     }
 
     // MARK: - Tonight

@@ -31,6 +31,7 @@ struct TrendWeightView: View {
                     summary(last)
                     chartCard
                     composition
+                    MetabolismLink()
                     explainer
                 } else if loaded {
                     empty
