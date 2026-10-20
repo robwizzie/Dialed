@@ -22,20 +22,29 @@ final class MileADayTests: XCTestCase {
     }
 
     func testDistanceWinsOverSteps() {
-        XCTAssertEqual(MileADay.miles(distance: 1.3, steps: 100), 1.3)
-        XCTAssertEqual(MileADay.miles(distance: nil, steps: 2_100), 1, accuracy: 1e-9)
-        XCTAssertEqual(MileADay.miles(distance: 0, steps: 4_200), 2, accuracy: 1e-9)
+        XCTAssertEqual(MileADay.miles(distance: 1.3, steps: 100, stepsPerMile: 2_100), 1.3)
+        XCTAssertEqual(MileADay.miles(distance: nil, steps: 2_100, stepsPerMile: 2_100), 1, accuracy: 1e-9)
+        XCTAssertEqual(MileADay.miles(distance: 0, steps: 4_800, stepsPerMile: 2_400), 2, accuracy: 1e-9)
+    }
+
+    func testStrideIsLearnedFromHealthDays() {
+        // Median of 2,300 / 2,350 / 2,300; the short day and the GPS glitch are ignored.
+        let days: [(steps: Double, miles: Double)] = [(2_300, 1.0), (4_700, 2.0), (1_150, 0.5), (500, 0.1), (9_000, 1.0)]
+        XCTAssertEqual(MileADay.learnStride(days), 2_300)
+        XCTAssertNil(MileADay.learnStride([(2_300, 1.0), (4_700, 2.0)]))
     }
 
     func testStreakKeepsGoingWhileTodayIsUnfinished() {
         let history: [Date: Double] = [day(16): 1.2, day(17): 1.0, day(18): 2.0, day(19): 0.3]
-        XCTAssertEqual(MileADay.streak(milesByDay: history, today: day(19).addingTimeInterval(9 * 3600), calendar: calendar), 3)
+        XCTAssertEqual(MileADay.streak(milesByDay: history, today: day(19).addingTimeInterval(9 * 3600), goal: 1, calendar: calendar), 3)
         var done = history
         done[day(19)] = 1.1
-        XCTAssertEqual(MileADay.streak(milesByDay: done, today: day(19), calendar: calendar), 4)
+        XCTAssertEqual(MileADay.streak(milesByDay: done, today: day(19), goal: 1, calendar: calendar), 4)
         var gap = history
         gap[day(17)] = 0.5
-        XCTAssertEqual(MileADay.streak(milesByDay: gap, today: day(19), calendar: calendar), 1)
+        XCTAssertEqual(MileADay.streak(milesByDay: gap, today: day(19), goal: 1, calendar: calendar), 1)
+        // A bigger goal raises the bar.
+        XCTAssertEqual(MileADay.streak(milesByDay: history, today: day(19), goal: 1.5, calendar: calendar), 1)
     }
 
     func testDialedScoreCountsTheMile() {

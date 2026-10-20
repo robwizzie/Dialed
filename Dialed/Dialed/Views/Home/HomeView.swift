@@ -68,7 +68,8 @@ struct HomeView: View {
                         miles: viewModel.milesToday,
                         week: viewModel.milesWeek,
                         streak: viewModel.mileStreak,
-                        ran: viewModel.ranToday
+                        ran: viewModel.ranToday,
+                        goal: viewModel.mileGoal
                     )
                     HomeChallengeCard(
                         challenge: viewModel.challenge,
@@ -132,6 +133,9 @@ struct HomeView: View {
             }
             .refreshable { await refreshAll(force: true) }
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
+                Task { await refreshAll(force: true) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: MileSettings.didChange)) { _ in
                 Task { await refreshAll(force: true) }
             }
             .onReceive(NotificationCenter.default.publisher(for: GoalEvent.didChangeNotification)) { _ in

@@ -17,7 +17,7 @@ struct WelcomeView: View {
             // The Dialed mark — same dial as the app icon.
             DialedMark()
                 .frame(width: 148, height: 148)
-                .motionTilt()
+                .motionTilt(5)
                 .padding(.bottom, 32)
 
             (Text("Dialed").foregroundColor(Neka.ink) + Text(".").foregroundColor(Neka.green))

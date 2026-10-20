@@ -45,6 +45,9 @@ struct SettingsView: View {
                         row("checklist", "Daily routine", "Your recurring tasks and times",
                             tint: Neka.orange, fill: Neka.orangeSoft) { ManageDailyRoutineView() }
                         divider
+                        row("figure.walk", "Mile a day", "\(MileADay.format(MileSettings.load().goalMiles)) goal · recalibrate steps per mile",
+                            tint: Neka.lavender, fill: Neka.lavenderSoft) { MileSettingsView() }
+                        divider
                         row("chart.bar.fill", "What to track", TrackingPreferences.load().trackingSummary,
                             tint: Neka.sky, fill: Neka.skySoft) { TrackingSettingsView() }
                         divider
