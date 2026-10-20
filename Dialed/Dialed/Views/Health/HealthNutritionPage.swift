@@ -42,7 +42,7 @@ struct HealthNutritionPage: View {
         let glasses = Int(n.waterOz / 8)
         return HealthTileGrid {
             HealthTile(
-                title: "Calories", value: Int(n.calories).formatted(), unit: "kcal",
+                title: "Calories", value: Int(n.calories).formatted(), unit: "calories",
                 status: n.calories == 0 ? "Nothing logged" : (calLeft >= 0 ? "On track" : "Over budget"),
                 statusColor: calLeft >= 0 ? Neka.green : Neka.rose,
                 footnote: calLeft >= 0 ? "\(Int(calLeft).formatted()) left" : "\(Int(-calLeft).formatted()) over",
@@ -50,7 +50,7 @@ struct HealthNutritionPage: View {
             ) {
                 VStack(alignment: .leading, spacing: 4) {
                     Spacer(minLength: 0)
-                    Text("of \(Int(n.calorieTarget).formatted()) kcal")
+                    Text("of \(Int(n.calorieTarget).formatted()) calories")
                         .font(.system(size: 11))
                         .foregroundColor(Neka.inkSecondary)
                     NekaProgressBar(progress: n.calorieTarget > 0 ? min(1, n.calories / n.calorieTarget) : 0,
@@ -137,7 +137,7 @@ struct HealthNutritionPage: View {
                 ZStack {
                     if totalKcal > 0 {
                         Chart(macros) { m in
-                            SectorMark(angle: .value("kcal", m.kcal), innerRadius: .ratio(0.72), angularInset: 1.5)
+                            SectorMark(angle: .value("calories", m.kcal), innerRadius: .ratio(0.72), angularInset: 1.5)
                                 .foregroundStyle(m.color)
                                 .cornerRadius(3)
                         }
@@ -148,7 +148,7 @@ struct HealthNutritionPage: View {
                         Text(Int(n.calories).formatted())
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(Neka.ink)
-                        Text("kcal")
+                        Text("calories")
                             .font(.system(size: 10))
                             .foregroundColor(Neka.inkSecondary)
                     }
@@ -305,7 +305,7 @@ struct HealthNutritionPage: View {
                             .foregroundColor(Neka.ink)
                             .lineLimit(1)
                         Spacer()
-                        Text("\(Int(meal.calories)) kcal")
+                        Text("\(Int(meal.calories)) calories")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Neka.ink)
                     }

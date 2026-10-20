@@ -132,7 +132,7 @@ struct HealthBodyPage: View {
                 Text("\(net > 0 ? "+" : "")\(Int(net).formatted())")
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundColor(Neka.ink)
-                Text("kcal")
+                Text("calories")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Neka.inkSecondary)
                 Spacer()
@@ -141,16 +141,16 @@ struct HealthBodyPage: View {
                     legend(Neka.green, "Burn \(Int(burn).formatted())")
                 }
             }
-            Text(net <= 0 ? "In a deficit — this is the direction you want." : "In a surplus so far. An hour-long walk closes ~300 kcal.")
+            Text(net <= 0 ? "In a deficit — this is the direction you want." : "In a surplus so far. An hour-long walk closes ~300 calories.")
                 .font(.system(size: 12))
                 .foregroundColor(net <= 0 ? Neka.greenText : Neka.orangeText)
 
             Chart {
                 // Side by side: intake just left of the hour, burn just right.
                 ForEach(0..<24, id: \.self) { h in
-                    BarMark(x: .value("Hour", Double(h) - 0.2), y: .value("kcal", model.intakeHourly[h]), width: 4)
+                    BarMark(x: .value("Hour", Double(h) - 0.2), y: .value("calories", model.intakeHourly[h]), width: 4)
                         .foregroundStyle(Neka.orange)
-                    BarMark(x: .value("Hour", Double(h) + 0.2), y: .value("kcal", h <= nowHour ? model.burnHourly[h] : 0), width: 4)
+                    BarMark(x: .value("Hour", Double(h) + 0.2), y: .value("calories", h <= nowHour ? model.burnHourly[h] : 0), width: 4)
                         .foregroundStyle(Neka.green.opacity(0.7))
                 }
                 if let balanceHour {

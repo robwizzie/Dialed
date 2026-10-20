@@ -29,12 +29,12 @@ enum QuickLogService {
         var proteinLeft: Double { max(0, proteinTarget - protein) }
         var caloriesLeft: Double { calorieTarget - calories }
 
-        /// "64 oz water, 120 g protein, 900 kcal left"
+        /// "64 oz water, 120 g protein, 900 calories left"
         var spokenSummary: String {
-            let kcal = caloriesLeft >= 0
-                ? "\(Int(caloriesLeft.rounded())) kcal left"
-                : "\(Int((-caloriesLeft).rounded())) kcal over"
-            return "\(Int(waterOz.rounded())) oz water, \(Int(protein.rounded())) g protein, \(kcal)"
+            let calorieText = caloriesLeft >= 0
+                ? "\(Int(caloriesLeft.rounded())) calories left"
+                : "\(Int((-caloriesLeft).rounded())) calories over"
+            return "\(Int(waterOz.rounded())) oz water, \(Int(protein.rounded())) g protein, \(calorieText)"
         }
     }
 

@@ -244,7 +244,7 @@ struct VoiceCaptureSheet: View {
         case .caffeine: return "\(Int(event.value ?? 0)) mg caffeine"
         case .alcohol:  return "\(Int(event.value ?? 0)) drink(s)"
         case .meal:
-            let cal = event.value.map { "\(Int($0)) kcal" }
+            let cal = event.value.map { "\(Int($0)) calories" }
             let prot = event.secondaryValue.map { "\(Int($0))g protein" }
             return [cal, prot].compactMap { $0 }.joined(separator: " · ").ifEmpty("Meal")
         case .mood:    return "Mood \(Int(event.value ?? 0))/5"

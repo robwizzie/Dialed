@@ -238,6 +238,8 @@ struct HomeFuelCard: View {
     var onLogMeal: () -> Void
     /// Opens the food log (see and edit everything eaten today).
     var onOpenLog: () -> Void = {}
+    /// "Eating out?" — an order that fits what's left today.
+    var onEatingOut: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -280,6 +282,28 @@ struct HomeFuelCard: View {
             Text(calorieNote)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
+            Button(action: onEatingOut) {
+                HStack(spacing: 10) {
+                    Text("🍽️").font(.system(size: 18))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Eating out?")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Get an order that fits the rest of today")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing)))
+            }
+            .buttonStyle(.dialedScale)
         }
         .padding(16)
         .nekaCard()
@@ -288,8 +312,8 @@ struct HomeFuelCard: View {
     private var calorieNote: String {
         let left = calorieTarget - calories
         if calories == 0 { return "Nothing logged yet today." }
-        if left >= 0 { return "\(Int(left).formatted()) kcal left in today's deficit budget." }
-        return "\(Int(-left).formatted()) kcal over budget — a walk claws some back."
+        if left >= 0 { return "\(Int(left).formatted()) calories left in today's deficit budget." }
+        return "\(Int(-left).formatted()) calories over budget — a walk claws some back."
     }
 
     private func row(title: String, value: String, progress: Double, tint: Color) -> some View {
@@ -646,7 +670,7 @@ struct HomePathsCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("Estimate: calories eaten minus calories your watch says you burned, at ~3,500 kcal per pound.")
+            Text("Estimate: calories eaten minus calories your watch says you burned, at ~3,500 calories per pound.")
                 .font(.system(size: 10))
                 .foregroundColor(Neka.inkTertiary)
                 .fixedSize(horizontal: false, vertical: true)
