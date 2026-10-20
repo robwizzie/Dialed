@@ -62,13 +62,13 @@ enum FunActivityService {
 
     // MARK: - Naming
 
-    static func name(_ bout: ActiveBouts.Bout, as name: String, context: ModelContext) {
+    static func name(_ bout: ActiveBouts.Bout, as name: String, protectionUsed: Bool? = nil, context: ModelContext) {
         add(name: name, start: bout.start, minutes: bout.minutes.rounded(), calories: bout.calories,
-            averageBPM: bout.averageBPM, externalID: bout.id, context: context)
+            averageBPM: bout.averageBPM, externalID: bout.id, protectionUsed: protectionUsed, context: context)
     }
 
     static func add(name: String, start: Date, minutes: Double, calories: Double?, averageBPM: Double? = nil,
-                    externalID: String? = nil, context: ModelContext) {
+                    externalID: String? = nil, protectionUsed: Bool? = nil, context: ModelContext) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, minutes > 0 else { return }
         let json = averageBPM.map { "{\"averageBPM\":\(Int($0))}" }
@@ -77,10 +77,18 @@ enum FunActivityService {
                                  source: externalID == nil ? .manual : .healthkit, sourceExternalID: externalID)
         context.insert(event)
         try? context.save()
+        if trimmed == ActiveBouts.intimacy {
+            let id = event.id
+            Task {
+                await HealthWriteBack.requestAccessIfNeeded()
+                HealthWriteBack.syncIntimacy(eventID: id, start: start, minutes: minutes, protectionUsed: protectionUsed)
+            }
+        }
         NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
     }
 
     static func delete(_ event: ContextEvent, context: ModelContext) {
+        if event.text == ActiveBouts.intimacy { HealthWriteBack.removeIntimacy(eventID: event.id) }
         context.delete(event)
         try? context.save()
         NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)

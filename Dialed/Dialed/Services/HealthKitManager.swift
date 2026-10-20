@@ -103,7 +103,10 @@ class HealthKitManager: ObservableObject {
 
     /// Types we ask to write — meals and water logged in Dialed.
     nonisolated static let typesToShare: Set<HKSampleType> = {
-        Set(intakeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+        var types: Set<HKSampleType> = Set(intakeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+        // Intimacy logged in Dialed → Health's Sexual Activity.
+        types.insert(HKCategoryType(.sexualActivity))
+        return types
     }()
 
     nonisolated private init() {}
