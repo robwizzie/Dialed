@@ -27,7 +27,21 @@ final class HealthInsightsTests: XCTestCase {
         let short = HealthInsights.sleepScore(night(18, asleep: 300, inBed: 420, deep: 30, rem: 40, wakes: 6))
         XCTAssertGreaterThanOrEqual(good, 85)
         XCTAssertLessThan(short, 60)
-        XCTAssertEqual(HealthInsights.sleepScore(night(18, asleep: 300, vendor: 77)), 77)
+        // Dialed's own score wins; the watch's stays on the night for comparison.
+        let withVendor = night(18, asleep: 300, vendor: 77)
+        XCTAssertEqual(HealthInsights.sleepScore(withVendor), HealthInsights.sleepScore(night(18, asleep: 300)))
+        XCTAssertEqual(withVendor.vendorScore, 77)
+    }
+
+    func testBreakdownAddsUpToTheScore() {
+        let n = night(18, asleep: 450, inBed: 473, deep: 90, rem: 90, wakes: 2)
+        let b = HealthInsights.scoreBreakdown(n)
+        XCTAssertEqual(b.duration, 50, accuracy: 0.01)
+        XCTAssertEqual(b.efficiency, 20, accuracy: 0.01)    // 95 % asleep in bed
+        XCTAssertEqual(b.restorative, 20, accuracy: 0.01)   // 40 % deep + REM
+        XCTAssertEqual(b.wakeUps, 7, accuracy: 0.01)
+        XCTAssertEqual(b.total, HealthInsights.sleepScore(n))
+        XCTAssertEqual(b.total, 97)
     }
 
     func testBedtimeAcrossMidnightCompares() {
