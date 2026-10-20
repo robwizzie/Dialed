@@ -95,7 +95,7 @@ struct HomeView: View {
                         protein: viewModel.proteinGrams,
                         proteinTarget: viewModel.proteinTarget,
                         calories: viewModel.caloriesIn,
-                        calorieTarget: viewModel.calorieTarget,
+                        calorieTarget: viewModel.calorieBudget,
                         miles: viewModel.milesToday,
                         onLogWater: { sheet = .water }
                     )
@@ -152,7 +152,8 @@ struct HomeView: View {
                         protein: viewModel.proteinGrams,
                         proteinTarget: viewModel.proteinTarget,
                         calories: viewModel.caloriesIn,
-                        calorieTarget: viewModel.calorieTarget,
+                        calorieTarget: viewModel.calorieBudget,
+                        earned: viewModel.earned,
                         onLogMeal: { sheet = .meal },
                         onOpenLog: { path.append(.foodLog) },
                         onEatingOut: { sheet = .eatingOut }
