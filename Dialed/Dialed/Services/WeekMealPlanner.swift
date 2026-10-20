@@ -186,15 +186,18 @@ enum WeekMealPlanner {
 
     // MARK: - Choosing
 
-    /// A slot's templates, best first: protein per calorie, plus a nudge
-    /// for foods you already eat, then rotated by `seed`.
-    static func ranked(_ slot: Slot, preferred: Set<String>, seed: Int = 0) -> [Template] {
+    /// A slot's templates, best first: closest to the share of calories
+    /// your protein target needs (a little over is fine, double isn't),
+    /// plus a nudge for foods you already eat, then rotated by `seed`.
+    /// Without a target, the most protein per calorie wins.
+    static func ranked(_ slot: Slot, preferred: Set<String>, seed: Int = 0, targetDensity: Double? = nil) -> [Template] {
         let options = library.filter { $0.slot == slot }
         let scored = options.map { t -> (Template, Double) in
             let m = meal(t)
             let density = m.calories > 0 ? m.protein * 4 / m.calories : 0
             let liked = Double(t.ingredients.filter { preferred.contains($0.food) }.count)
-            return (t, density + liked * 0.08)
+            let fit = targetDensity.map { -abs(density - $0 * 1.15) } ?? density
+            return (t, fit + liked * 0.08)
         }
         let sorted = scored.sorted { $0.1 == $1.1 ? $0.0.id < $1.0.id : $0.1 > $1.1 }.map(\.0)
         guard !sorted.isEmpty else { return [] }
@@ -207,8 +210,9 @@ enum WeekMealPlanner {
 
     static func day(_ date: Date, index: Int, calories: Double, protein: Double,
                     preferred: Set<String>, seed: Int) -> DayPlan {
+        let targetDensity = calories > 0 && protein > 0 ? protein * 4 / calories : nil
         var meals = Slot.allCases.compactMap { slot -> Meal? in
-            let options = ranked(slot, preferred: preferred, seed: seed).prefix(rotation(slot))
+            let options = ranked(slot, preferred: preferred, seed: seed, targetDensity: targetDensity).prefix(rotation(slot))
             guard !options.isEmpty else { return nil }
             let pick = options[options.startIndex + index % options.count]
             return meal(pick, calories: calories * slot.share)
