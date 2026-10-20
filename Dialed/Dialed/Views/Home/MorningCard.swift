@@ -303,6 +303,13 @@ struct HomeMorningCard: View {
 
     /// One upbeat line, from whatever's most notable this morning.
     private var funLine: String? {
+        // Up on time? Compared with this morning's scheduled wake-up.
+        if let night, calendar.isDateInToday(night.wakeDay) || calendar.isDateInToday(night.wakeTime),
+           let planned = WakeSchedule.load().wake(on: night.wakeTime) {
+            let late = Int(night.wakeTime.timeIntervalSince(planned) / 60)
+            if abs(late) <= 10 { return "⏰ Up right on time (\(WakeSchedule.clock(WakeScheduleView.minutes(of: planned))) plan). Consistency is the cheat code." }
+            if late > 30 { return "⏰ Up \(late) min after your \(WakeSchedule.clock(WakeScheduleView.minutes(of: planned))) plan. Try lights out a bit earlier tonight." }
+        }
         if let score {
             let week = recentNights.suffix(7).map(HealthInsights.sleepScore)
             if week.count >= 4, score >= (week.max() ?? 0) { return "🏆 Best night of your week. Use it — today's a good day to push." }

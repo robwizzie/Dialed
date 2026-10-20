@@ -126,6 +126,9 @@ struct HomeView: View {
                         sheet = .logWorkout
                     })
                     HomeFunCard()
+                    if HomeTomorrowWakeCard.isShowing {
+                        HomeTomorrowWakeCard()
+                    }
                     if HomeWeeklyReviewCard.isShowing() {
                         HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
                     }
