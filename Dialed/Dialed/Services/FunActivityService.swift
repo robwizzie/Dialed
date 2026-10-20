@@ -148,11 +148,20 @@ enum FunActivityService {
 extension GoogleHealthSyncService {
     /// Every heart-rate reading in a window (Pixel Watch, Fitbit).
     func heartRate(from start: Date, to end: Date) async -> [ActiveBouts.Sample] {
-        guard let points = try? await GoogleHealthAPI.shared.list(
-            "heart-rate",
-            filter: "heart_rate.sample_time.physical_time >= \"\(GHTime.rfc3339(start))\"",
-            pageSize: 1000, maxPages: 20
-        ) else { return [] }
+        // Bounded on both ends: a past day with only a lower bound pulled
+        // every reading since then, page after page, and stalled the view.
+        let field = "heart_rate.sample_time.physical_time"
+        let lower = "\(field) >= \"\(GHTime.rfc3339(start))\""
+        let bounded = try? await GoogleHealthAPI.shared.list(
+            "heart-rate", filter: "\(lower) AND \(field) < \"\(GHTime.rfc3339(end))\"", pageSize: 1000, maxPages: 8)
+        // If the API won't take the AND, a few pages from the start still covers most of a window.
+        let fallback: [GHDataPoint]?
+        if bounded == nil {
+            fallback = try? await GoogleHealthAPI.shared.list("heart-rate", filter: lower, pageSize: 1000, maxPages: 4)
+        } else {
+            fallback = nil
+        }
+        guard let points = bounded ?? fallback else { return [] }
         return points.compactMap { p in
             guard let hr = p.heartRate, let bpm = hr.beatsPerMinute?.value,
                   let t = GHTime.parse(hr.sampleTime?.physicalTime), t < end else { return nil }
