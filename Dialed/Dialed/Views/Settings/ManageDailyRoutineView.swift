@@ -74,7 +74,7 @@ struct ManageDailyRoutineView: View {
                             .foregroundStyle(.secondary)
 
                         VStack(spacing: 8) {
-                            ForEach(Constants.ChecklistType.allCases, id: \.self) { type in
+                            ForEach(Constants.ChecklistType.active, id: \.self) { type in
                                 DefaultTaskRow(type: type)
                             }
                         }
