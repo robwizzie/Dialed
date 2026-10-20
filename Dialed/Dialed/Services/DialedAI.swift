@@ -272,15 +272,23 @@ enum DialedAI {
     /// Read a typed gym log ("bench 185 for 8 then 7, squats felt heavy at
     /// 225, five sets of five") into exercises and sets. Used when the rule
     /// parser can't make sense of it.
-    static func parseWorkout(_ text: String) async -> [WorkoutTextParser.ParsedExercise]? {
+    static func parseWorkout(_ text: String, known knownNames: [String] = []) async -> [WorkoutTextParser.ParsedExercise]? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isAvailable {
             let session = LanguageModelSession(instructions: """
-            You turn a person's quick gym notes into a list of exercises with their sets. \
+            You turn a person's gym notes into a list of exercises with their sets. \
             Only include what they actually wrote — never invent exercises, weights or reps. \
-            Weights are in pounds. Bodyweight exercises have weight 0.
+            Weights are in pounds. Bodyweight exercises have weight 0. \
+            List one entry per set: "3 sets of 10 at 100" is reps [10, 10, 10] and weights [100, 100, 100]; \
+            "1 set of 10 for 135, 1 set of 8 for 155" is reps [10, 8] and weights [135, 155]. \
+            When they describe a machine instead of naming it, use its gym name: pulling the two \
+            sides together for the inner chest is "Pec deck fly", sitting and pushing a sled with the \
+            legs is "Leg press", pulling a bar down to the chest is "Lat pulldown". \
+            Keep variants distinct: incline bench press is not bench press. \
+            Runs, walks and bike rides go in minutes and miles with no sets. \
+            Use the names from this list when one fits: \(knownNames.prefix(60).joined(separator: ", ")).
             """)
             do {
                 let response = try await session.respond(to: "Gym notes: \(trimmed)", generating: GeneratedWorkout.self)
@@ -501,7 +509,7 @@ struct GeneratedWorkout {
 @available(iOS 26.0, *)
 @Generable
 struct GeneratedExercise {
-    @Guide(description: "The exercise name as written, e.g. bench press, squat, lat pulldown")
+    @Guide(description: "The exercise's gym name, e.g. Bench press, Incline bench press, Pec deck fly, Lat pulldown")
     var name: String
 
     @Guide(description: "Weight in pounds for each set, one number per set; 0 for bodyweight")
