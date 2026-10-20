@@ -41,6 +41,8 @@ enum HeadToHeadSync {
                         calendar.startOfDay(for: now))
         let readings = await WeightDataSource.readings(context: context, since: since)
         await live.sync(readings: readings, force: true)
+        // Side bets: publish your running number, hear about proposals and results.
+        await SideBetsStore.shared.refresh(context: context)
         guard let updated = WeightChallenge.load() else { return }
 
         let progress = WeightChallengeEngine.progress(challenge: updated, readings: readings, now: now)
