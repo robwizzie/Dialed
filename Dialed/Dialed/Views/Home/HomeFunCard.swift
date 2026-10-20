@@ -121,7 +121,7 @@ struct HomeFunCard: View {
                     .foregroundColor(Neka.ink)
                     .lineLimit(1)
                 Text("\(Int(b.minutes.rounded())) min · avg \(Int(b.averageBPM)) bpm · "
-                     + (EarnedCalories.share > 0 ? "name it to earn ~\(Int(b.calories * EarnedCalories.share))" : "~\(Int(b.calories)) cal"))
+                     + "name it to earn ~\(Int(b.calories))")
                     .font(.system(size: 12))
                     .foregroundColor(Neka.inkSecondary)
                     .lineLimit(1)
@@ -166,7 +166,7 @@ struct HomeFunCard: View {
         let firstLook = lookedAt == nil
         lookedAt = Date()
         let found = await FunActivityService.day(Date(), context: context)
-        let nowEarned = EarnedCalories.day(context: context)
+        let nowEarned = await EarnedCalories.day(context: context)
         let gained = nowEarned.earned - earned.earned
         withAnimation(.easeOut(duration: 0.25)) {
             day = found
@@ -372,64 +372,117 @@ struct FunActivitySheet: View {
 
 // MARK: - Earned calories
 
-/// "🔥 +280 earned · Pickleball   Eat back: Half ▾" — on the Fuel card
-/// and the Fun stuff card.
+/// "🔥 +455 calories earned · Strength, Pickleball  ›" — on the Fuel card
+/// and Food log. Tap for what earned them.
 struct EarnedCaloriesPill: View {
     let earned: EarnedCalories.Day
-    @State private var share = EarnedCalories.share
+    @State private var showing = false
     @State private var glow = false
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 28, height: 28)
-                .background(Circle().fill(LinearGradient(colors: [Neka.amber, Neka.orange],
-                                                         startPoint: .top, endPoint: .bottom)))
-                .scaleEffect(glow ? 1.08 : 1)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(earned.earned > 0 ? "+\(Int(earned.earned)) calories earned" : "\(Int(earned.burned)) burned, none added")
+        Button { showing = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "flame.fill")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(Neka.orangeText)
-                    .contentTransition(.numericText(value: earned.earned))
-                Text(earned.sources.joined(separator: ", "))
-                    .font(.system(size: 11))
-                    .foregroundColor(Neka.inkSecondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 6)
-            Menu {
-                Picker("Eat back", selection: $share) {
-                    ForEach(EarnedCalories.shares, id: \.value) { option in
-                        Text(option.value == 0.5 ? "\(option.label) (recommended)" : option.label).tag(option.value)
-                    }
+                    .foregroundColor(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(LinearGradient(colors: [Neka.amber, Neka.orange],
+                                                             startPoint: .top, endPoint: .bottom)))
+                    .scaleEffect(glow ? 1.08 : 1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("+\(Int(earned.earned)) calories earned")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Neka.orangeText)
+                        .contentTransition(.numericText(value: earned.earned))
+                    Text(earned.sources)
+                        .font(.system(size: 11))
+                        .foregroundColor(Neka.inkSecondary)
+                        .lineLimit(1)
                 }
-            } label: {
-                HStack(spacing: 3) {
-                    Text("Eat back \(EarnedCalories.shares.first { $0.value == share }?.label.lowercased() ?? "half")")
-                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 8, weight: .bold))
-                }
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(Neka.ink)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(Neka.surface))
+                Spacer(minLength: 6)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Neka.inkTertiary)
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing)))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing)))
-        .onChange(of: share) { _, value in
-            EarnedCalories.share = value
-            #if os(iOS)
-            UISelectionFeedbackGenerator().selectionChanged()
-            #endif
-        }
+        .buttonStyle(.dialedScale)
         .onAppear {
             withAnimation(.easeInOut(duration: 1.2).repeatCount(3, autoreverses: true)) { glow = true }
         }
-        .accessibilityElement(children: .combine)
+        .sheet(isPresented: $showing) {
+            EarnedCaloriesSheet(earned: earned)
+                .presentationDetents([.medium])
+        }
+    }
+}
+
+/// What earned today's calories, one row per session.
+struct EarnedCaloriesSheet: View {
+    let earned: EarnedCalories.Day
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("+\(Int(earned.earned))")
+                            .font(Neka.display(40, weight: .bold))
+                            .foregroundColor(Neka.orangeText)
+                        Text("calories added to today's budget")
+                            .font(.system(size: 13))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    VStack(spacing: 0) {
+                        ForEach(earned.entries) { e in
+                            HStack(spacing: 12) {
+                                Image(systemName: e.symbol)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(Neka.orangeText)
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Neka.orangeSoft))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(e.name)
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundColor(Neka.ink)
+                                    Text("\(HomeFunCard.timeRange(e.start, e.end)) · \(Self.sourceText(e.source))")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Neka.inkSecondary)
+                                }
+                                Spacer()
+                                Text("+\(Int(e.calories))")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .monospacedDigit()
+                                    .foregroundColor(Neka.ink)
+                            }
+                            .padding(.vertical, 10)
+                            if e.id != earned.entries.last?.id { Divider().overlay(Neka.hairline) }
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .nekaCard()
+                    Text("Watch-recorded workouts use your watch's number. Sessions you logged are estimated from time, distance and your weight. Anything recorded twice counts once.")
+                        .font(.system(size: 11))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(16)
+            }
+            .nekaPageBackground()
+            .navigationTitle("Earned today")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+
+    static func sourceText(_ s: EarnedCalories.Entry.Source) -> String {
+        switch s {
+        case .watch:  return "measured by your watch"
+        case .fun:    return "from heart rate"
+        case .logged: return "estimated from your log"
+        }
     }
 }

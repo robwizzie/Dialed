@@ -27,10 +27,12 @@ struct EatingOutView: View {
     @FocusState private var searching: Bool
 
     private var settings: UserSettings { UserSettings.load() }
-    /// Today's target plus anything fun activity earned back.
+    /// Calories exercise earned back today.
+    @State private var earnedCalories: Double = 0
+
+    /// Today's target plus what exercise earned back.
     private var calorieTarget: Double {
-        (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight))
-            + EarnedCalories.day(context: modelContext).earned
+        (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)) + earnedCalories
     }
     private var proteinTarget: Double { settings.proteinTargetGrams }
 
@@ -53,6 +55,7 @@ struct EatingOutView: View {
             }
         }
         .onAppear(perform: loadToday)
+        .task { earnedCalories = await EarnedCalories.day(context: modelContext).earned }
         .onChange(of: lastMeal) { _, _ in if let restaurant { Task { await plan(restaurant) } } }
     }
 
