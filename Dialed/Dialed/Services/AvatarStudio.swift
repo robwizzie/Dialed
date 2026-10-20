@@ -16,6 +16,9 @@
 //  back to presenting the system Image Playground sheet pre-filled with
 //  the prompt (see `AvatarPlaygroundSheet`).
 //
+//  Any look can be a real photo instead (AvatarStudio+PhotoLooks): when
+//  you've added one and "use my photos" is on, image(for:) returns it.
+//
 //  Looks also carry your fitness stage (AvatarEvolution): when you reach
 //  a new one, the mood looks are redrawn at that stage and the old look is
 //  kept for a before/after "leveled up" moment.
@@ -35,13 +38,21 @@ final class AvatarStudio: ObservableObject {
     static let futureKey = "future"
 
     @Published private(set) var images: [String: UIImage] = [:]
-    @Published private(set) var inProgress: Set<String> = []
+    @Published var inProgress: Set<String> = []
     @Published var lastError: String?
     /// Where the face sits in each avatar (unit coordinates, top-left
     /// origin), so views can frame it instead of center-cropping.
     @Published private(set) var focusPoints: [String: CGPoint] = [:]
     /// Per-look reference photos, keyed like `images`.
     @Published private(set) var references: [String: UIImage] = [:]
+    /// Real photos used as looks instead of the drawing, keyed like `images`.
+    @Published var photoLooks: [String: UIImage] = [:]
+    /// Where the face sits in each photo look.
+    @Published var photoFocusPoints: [String: CGPoint] = [:]
+    /// Use photo looks where you've added them.
+    @Published var usePhotoLooks: Bool {
+        didSet { UserDefaults.standard.set(usePhotoLooks, forKey: "avatar.usePhotoLooks") }
+    }
 
     /// Where you are on the fitness stages right now (nil until there's a
     /// weight to read from).
@@ -87,6 +98,7 @@ final class AvatarStudio: ObservableObject {
 
     private init() {
         isEnabled = UserDefaults.standard.bool(forKey: "avatar.enabled")
+        usePhotoLooks = UserDefaults.standard.object(forKey: "avatar.usePhotoLooks") as? Bool ?? true
         for key in Self.allKeys {
             if let data = try? Data(contentsOf: Self.url(for: key)), let image = UIImage(data: data) {
                 images[key] = image
@@ -95,6 +107,7 @@ final class AvatarStudio: ObservableObject {
             if let data = try? Data(contentsOf: Self.referenceURL(for: key)), let image = UIImage(data: data) {
                 references[key] = image
             }
+            loadPhotoLook(key)
         }
         if let pending = UserDefaults.standard.array(forKey: Self.levelUpKey) as? [Int], pending.count == 2 {
             let before = (try? Data(contentsOf: Self.beforeURL)).flatMap(UIImage.init(data:))
@@ -117,7 +130,8 @@ final class AvatarStudio: ObservableObject {
         defaults.set(settled.level, forKey: Self.stageKey)
         guard settled.leveledUp, let from = stored else { return }
 
-        let before = AvatarMood.allCases.lazy.compactMap { self.images[$0.rawValue] }.first
+        // What you see now (a photo look stays a photo through the redraw).
+        let before = AvatarMood.allCases.lazy.compactMap { self.image(for: $0) }.first
         if let data = before?.pngData() {
             try? FileManager.default.createDirectory(at: Self.directory, withIntermediateDirectories: true)
             try? data.write(to: Self.beforeURL, options: .atomic)
@@ -229,8 +243,22 @@ final class AvatarStudio: ObservableObject {
 
     // MARK: - Generate
 
-    func image(for mood: AvatarMood) -> UIImage? { images[mood.rawValue] }
-    var futureImage: UIImage? { images[Self.futureKey] }
+    /// The look to show: your photo when it wins, else the drawing.
+    func image(for mood: AvatarMood) -> UIImage? { look(for: mood.rawValue) }
+    var futureImage: UIImage? { look(for: Self.futureKey) }
+
+    func look(for key: String) -> UIImage? {
+        switch source(for: key) {
+        case .photo:     return photoLooks[key]
+        case .generated: return images[key]
+        case .none:      return nil
+        }
+    }
+
+    func source(for key: String) -> AvatarLookSource {
+        AvatarLookResolver.source(hasPhoto: photoLooks[key] != nil, hasGenerated: images[key] != nil,
+                                  usePhotos: usePhotoLooks)
+    }
 
     func generate(mood: AvatarMood) async {
         await generate(key: mood.rawValue, prompt: Self.prompt(for: mood))
@@ -283,7 +311,7 @@ final class AvatarStudio: ObservableObject {
 
     /// Fill in the current mood in the background once avatars are on.
     func ensure(mood: AvatarMood) async {
-        guard isEnabled, images[mood.rawValue] == nil, canGenerate,
+        guard isEnabled, images[mood.rawValue] == nil, source(for: mood.rawValue) != .photo, canGenerate,
               referencePhoto(for: mood.rawValue) != nil else { return }
         #if canImport(ImagePlayground)
         // Background fills use only the silent API — never pop a sheet.
@@ -336,8 +364,9 @@ final class AvatarStudio: ObservableObject {
 
     /// Focus point for an image this studio made, or nil (frame centered).
     func focus(of image: UIImage) -> CGPoint? {
-        guard let key = images.first(where: { $0.value === image })?.key else { return nil }
-        return focusPoints[key]
+        if let key = images.first(where: { $0.value === image })?.key { return focusPoints[key] }
+        if let key = photoLooks.first(where: { $0.value === image })?.key { return photoFocusPoints[key] }
+        return nil
     }
 
     private func locateFocus(of image: UIImage, key: String) {

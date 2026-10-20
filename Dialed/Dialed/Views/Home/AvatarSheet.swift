@@ -4,7 +4,8 @@
 //
 //  Your avatar, today's mood and what would move it up, the four mood
 //  looks, and "future you" on your goal day. Tap any look to redo it or
-//  draw it from a different photo.
+//  draw it from a different photo — or use a real photo for it instead
+//  ("Your looks").
 //
 
 import SwiftUI
@@ -29,6 +30,8 @@ struct AvatarSheet: View {
     @State private var pickTarget: PickTarget?
     @State private var showPicker = false
     @State private var pickerItem: PhotosPickerItem?
+    /// The look whose real photo is being edited.
+    @State private var photoSlot: AvatarLookSlot?
 
     init(reading: AvatarMood.Reading, projection: WeightChallengeEngine.Projection?, onGoalChanged: @escaping () -> Void = {}) {
         self.reading = reading
@@ -68,6 +71,7 @@ struct AvatarSheet: View {
                     }
                     boostsCard
                     breakdownCard
+                    AvatarYourLooksCard()
                     moodsCard
                     futureCard
                     Toggle("Show my avatar on Home", isOn: $useOnHome)
@@ -92,6 +96,10 @@ struct AvatarSheet: View {
                 }
             }
             .avatarPlaygroundSheet()
+            .sheet(item: $photoSlot) { slot in
+                AvatarLookEditor(slot: slot)
+                    .presentationDetents([.large])
+            }
             .photosPicker(isPresented: $showPicker, selection: $pickerItem, matching: .images)
             .onChange(of: pickerItem) { _, item in
                 guard let item, let target = pickTarget else { return }
@@ -130,7 +138,10 @@ struct AvatarSheet: View {
             .disabled(studio.referencePhoto(for: key) == nil || studio.inProgress.contains(key))
         }
         Button { pick(.look(key)) } label: {
-            Label("Use a different photo…", systemImage: "photo.on.rectangle")
+            Label("Draw it from a different photo…", systemImage: "photo.on.rectangle")
+        }
+        Button { photoSlot = AvatarLookSlot.allCases.first { $0.key == key } } label: {
+            Label(studio.hasPhotoLook(key) ? "Edit my real photo…" : "Use a real photo instead…", systemImage: "camera")
         }
         if studio.hasCustomReference(key) {
             Button { Task { await studio.clearReference(for: key) } } label: {
@@ -381,6 +392,11 @@ struct AvatarSheet: View {
                 }
                 .frame(height: 140)
                 .overlay(alignment: .topTrailing) { menuDot.padding(8) }
+                .overlay(alignment: .topLeading) {
+                    if studio.source(for: m.rawValue) == .photo {
+                        AvatarSourceBadge(text: "Photo", isPhoto: true).padding(8)
+                    }
+                }
                 .overlay(alignment: .bottomLeading) { referenceBadge(m.rawValue).padding(8) }
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .overlay(

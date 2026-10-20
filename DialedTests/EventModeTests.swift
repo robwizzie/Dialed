@@ -2,8 +2,8 @@
 //  EventModeTests.swift
 //  DialedTests
 //
-//  The wedding run-up: countdown, the look-your-best week, the day itself
-//  (nothing tracked, streaks safe), and the day after.
+//  The wedding run-up: quiet until the last week, the look-your-best week,
+//  the day itself (nothing tracked, streaks safe), and the day after.
 //
 
 import XCTest
@@ -22,7 +22,7 @@ final class EventModeTests: XCTestCase {
 
     func testPhases() {
         let wedding = day(11, 19, hour: 16)
-        XCTAssertEqual(EventMode.phase(event: wedding, now: day(10, 20), calendar: calendar), .countdown(daysLeft: 30))
+        XCTAssertEqual(EventMode.phase(event: wedding, now: day(10, 20), calendar: calendar), .ahead(daysLeft: 30))
         XCTAssertEqual(EventMode.phase(event: wedding, now: day(11, 12), calendar: calendar), .lookYourBest(daysLeft: 7))
         XCTAssertEqual(EventMode.phase(event: wedding, now: day(11, 18, hour: 23), calendar: calendar), .lookYourBest(daysLeft: 1))
         XCTAssertEqual(EventMode.phase(event: wedding, now: day(11, 19, hour: 7), calendar: calendar), .eventDay)
@@ -47,7 +47,7 @@ final class EventModeTests: XCTestCase {
         XCTAssertEqual(late.first { $0.id == "water" }?.title, "Drink normally")
         XCTAssertTrue(late.contains { $0.id == "fiber" })
         XCTAssertTrue(EventMode.checklist(daysLeft: 9, bedtime: nil).isEmpty)
-        XCTAssertEqual(EventMode.countdownTitle("Brother's wedding"), "Suit-fit countdown")
+        XCTAssertTrue(EventMode.isWedding("Brother's wedding"))
     }
 
     func testEventDayDoesNotBreakAStreak() {

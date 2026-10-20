@@ -43,6 +43,9 @@ final class SleepVisualsTests: XCTestCase {
         XCTAssertEqual(clock(t.bedtime), "20 23:45")  // 8 h goal + 45 min
         XCTAssertEqual(clock(t.windDown), "20 23:15")
         XCTAssertEqual(SleepVisuals.countdown(t, now: at(20, 21, 5)), "Wind down in 2 h 10 m")
+        // Only within 3 h of wind-down: not at 10 AM, yes at 9:05 PM.
+        XCTAssertNil(SleepVisuals.countdownIfSoon(t, now: at(20, 10)))
+        XCTAssertEqual(SleepVisuals.countdownIfSoon(t, now: at(20, 21, 5)), "Wind down in 2 h 10 m")
     }
 
     func testAfterMidnightStillPlansForThisMorning() {
@@ -60,5 +63,17 @@ final class SleepVisualsTests: XCTestCase {
         XCTAssertFalse(t.fromSchedule)
         XCTAssertEqual(clock(t.wake), "21 10:17")
         XCTAssertNil(SleepVisuals.tonight(schedule: nil, learnedWakeMinutes: nil, debtHours: 1, now: at(20, 21), calendar: calendar))
+    }
+
+    func testVerdictFoldsInTheWeekAndTheSunRidesTheScore() {
+        let great = SleepVisuals.MorningTier(score: 96)
+        XCTAssertEqual(great.verdict(weekDelta: 3), "Fully charged. Go take the day. 3 above your week.")
+        XCTAssertEqual(great.verdict(weekDelta: 1), great.verdict)   // too small to mention
+        XCTAssertEqual(great.verdict(weekDelta: nil), great.verdict)
+        XCTAssertEqual(SleepVisuals.MorningTier(score: 40).verdict(weekDelta: -8),
+                       "Rough night. Be kind to yourself today. 8 under your week.")
+        XCTAssertEqual(SleepVisuals.arcProgress(score: 96), 0.96, accuracy: 0.001)
+        XCTAssertEqual(SleepVisuals.arcProgress(score: 0), 0.04, accuracy: 0.001)   // still peeks over the horizon
+        XCTAssertEqual(SleepVisuals.arcProgress(score: 120), 1)
     }
 }

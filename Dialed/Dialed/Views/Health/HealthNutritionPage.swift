@@ -255,7 +255,7 @@ struct HealthNutritionPage: View {
                         .frame(width: 32, height: 32)
                         .background(Circle().fill(Neka.track))
                 }
-                .accessibilityLabel("Log a meal")
+                .accessibilityLabel("Log food")
             }
 
             GeometryReader { geo in

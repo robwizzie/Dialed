@@ -10,8 +10,8 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, wakeSuggestion, event, finalPush, wrapped, suggestions, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
-         weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
+    case morning, wakeSuggestion, event, finalPush, wrapped, suggestions, hero, today, quests, fuel, proteinPace, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
+         weeklyReview, patterns, badges, paths, aiBrief, body, tiles, mealPlan, timeline, coach
 
     var id: String { rawValue }
 
@@ -19,7 +19,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         switch self {
         case .morning:      return "Morning brief"
         case .wakeSuggestion: return "Wake-up suggestion"
-        case .event:        return "Big day countdown"
+        case .event:        return "Big day"
         case .finalPush:    return "Final push"
         case .wrapped:      return "Dialed Wrapped"
         case .hero:         return "Photo & vitals"
@@ -88,7 +88,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         switch self {
         case .morning:      return "Mornings until noon"
         case .wakeSuggestion: return "When your calendar changes a morning"
-        case .event:        return "Before, on and after your event"
+        case .event:        return "Last week before and on your event"
         case .finalPush:    return "Last 14 days of a challenge"
         case .wrapped:      return "Around the challenge's end"
         case .tomorrow:     return "Evenings"
@@ -159,15 +159,26 @@ struct HomeLayout: Equatable {
             order.insert(HomeSection.suggestions.rawValue, at: anchor.map { $0 + 1 } ?? 0)
             defaults.set(order, forKey: orderKey)
         }
+        // Once: Fuel (where you log food) moves up under today's score and
+        // quests, where people look for it.
+        if !defaults.bool(forKey: fuelUpKey) {
+            defaults.set(true, forKey: fuelUpKey)
+            order.removeAll { $0 == HomeSection.fuel.rawValue }
+            let anchor = [HomeSection.quests, .today, .hero].compactMap { order.firstIndex(of: $0.rawValue) }.first
+            order.insert(HomeSection.fuel.rawValue, at: anchor.map { $0 + 1 } ?? 0)
+            defaults.set(order, forKey: orderKey)
+        }
         return HomeLayout(savedOrder: order, savedHidden: defaults.stringArray(forKey: hiddenKey) ?? [])
     }
 
     private static let suggestionsTopKey = "home.layout.suggestionsTop.v1"
+    private static let fuelUpKey = "home.layout.fuelUp.v1"
 
     func save(_ defaults: UserDefaults = .standard) {
         defaults.set(order.map(\.rawValue), forKey: Self.orderKey)
         defaults.set(hidden.map(\.rawValue).sorted(), forKey: Self.hiddenKey)
         defaults.set(true, forKey: Self.suggestionsTopKey)
+        defaults.set(true, forKey: Self.fuelUpKey)
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 

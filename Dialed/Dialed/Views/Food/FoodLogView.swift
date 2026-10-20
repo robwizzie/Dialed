@@ -248,7 +248,7 @@ struct FoodLogView: View {
             // the same sheet you get from Home and the + menu.
             HStack(spacing: 10) {
                 Button { adding = AddRequest(method: nil) } label: {
-                    Label("Add food", systemImage: "plus")
+                    Label("Log food", systemImage: "plus")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.nekaPrimary)

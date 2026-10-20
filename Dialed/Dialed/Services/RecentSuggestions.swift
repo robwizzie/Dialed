@@ -23,7 +23,8 @@ enum RecentSuggestions {
         var items: [DaySuggestions.Item] = []
         for back in 0...max(1, days) {
             guard let day = calendar.date(byAdding: .day, value: -back, to: calendar.startOfDay(for: now)) else { continue }
-            items += await forDay(day, context: context)
+            // One slow day (a Health or Google query that stalls) can't hold up the card.
+            items += await DayLoadKit.withTimeout(seconds: 8) { await forDay(day, context: context) } ?? []
         }
         let sorted = items.sorted { $0.start > $1.start }
         cache = (now, sorted)
@@ -41,6 +42,17 @@ enum RecentSuggestions {
                                       dismissed: dismissed, calendar: calendar)
     }
 
+    /// What's waiting from one day, when the day's stretches and watch
+    /// sessions are already in hand (Home's past-day view loads them once).
+    static func pending(on date: Date, bouts: [ActiveBouts.Bout], workouts: [DetectedWorkout],
+                        context: ModelContext) -> [DaySuggestions.Item] {
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let logged: Set<Date> = PlanWorkoutLogStore.log(for: WorkoutPlanStore.key(day), context: context) == nil ? [] : [day]
+        return DaySuggestions.pending(bouts: bouts, workouts: workouts, loggedDays: logged,
+                                      dismissed: dismissed, calendar: calendar)
+    }
+
     /// "Not this one": bouts go through FunActivityService, watch sessions here.
     static func dismiss(_ item: DaySuggestions.Item) {
         switch item.kind {
@@ -55,7 +67,10 @@ enum RecentSuggestions {
         invalidate()
     }
 
-    static func invalidate() { cache = nil }
+    static func invalidate() {
+        cache = nil
+        DayRecapStore.shared.invalidate()
+    }
 
     private static var dismissed: Set<String> {
         Set(UserDefaults.standard.stringArray(forKey: dismissedKey) ?? [])

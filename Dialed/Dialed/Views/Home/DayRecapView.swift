@@ -2,157 +2,80 @@
 //  DayRecapView.swift
 //  Dialed
 //
-//  Any past day at a glance: the Dialed score, the night before, food,
-//  protein and water against target, the mile, workouts, calories earned,
-//  the weigh-in, suggested activity and quests. Step a day with the chevrons
-//  or a swipe, or jump with the calendar. Anything still waiting from that
+//  A past day, shown right on Home when you step back with the header's
+//  date control: the Dialed score, the night before, food, protein and
+//  water against target, the mile, workouts, calories earned, suggested
+//  activity, the weigh-in and quests. Every card fills in on its own as
+//  its data arrives (DayRecapStore), and anything still waiting from that
 //  day (an unnamed stretch, a watch session you never logged) can be
-//  added right here.
+//  reviewed and added here.
 //
 
 import SwiftUI
 import SwiftData
 
-struct DayRecapView: View {
-    @Environment(\.modelContext) private var context
-    @StateObject private var model = HealthDetailModel()
-    @State private var date: Date
-    @State private var picking = false
-    @State private var loading = true
+struct DayRecapContent: View {
+    let date: Date
 
-    @State private var miles: Double?
-    @State private var snapshot: DailyScoreSnapshot?
-    @State private var workoutLog: PlanWorkoutLog?
-    @State private var setsDone = 0
-    @State private var watchWorkouts: [DetectedWorkout] = []
-    @State private var earned = EarnedCalories.Day()
-    @State private var active: [ContextEvent] = []
-    @State private var quests: (done: Int, xp: Int)?
-    @State private var suggestions: [DaySuggestions.Item] = []
+    @Environment(\.modelContext) private var context
+    @ObservedObject private var store = DayRecapStore.shared
     @State private var naming: HomeFunCard.NamingTarget?
+    @State private var reviewing: ActiveBouts.Bout?
     @State private var logging: DetectedWorkout?
 
-    private let calendar = Calendar.current
-
-    init(date: Date) {
-        _date = State(initialValue: Calendar.current.startOfDay(for: date))
-    }
+    private var day: DayRecapStore.Day? { store.day(date) }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                dayBar
-                if loading {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
-                } else {
-                    scoreCard
-                    if !suggestions.isEmpty { suggestionsCard }
-                    sleepCard
-                    fuelCard
-                    moveCard
-                    if quests != nil || weighIn != nil { extrasCard }
-                }
-            }
-            .padding(16)
-            .padding(.bottom, 24)
+        VStack(alignment: .leading, spacing: 16) {
+            scoreCard
+            if let items = day?.suggestions, !items.isEmpty { suggestionsCard(items) }
+            sleepCard
+            fuelCard
+            moveCard
+            extrasCard
         }
-        .nekaPageBackground()
-        .navigationTitle(DayNavigation.label(date))
-        .navigationBarTitleDisplayMode(.inline)
-        .simultaneousGesture(DragGesture(minimumDistance: 30).onEnded { value in
-            guard abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
-            if value.translation.width > 60 { step(-1) }
-            if value.translation.width < -60, DayNavigation.canGoForward(date) { step(1) }
-        })
-        .task(id: date) { await load() }
-        .sheet(isPresented: $picking) {
-            DayPickerSheet(selection: date) { picked in
-                withAnimation { date = calendar.startOfDay(for: picked) }
-            }
-            .presentationDetents([.medium, .large])
+        .task(id: "\(DayLoadKit.key(date))-\(store.version)") {
+            await store.load(date, context: context)
         }
         .sheet(item: $naming) { target in
-            FunActivitySheet(target: target) {
-                RecentSuggestions.invalidate()
-                Task { await load() }
-            }
-            .presentationDetents([.medium, .large])
+            FunActivitySheet(target: target) { RecentSuggestions.invalidate() }
+                .presentationDetents([.medium, .large])
         }
-        .sheet(item: $logging, onDismiss: {
-            RecentSuggestions.invalidate()
-            Task { await load() }
-        }) { w in
+        .sheet(item: $reviewing) { bout in
+            ActivityReviewSheet(bout: bout)
+                .presentationDetents([.large])
+        }
+        .sheet(item: $logging, onDismiss: { RecentSuggestions.invalidate() }) { w in
             WorkoutLoggerView(day: date, session: WorkoutPlanStore.session(on: date), detected: [w])
                 .presentationDetents([.large])
         }
     }
 
-    private func step(_ days: Int) {
-        withAnimation(.easeOut(duration: 0.2)) { date = DayNavigation.step(date, by: days) }
-        #if os(iOS)
-        UISelectionFeedbackGenerator().selectionChanged()
-        #endif
-    }
-
-    // MARK: - Day bar
-
-    private var dayBar: some View {
-        HStack(spacing: 10) {
-            chevron("chevron.left", enabled: true) { step(-1) }
-                .accessibilityLabel("Previous day")
-            Button { picking = true } label: {
-                VStack(spacing: 2) {
-                    Text(DayNavigation.label(date))
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                    Text(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                        .font(.system(size: 12))
-                        .foregroundColor(Neka.inkSecondary)
-                }
-                .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Pick a day")
-            chevron("chevron.right", enabled: DayNavigation.canGoForward(date)) { step(1) }
-                .accessibilityLabel("Next day")
-        }
-    }
-
-    private func chevron(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(enabled ? Neka.ink : Neka.inkTertiary)
-                .frame(width: 42, height: 42)
-                .background(Circle().fill(Neka.surface))
-                .shadow(color: .black.opacity(0.05), radius: 6, y: 3)
-        }
-        .buttonStyle(.dialedScale)
-        .disabled(!enabled)
-    }
-
     // MARK: - Score
 
-    private var dialedScore: Int {
-        let n = model.nutrition
-        return DialedScore.compute(waterOz: n.waterOz, waterTargetOz: n.waterTargetOz, protein: n.protein,
-                                   proteinTarget: n.proteinTarget, calories: n.calories,
-                                   calorieTarget: n.calorieTarget + earned.earned, miles: miles)
+    private var dialedScore: Int? {
+        guard let d = day else { return nil }
+        let budget = d.calorieTarget + (d.earned?.earned ?? 0)
+        return DialedScore.compute(waterOz: d.waterOz, waterTargetOz: d.waterTarget, protein: d.protein,
+                                   proteinTarget: d.proteinTarget, calories: d.calories,
+                                   calorieTarget: budget, miles: d.miles)
     }
 
     private var scoreCard: some View {
-        HStack(spacing: 18) {
+        let score = dialedScore ?? 0
+        let color = score >= 80 ? Neka.green : score >= 55 ? Neka.amber : Neka.rose
+        return HStack(spacing: 18) {
             ZStack {
                 Circle().stroke(Neka.track, lineWidth: 10)
                 Circle()
-                    .trim(from: 0, to: Double(dialedScore) / 100)
-                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 10, lineCap: .round))
+                    .trim(from: 0, to: Double(score) / 100)
+                    .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                 VStack(spacing: 0) {
-                    Text("\(dialedScore)")
+                    Text(dialedScore.map(String.init) ?? "–")
                         .font(Neka.display(30, weight: .bold))
                         .foregroundColor(Neka.ink)
-                        .contentTransition(.numericText(value: Double(dialedScore)))
+                        .contentTransition(.numericText(value: Double(score)))
                     Text("DIALED")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(0.8)
@@ -161,15 +84,15 @@ struct DayRecapView: View {
             }
             .frame(width: 96, height: 96)
             VStack(alignment: .leading, spacing: 8) {
-                Text(verdict)
+                Text(dialedScore == nil ? "Pulling that day together…" : Self.verdict(score))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(Neka.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                if let s = snapshot {
+                if let p = day?.pillars {
                     HStack(spacing: 6) {
-                        pillar("Recovery", s.recoveryScore)
-                        pillar("Readiness", s.readinessScore)
-                        pillar("Strain", s.strainScore)
+                        pillar("Recovery", p.recovery)
+                        pillar("Readiness", p.readiness)
+                        pillar("Strain", p.strain)
                     }
                 }
             }
@@ -177,14 +100,11 @@ struct DayRecapView: View {
         }
         .padding(16)
         .nekaCard(wash: .mint)
+        .animation(.easeOut(duration: 0.25), value: dialedScore)
     }
 
-    private var scoreColor: Color {
-        dialedScore >= 80 ? Neka.green : dialedScore >= 55 ? Neka.amber : Neka.rose
-    }
-
-    private var verdict: String {
-        switch dialedScore {
+    static func verdict(_ score: Int) -> String {
+        switch score {
         case 85...: return "Dialed in. That's the blueprint."
         case 70..<85: return "Solid day with a little left on the table."
         case 50..<70: return "Half there. Water, protein and the mile add up."
@@ -209,16 +129,18 @@ struct DayRecapView: View {
 
     // MARK: - Suggestions
 
-    private var suggestionsCard: some View {
+    private func suggestionsCard(_ items: [DaySuggestions.Item]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Still waiting from this day", systemImage: "sparkles")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Neka.ink)
-            ForEach(suggestions) { item in
-                SuggestionRow(item: item, showsDay: false, onAdd: { add(item) }, onDismiss: {
-                    RecentSuggestions.dismiss(item)
-                    withAnimation { suggestions.removeAll { $0.id == item.id } }
-                })
+            ForEach(items) { item in
+                SuggestionRow(item: item, showsDay: false,
+                              onOpen: item.bout.map { b -> () -> Void in { reviewing = b } },
+                              onAdd: { add(item) },
+                              onDismiss: {
+                                  RecentSuggestions.dismiss(item)
+                              })
             }
         }
         .padding(16)
@@ -236,11 +158,15 @@ struct DayRecapView: View {
 
     @ViewBuilder
     private var sleepCard: some View {
-        if let night = model.lastNight {
-            let score = HealthInsights.sleepScore(night)
+        if let night = day?.night {
             row(icon: "moon.stars.fill", tint: Neka.lavender, fill: Neka.lavenderSoft,
                 title: "Slept \(Self.hours(night.asleepMinutes))",
-                detail: "\(night.bedtime.formatted(date: .omitted, time: .shortened)) → \(night.wakeTime.formatted(date: .omitted, time: .shortened)) · score \(score)")
+                detail: "\(night.bedtime.formatted(date: .omitted, time: .shortened)) → \(night.wakeTime.formatted(date: .omitted, time: .shortened)) · score \(HealthInsights.sleepScore(night))")
+                .padding(14)
+                .nekaCard()
+        } else if day != nil {
+            row(icon: "moon.zzz", tint: Neka.inkTertiary, fill: Neka.track,
+                title: "No sleep recorded", detail: "Nothing synced for the night before")
                 .padding(14)
                 .nekaCard()
         }
@@ -249,13 +175,16 @@ struct DayRecapView: View {
     // MARK: - Food
 
     private var fuelCard: some View {
-        let n = model.nutrition
-        let budget = n.calorieTarget + earned.earned
+        let d = day ?? DayRecapStore.Day()
+        let budget = d.calorieTarget + (d.earned?.earned ?? 0)
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Fuel")
                     .font(Neka.title)
                     .foregroundColor(Neka.ink)
+                if day?.loaded.contains(.health) == false {
+                    ProgressView().controlSize(.mini)
+                }
                 Spacer()
                 NavigationLink {
                     FoodLogView(day: date)
@@ -268,10 +197,10 @@ struct DayRecapView: View {
                         .background(Capsule().fill(Neka.track))
                 }
             }
-            bar("Calories", n.calories, budget, unit: "", tint: n.calories > budget ? Neka.rose : Neka.green)
-            bar("Protein", n.protein, n.proteinTarget, unit: " g", tint: Neka.orange)
-            bar("Water", n.waterOz, n.waterTargetOz, unit: " oz", tint: Neka.sky)
-            if earned.earned > 0 {
+            bar("Calories", d.calories, budget, unit: "", tint: d.calories > budget ? Neka.rose : Neka.green)
+            bar("Protein", d.protein, d.proteinTarget, unit: " g", tint: Neka.orange)
+            bar("Water", d.waterOz, d.waterTarget, unit: " oz", tint: Neka.sky)
+            if let earned = d.earned, earned.earned > 0 {
                 Text("Budget includes +\(Int(earned.earned)) calories earned (\(earned.sources)).")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkSecondary)
@@ -279,6 +208,7 @@ struct DayRecapView: View {
         }
         .padding(16)
         .nekaCard()
+        .redacted(reason: day == nil ? .placeholder : [])
     }
 
     private func bar(_ title: String, _ value: Double, _ target: Double, unit: String, tint: Color) -> some View {
@@ -300,57 +230,71 @@ struct DayRecapView: View {
     // MARK: - Move
 
     private var moveCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Move")
-                .font(Neka.title)
-                .foregroundColor(Neka.ink)
-            let mi = miles ?? 0
+        let d = day ?? DayRecapStore.Day()
+        let mi = d.miles ?? 0
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Move")
+                    .font(Neka.title)
+                    .foregroundColor(Neka.ink)
+                if let d = day, !d.loaded.isSuperset(of: [.watch, .earned, .activity]) {
+                    ProgressView().controlSize(.mini)
+                }
+            }
             row(icon: "figure.walk", tint: Neka.lavenderText, fill: Neka.lavenderSoft,
                 title: mi >= MileADay.goal ? "Mile done · \(String(format: "%.1f", mi)) mi" : String(format: "%.2f mi", mi),
-                detail: mi >= MileADay.goal ? "Streak kept alive" : "Short of the mile")
-            if let log = workoutLog {
+                detail: [mi >= MileADay.goal ? "Streak kept alive" : "Short of the mile",
+                         d.steps.map { "\(Int($0).formatted()) steps" }].compactMap { $0 }.joined(separator: " · "))
+            if let title = d.workoutTitle {
                 row(icon: "dumbbell.fill", tint: Neka.greenText, fill: Neka.greenSoft,
-                    title: log.title, detail: setsDone > 0 ? "\(setsDone) sets logged" : "Logged")
+                    title: title, detail: d.setsDone > 0 ? "\(d.setsDone) sets logged" : "Logged")
             }
-            ForEach(watchWorkouts) { w in
+            ForEach(d.watch ?? []) { w in
                 row(icon: w.isCardio ? WorkoutLoggerView.cardioSymbol(WorkoutDetector.title(for: w.kind)) : "applewatch",
                     tint: Neka.sky, fill: Neka.skySoft, title: "\(w.title) · \(Int(w.minutes.rounded())) min",
                     detail: [w.timeText, w.calories.map { "\($0) cal" }, w.source].compactMap { $0 }.joined(separator: " · "))
             }
-            ForEach(active, id: \.id) { e in
-                row(icon: ActiveBouts.symbol(for: e.text ?? ""), tint: Neka.orangeText, fill: Neka.orangeSoft,
-                    title: e.text ?? "Activity",
-                    detail: "\(e.timestamp.formatted(date: .omitted, time: .shortened)) · \(Int(e.value ?? 0)) min" + (e.secondaryValue.map { " · ~\(Int($0)) cal" } ?? ""))
+            ForEach(d.moments ?? []) { m in
+                row(icon: ActiveBouts.symbol(for: m.name), tint: Neka.orangeText, fill: Neka.orangeSoft,
+                    title: m.name,
+                    detail: "\(m.start.formatted(date: .omitted, time: .shortened)) · \(Int(m.minutes)) min" + (m.calories.map { " · ~\(Int($0)) cal" } ?? ""))
             }
-            if earned.earned > 0 {
+            if let earned = d.earned, earned.earned > 0 {
                 Label("+\(Int(earned.earned)) calories earned", systemImage: "flame.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Neka.orangeText)
             }
+            if let d = day, !d.failed.intersection([.watch, .earned, .activity]).isEmpty {
+                Text("Some watch data didn't come back in time. Pull down to try again.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
+            }
         }
         .padding(16)
         .nekaCard()
+        .redacted(reason: day == nil ? .placeholder : [])
     }
 
     // MARK: - Extras
 
-    private var weighIn: Double? {
-        model.weight.first { calendar.isDate($0.date, inSameDayAs: date) }?.value
-    }
-
+    @ViewBuilder
     private var extrasCard: some View {
-        VStack(spacing: 10) {
-            if let w = weighIn {
-                row(icon: "scalemass.fill", tint: Neka.greenText, fill: Neka.greenSoft,
-                    title: String(format: "Weighed in at %.1f lb", w), detail: "Morning weigh-in")
+        let weighIn = day?.weighIn ?? nil
+        let quests = day?.quests
+        if weighIn != nil || quests != nil {
+            VStack(spacing: 10) {
+                if let w = weighIn {
+                    row(icon: "scalemass.fill", tint: Neka.greenText, fill: Neka.greenSoft,
+                        title: String(format: "Weighed in at %.1f lb", w), detail: "That morning's weigh-in")
+                }
+                if let q = quests {
+                    row(icon: "checklist.checked", tint: Neka.amber, fill: Neka.amberSoft,
+                        title: "\(q.done) of 3 quests", detail: "+\(q.xp) XP")
+                }
             }
-            if let q = quests {
-                row(icon: "checklist.checked", tint: Neka.amber, fill: Neka.amberSoft,
-                    title: "\(q.done) of 3 quests", detail: "+\(q.xp) XP")
-            }
+            .padding(14)
+            .nekaCard()
         }
-        .padding(14)
-        .nekaCard()
     }
 
     private func row(icon: String, tint: Color, fill: Color, title: String, detail: String) -> some View {
@@ -374,62 +318,28 @@ struct DayRecapView: View {
     }
 
     static func hours(_ minutes: Int) -> String { "\(minutes / 60)h \(minutes % 60)m" }
-
-    // MARK: - Load
-
-    private func load() async {
-        let day = date
-        loading = snapshot == nil && workoutLog == nil && model.nights.isEmpty
-        model.day = day
-        await model.load(context: context)
-        guard day == date else { return }
-
-        miles = MileHistory.load()?.day(day)?.miles
-        let snapshots = (try? context.fetch(FetchDescriptor<DailyScoreSnapshot>(predicate: #Predicate { $0.logicalDate == day }))) ?? []
-        snapshot = snapshots.first
-        workoutLog = PlanWorkoutLogStore.log(for: WorkoutPlanStore.key(day), context: context)
-        setsDone = workoutLog.map { PlanWorkoutLogStore.sets(for: $0.id, context: context).filter(\.completed).count } ?? 0
-        watchWorkouts = await WorkoutDetector.workouts(on: day, context: context)
-        earned = await EarnedCalories.day(day, context: context)
-        active = await FunActivityService.day(day, context: context).logged
-        if let q = GameStore.load().days[WeeklyReview.dayKey(day)], !q.done.isEmpty {
-            quests = (q.done.count, q.done.values.reduce(0, +) + (q.swept ? QuestEngine.sweepBonus : 0))
-        } else {
-            quests = nil
-        }
-        suggestions = calendar.isDateInToday(day) ? [] : await RecentSuggestions.forDay(day, context: context)
-        guard day == date else { return }
-        withAnimation(.easeOut(duration: 0.2)) { loading = false }
-    }
 }
 
 // MARK: - Shared pieces
 
-/// One waiting item: "Active 58 min · 4:12 PM · ~560 cal   [Add] ✕".
+/// One waiting item: "Active 58 min · 4:12 PM · ~560 cal   [Name it] ✕".
+/// Tapping the row itself (when `onOpen` is set) opens a closer look.
 struct SuggestionRow: View {
     let item: DaySuggestions.Item
     var showsDay = true
+    var onOpen: (() -> Void)? = nil
     var onAdd: () -> Void
     var onDismiss: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: item.kind == .activity ? "waveform.path.ecg" : "applewatch")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(item.kind == .activity ? Neka.rose : Neka.sky)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(item.kind == .activity ? Neka.roseSoft : Neka.skySoft))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                    .lineLimit(1)
-                Text(detail)
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                    .lineLimit(1)
+            if let onOpen {
+                Button(action: onOpen) { summary.contentShape(Rectangle()) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Review the heart rate")
+            } else {
+                summary
             }
-            Spacer(minLength: 4)
             Button(action: onAdd) {
                 Text(item.kind == .activity ? "Name it" : "Log it")
                     .font(.system(size: 12, weight: .semibold))
@@ -448,6 +358,27 @@ struct SuggestionRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Dismiss")
+        }
+    }
+
+    private var summary: some View {
+        HStack(spacing: 12) {
+            Image(systemName: item.kind == .activity ? "waveform.path.ecg" : "applewatch")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(item.kind == .activity ? Neka.rose : Neka.sky)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(item.kind == .activity ? Neka.roseSoft : Neka.skySoft))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 4)
         }
     }
 
