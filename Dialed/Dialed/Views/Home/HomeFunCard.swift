@@ -2,7 +2,7 @@
 //  HomeFunCard.swift
 //  Dialed
 //
-//  "Bonus burn" on Home: the stretches your heart rate gave away
+//  "Suggested activity" on Home: the stretches your heart rate gave away
 //  (tap a "?" to say what it was, with your usual picks first), the ones
 //  you've named, and anything your watch recorded that isn't the gym —
 //  laid out on a strip of your day, 6 AM to midnight, with the minutes
@@ -24,7 +24,7 @@ struct HomeFunCard: View {
     @State private var pulse = false
 
     /// Shown in the header, Customize Home and the naming sheet.
-    static let title = "Bonus burn"
+    static let title = "Suggested activity"
 
     enum NamingTarget: Identifiable {
         case bout(ActiveBouts.Bout)
@@ -351,7 +351,7 @@ struct ActiveMomentsStrip: View {
             .foregroundColor(Neka.inkTertiary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(items.isEmpty ? "No bonus activity yet today" : "\(items.count) bonus activities today")
+        .accessibilityLabel(items.isEmpty ? "No suggested activity yet today" : "\(items.count) suggested activities today")
     }
 
     @ViewBuilder
