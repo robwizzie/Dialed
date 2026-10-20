@@ -81,6 +81,8 @@ enum SmartReminders {
         if let review = ReminderPlanner.weeklyReview(now: now, settings: settings) {
             reminders.append(review)
         }
+        // The big day (a wedding): no nudges at all.
+        reminders.removeAll { EventModeStore.isEventDay($0.fireDate) }
         await replacePending(with: reminders)
         scheduleBackgroundRefresh()
     }
