@@ -391,45 +391,98 @@ struct WorkoutPlanView: View {
     }
 }
 
-/// Home card: today's session at a glance, with a quick done check.
+/// Home card: today's session at a glance, what your watch already
+/// recorded, and a one-tap "I worked out" that opens the logger with the
+/// times filled in.
 struct HomeWorkoutCard: View {
     @AppStorage(WorkoutPlanStore.doneKey) private var doneRaw = ""
+    @Environment(\.modelContext) private var context
+    @State private var detected: [DetectedWorkout] = []
+    @State private var lookedAt: Date?
     var onOpen: () -> Void
+    var onLog: ([DetectedWorkout]) -> Void = { _ in }
 
     var body: some View {
         let today = Calendar.current.startOfDay(for: Date())
         let s = WorkoutPlanStore.session(on: today)
         let key = WorkoutPlanStore.key(today)
         let isDone = doneRaw.split(separator: ",").contains { $0 == key }
-        return Button(action: onOpen) {
-            HStack(spacing: 14) {
-                Image(systemName: isDone ? "checkmark" : s.symbol)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(isDone ? Neka.onInk : Neka.ink)
-                    .frame(width: 48, height: 48)
-                    .background(Circle().fill(isDone ? Neka.green : Neka.greenSoft))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(isDone ? "TODAY'S WORKOUT · DONE" : "TODAY'S WORKOUT")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.8)
+        return VStack(alignment: .leading, spacing: 12) {
+            Button(action: onOpen) {
+                HStack(spacing: 14) {
+                    Image(systemName: isDone ? "checkmark" : s.symbol)
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(isDone ? Neka.onInk : Neka.ink)
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(isDone ? Neka.green : Neka.greenSoft))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(isDone ? "TODAY'S WORKOUT · DONE" : "TODAY'S WORKOUT")
+                            .font(.system(size: 10, weight: .bold))
+                            .tracking(0.8)
+                            .foregroundColor(Neka.inkTertiary)
+                        Text(s.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                            .lineLimit(1)
+                        Text([s.minutes > 0 ? "\(s.minutes) min" : nil, s.walk].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Neka.inkTertiary)
-                    Text(s.title)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .lineLimit(1)
-                    Text([s.minutes > 0 ? "\(s.minutes) min" : nil, s.walk].compactMap { $0 }.joined(separator: " · "))
-                        .font(.system(size: 12))
+                }
+            }
+            .buttonStyle(.plain)
+
+            ForEach(detected) { w in
+                HStack(spacing: 8) {
+                    Image(systemName: w.isCardio ? WorkoutLoggerView.cardioSymbol(WorkoutDetector.title(for: w.kind)) : "dumbbell.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Neka.greenText)
+                    Text(detectedLine(w))
+                        .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Neka.inkSecondary)
                         .lineLimit(1)
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Neka.inkTertiary)
             }
-            .padding(14)
-            .nekaCard(wash: .mint)
+
+            Button { onLog(detected) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: isDone ? "square.and.pencil" : (detected.isEmpty ? "plus" : "checkmark"))
+                    Text(isDone ? "Edit today's log" : (detected.isEmpty ? "I worked out" : "Log what you did"))
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isDone ? Neka.ink : Neka.onInk)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Capsule().fill(isDone ? Neka.track : Neka.ink))
+            }
+            .buttonStyle(.dialedScale)
         }
-        .buttonStyle(.dialedScale)
+        .padding(14)
+        .nekaCard(wash: .mint)
+        .task { await refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
+            // Autosave posts this every few seconds; health doesn't change that fast.
+            if Date().timeIntervalSince(lookedAt ?? .distantPast) > 120 { Task { await refresh() } }
+        }
+    }
+
+    /// "Apple Watch · Strength 6:15–6:45 PM · 210 cal"
+    private func detectedLine(_ w: DetectedWorkout) -> String {
+        var parts = ["\(w.source) · \(w.title) \(w.timeText)"]
+        if let mi = w.miles { parts.append(String(format: "%.2f mi", mi)) }
+        if let cal = w.calories, cal > 0 { parts.append("\(cal) cal") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func refresh() async {
+        lookedAt = Date()
+        let found = await WorkoutDetector.workouts(on: Date(), context: context)
+        withAnimation(.easeOut(duration: 0.25)) { detected = found }
     }
 }

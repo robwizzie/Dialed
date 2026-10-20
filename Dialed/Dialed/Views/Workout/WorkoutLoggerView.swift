@@ -8,8 +8,11 @@
 //  finish it (starts the optional 60/90 s rest timer), add/remove sets
 //  and notes. Bike / walk days log duration and distance. Or just type
 //  what you did ("bench 185x8x4, squat 225 5x5") and the sets fill in.
-//  Saving stores the sets in SwiftData, checks the day off, and adjusts
-//  the rest of the week if you trained a different day's workout.
+//  Or write it like a text ("1 set of 10 for 135, then 3 sets of 10 of
+//  100 on the pec deck… worked out 6:15-6:45, ran a mile first"). It
+//  saves as you go; Done checks the day off and adjusts the rest of the
+//  week if you trained a different day's workout. Workouts your watch
+//  recorded (Apple Health, Google Health) fill in the time and cardio.
 //
 
 import SwiftUI
@@ -18,6 +21,8 @@ import SwiftData
 struct WorkoutLoggerView: View {
     let day: Date
     let session: WorkoutProgram.Session
+    /// Watch sessions found for this day (times, runs) to start from.
+    var detected: [DetectedWorkout] = []
     var onSaved: () -> Void = {}
 
     @Environment(\.modelContext) private var context
@@ -36,6 +41,18 @@ struct WorkoutLoggerView: View {
     @State private var reading = false
     @State private var typedResult: String?
     @State private var summary: [String]?
+    @State private var startedAt: Date?
+    @State private var endedAt: Date?
+    @State private var cardioKind: String?
+    @State private var cardioMinutes: Double?
+    @State private var cardioMiles: Double?
+    @State private var known: [String] = []
+    @State private var newExercise = ""
+    @State private var addingExercise = false
+    @State private var savedAt: Date?
+    @State private var savedFingerprint = ""
+    @State private var autosave: Task<Void, Never>?
+    @State private var watch: [DetectedWorkout] = []
     @FocusState private var typing: Bool
 
     private var isCardio: Bool { session.kind == .bike || session.kind == .walk }
@@ -70,6 +87,7 @@ struct WorkoutLoggerView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     header
                     typeCard
+                    whenCard
                     if isCardio {
                         cardioCard
                     } else {
@@ -78,6 +96,7 @@ struct WorkoutLoggerView: View {
                     ForEach($exercises) { $exercise in
                         exerciseCard($exercise)
                     }
+                    if !isCardio { addExerciseCard }
                     notesCard
                     if hasExistingLog {
                         Button(role: .destructive) { confirmDelete = true } label: {
@@ -94,16 +113,28 @@ struct WorkoutLoggerView: View {
             }
             .scrollDismissesKeyboard(.interactively)
             .nekaPageBackground()
-            .navigationTitle(session.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Close") { closeKeepingChanges() }
+                }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(session.title)
+                            .font(.system(size: 15, weight: .semibold))
+                            .lineLimit(1)
+                        savedStatus
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("Done") { save() }
                         .fontWeight(.semibold)
                 }
+            }
+            .onChange(of: fingerprint) { _, _ in scheduleAutosave() }
+            .onDisappear {
+                flushAutosave()
+                if hasExistingLog { onSaved() }
             }
             .safeAreaInset(edge: .bottom) {
                 if let end = restEndsAt {
@@ -116,6 +147,7 @@ struct WorkoutLoggerView: View {
                 Text("The sets are removed and the day is unchecked in your plan.")
             }
             .onAppear(perform: loadIfNeeded)
+            .task { await lookForWatchWorkouts() }
             .alert("Saved", isPresented: Binding(get: { summary != nil }, set: { if !$0 { finish() } })) {
                 Button("Nice", role: .cancel) {}
             } message: {
@@ -129,11 +161,11 @@ struct WorkoutLoggerView: View {
     /// Type (or dictate) what you did; the sets fill in below.
     private var typeCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Type what you did", systemImage: "keyboard")
+            Label("Tell it what you did", systemImage: "text.bubble")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(Neka.ink)
-            TextField("bench 185x8x4, squat 225 5x5, lat pulldown 120 3x10", text: $typed, axis: .vertical)
-                .lineLimit(2...6)
+            TextField("Bench 135 for 10, 145 for 10, 155 for 8. Then pec deck 3 sets of 10 at 100. Worked out 6:15-6:45, ran a mile first.", text: $typed, axis: .vertical)
+                .lineLimit(3...10)
                 .font(.system(size: 15))
                 .focused($typing)
                 .padding(12)
@@ -144,7 +176,7 @@ struct WorkoutLoggerView: View {
                 } label: {
                     HStack(spacing: 6) {
                         if reading { ProgressView().tint(Neka.onInk) } else { Image(systemName: "wand.and.stars") }
-                        Text(reading ? "Reading…" : "Fill in sets")
+                        Text(reading ? "Reading…" : "Add to workout")
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(Neka.onInk)
@@ -155,7 +187,7 @@ struct WorkoutLoggerView: View {
                 .buttonStyle(.dialedScale)
                 .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty || reading)
                 Spacer()
-                Text("weight × reps × sets, or sets × reps @ weight")
+                Text("Write it like a text, or 185x8x4")
                     .font(.system(size: 10))
                     .foregroundColor(Neka.inkTertiary)
                     .multilineTextAlignment(.trailing)
@@ -174,26 +206,80 @@ struct WorkoutLoggerView: View {
         typing = false
         reading = true
         defer { reading = false }
-        let known = exercises.map(\.name) + Self.allPlanExercises
-        var parsed = WorkoutTextParser.parse(typed, known: known)
-        if parsed.isEmpty, let ai = await DialedAI.parseWorkout(typed) {
-            parsed = ai.map { e in
-                var e = e
-                e.name = WorkoutTextParser.canonical(e.name, known: known)
-                return e
+        let names = exercises.map(\.name) + known
+        let now = Calendar.current.isDateInToday(day)
+            ? Date()
+            : Calendar.current.date(bySettingHour: 23, minute: 59, second: 0, of: day) ?? day
+        var heard = WorkoutNarrative.read(typed, known: names, now: now)
+        if heard.exercises.isEmpty {
+            // Gym shorthand ("bench 185x8x4, squat 225 5x5").
+            let parsed = WorkoutTextParser.parse(typed, known: names)
+            heard.exercises = parsed.filter { !$0.sets.isEmpty }
+            if heard.cardio.isEmpty, let c = parsed.first(where: { $0.sets.isEmpty && ($0.minutes != nil || $0.miles != nil) }) {
+                heard.cardio = [.init(kind: c.name, miles: c.miles, minutes: c.minutes)]
             }
         }
-        guard !parsed.isEmpty else {
+        if heard.exercises.isEmpty, let ai = await DialedAI.parseWorkout(typed, known: names) {
+            heard.exercises = ai.filter { !$0.sets.isEmpty }.map { e in
+                var e = e
+                e.name = WorkoutTextParser.canonical(e.name, known: names)
+                return e
+            }
+            if heard.cardio.isEmpty, let c = ai.first(where: { $0.sets.isEmpty && ($0.minutes != nil || $0.miles != nil) }) {
+                heard.cardio = [.init(kind: c.name, miles: c.miles, minutes: c.minutes)]
+            }
+        }
+        guard !heard.isEmpty else {
             typedResult = nil
-            withAnimation { typedResult = "Couldn't read that — try \"bench 185x8x4\"." }
+            withAnimation { typedResult = "Couldn't read that. Try \"bench 135 for 10, 155 for 8\"." }
             return
         }
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { apply(parsed) }
-        let setCount = parsed.reduce(0) { $0 + $1.sets.count }
-        typedResult = "Filled \(parsed.count) exercise\(parsed.count == 1 ? "" : "s")\(setCount > 0 ? ", \(setCount) sets" : "") — check and save."
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { apply(heard) }
+        typedResult = Self.describe(heard)
+        typed = ""
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
+    }
+
+    /// "3 exercises · 9 sets · 6:15–6:45 · 1 mi run"
+    static func describe(_ r: WorkoutNarrative.Reading) -> String {
+        var parts: [String] = []
+        if !r.exercises.isEmpty {
+            let sets = r.exercises.reduce(0) { $0 + $1.sets.count }
+            parts.append("\(r.exercises.count) exercise\(r.exercises.count == 1 ? "" : "s")")
+            if sets > 0 { parts.append("\(sets) sets") }
+        }
+        if let start = r.start, let end = r.end {
+            let f = Date.FormatStyle.dateTime.hour().minute()
+            parts.append("\(start.formatted(f))–\(end.formatted(f))")
+        }
+        for c in r.cardio {
+            if let mi = c.miles { parts.append(String(format: "%@ %.1f mi", c.kind.lowercased(), mi)) }
+            else if let m = c.minutes { parts.append("\(c.kind.lowercased()) \(Int(m)) min") }
+        }
+        return "Added " + parts.joined(separator: " · ") + ". Saved as you go."
+    }
+
+    /// Lifting fills its rows; time and cardio fill the When card.
+    private func apply(_ r: WorkoutNarrative.Reading) {
+        apply(r.exercises)
+        if let start = r.start, let end = r.end {
+            startedAt = start
+            endedAt = end
+        }
+        if let c = r.cardio.first {
+            if isCardio {
+                if let m = c.minutes { durationMinutes = m }
+                if let mi = c.miles { distanceMiles = mi }
+            } else {
+                cardioKind = c.kind
+                cardioMinutes = c.minutes ?? cardioMinutes
+                cardioMiles = c.miles ?? cardioMiles
+            }
+            // A run before lifting with no session time: the run starts it.
+            if startedAt == nil, let s = c.start { startedAt = s; endedAt = c.end }
+        }
     }
 
     /// Typed sets replace that exercise's rows (marked done); new exercises
@@ -216,7 +302,9 @@ struct WorkoutLoggerView: View {
             }
             let sets = p.sets.map { SetDraft(weight: $0.weight, reps: $0.reps, done: true) }
             if let i = exercises.firstIndex(where: { $0.name == p.name }) {
-                exercises[i].sets = sets
+                // Added mid-workout ("then 155 for 8"): keep what's done.
+                let kept = exercises[i].sets.filter(\.done)
+                exercises[i].sets = kept + sets
             } else {
                 let equipment = StrengthProgression.equipment(for: p.name)
                 exercises.append(ExerciseDraft(
@@ -234,6 +322,279 @@ struct WorkoutLoggerView: View {
         if let m = p.minutes { parts.append(m < 1 ? "\(Int(m * 60)) s" : "\(formatPounds(m)) min") }
         if let mi = p.miles { parts.append(String(format: "%.1f mi", mi)) }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: - When
+
+    /// Start / end time and any cardio done alongside the lifting.
+    private var whenCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("When", systemImage: "clock")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                if let start = startedAt, let end = endedAt, end > start {
+                    Text("\(Int(end.timeIntervalSince(start) / 60)) min")
+                        .font(.system(size: 13, weight: .semibold))
+                        .monospacedDigit()
+                        .foregroundColor(Neka.greenText)
+                }
+            }
+            if startedAt != nil {
+                HStack(spacing: 8) {
+                    DatePicker("Start", selection: timeBinding($startedAt), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Text("to")
+                        .font(.system(size: 13))
+                        .foregroundColor(Neka.inkTertiary)
+                    DatePicker("End", selection: timeBinding($endedAt), displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Spacer(minLength: 0)
+                    Button { withAnimation { startedAt = nil; endedAt = nil } } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(Neka.inkTertiary)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(Neka.track))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear time")
+                }
+            } else {
+                Button {
+                    withAnimation {
+                        let now = Calendar.current.isDateInToday(day) ? Date() : day.addingTimeInterval(18 * 3600)
+                        endedAt = now
+                        startedAt = now.addingTimeInterval(-Double(max(session.minutes, 30)) * 60)
+                    }
+                } label: {
+                    Label("Add start and end time", systemImage: "plus")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+            ForEach(watch.filter { !$0.isCardio || isCardio }) { w in
+                Label("\(w.source) recorded \(w.title.lowercased()) · \(w.timeText)", systemImage: "applewatch")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+
+            if !isCardio {
+                Divider().overlay(Neka.hairline)
+                if let kind = cardioKind {
+                    HStack(spacing: 8) {
+                        Image(systemName: Self.cardioSymbol(kind))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.orangeText)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(Neka.orangeSoft))
+                        Menu {
+                            ForEach(["Run", "Walk", "Bike", "Row", "Elliptical", "Stairs"], id: \.self) { k in
+                                Button(k) { cardioKind = k }
+                            }
+                        } label: {
+                            HStack(spacing: 3) {
+                                Text(kind)
+                                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .bold))
+                            }
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        }
+                        Spacer()
+                        Button { withAnimation { cardioKind = nil; cardioMinutes = nil; cardioMiles = nil } } label: {
+                            Text("Remove")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(Neka.inkTertiary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    cardioField(title: "Distance", unit: "mi", value: $cardioMiles, step: 0.25)
+                    cardioField(title: "Time", unit: "min", value: $cardioMinutes, step: 5)
+                    if let mi = cardioMiles, mi >= 1, ["Run", "Walk"].contains(kind) {
+                        Label("Counts toward your mile today", systemImage: "checkmark.seal.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Neka.greenText)
+                    }
+                } else {
+                    Menu {
+                        ForEach(["Run", "Walk", "Bike", "Row", "Elliptical", "Stairs"], id: \.self) { k in
+                            Button(k) { withAnimation { cardioKind = k } }
+                        }
+                    } label: {
+                        Label("Add cardio", systemImage: "figure.run")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private func timeBinding(_ value: Binding<Date?>) -> Binding<Date> {
+        Binding(
+            get: { value.wrappedValue ?? Date() },
+            set: { picked in
+                // Keep the logged day; only the clock time changes.
+                let c = Calendar.current.dateComponents([.hour, .minute], from: picked)
+                value.wrappedValue = Calendar.current.date(bySettingHour: c.hour ?? 0, minute: c.minute ?? 0, second: 0, of: day)
+            }
+        )
+    }
+
+    static func cardioSymbol(_ kind: String) -> String {
+        switch kind {
+        case "Walk":       return "figure.walk"
+        case "Bike":       return "figure.outdoor.cycle"
+        case "Row":        return "figure.rower"
+        case "Elliptical": return "figure.elliptical"
+        case "Stairs":     return "figure.stairs"
+        default:           return "figure.run"
+        }
+    }
+
+    // MARK: - Add an exercise
+
+    private var addExerciseCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if addingExercise {
+                HStack(spacing: 8) {
+                    TextField("Exercise name (e.g. Pec deck fly)", text: $newExercise)
+                        .font(.system(size: 15))
+                        .submitLabel(.done)
+                        .onSubmit(addExercise)
+                        .padding(10)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.track))
+                    Button("Add", action: addExercise)
+                        .font(.system(size: 14, weight: .semibold))
+                        .disabled(newExercise.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                let suggestions = exerciseSuggestions
+                if !suggestions.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(suggestions, id: \.self) { name in
+                                Button { newExercise = name; addExercise() } label: {
+                                    Text(name)
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Neka.ink)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(Capsule().fill(Neka.track))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Button { withAnimation { addingExercise = true } } label: {
+                    Label("Add an exercise", systemImage: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    /// Your own and past exercises first, filtered by what's typed.
+    private var exerciseSuggestions: [String] {
+        let have = Set(exercises.map(\.name))
+        let q = newExercise.lowercased().trimmingCharacters(in: .whitespaces)
+        let pool = PlanWorkoutLogStore.customExercises + known + Self.commonExercises
+        var seen = Set<String>()
+        return pool.filter { !have.contains($0) && seen.insert($0).inserted && (q.isEmpty || $0.lowercased().contains(q)) }
+            .prefix(10).map { $0 }
+    }
+
+    static let commonExercises = ["Incline bench press", "Pec deck fly", "Leg press", "Leg extension", "Leg curl",
+                                  "Lateral raise", "Tricep pushdown", "Hammer curl", "Preacher curl", "Chest press machine",
+                                  "Shoulder press machine", "Seated row", "Hip thrust", "Calf raise", "Pull-up", "Dip"]
+
+    private func addExercise() {
+        let typedName = newExercise.trimmingCharacters(in: .whitespaces)
+        guard !typedName.isEmpty else { return }
+        let name = WorkoutTextParser.canonical(typedName, known: exercises.map(\.name) + known)
+        newExercise = ""
+        guard !exercises.contains(where: { $0.name == name }) else { return }
+        let last = PlanWorkoutLogStore.lastSession(of: name, before: day, context: context).filter(\.completed)
+        let sets = last.isEmpty
+            ? (0..<3).map { _ in SetDraft(weight: nil, reps: 10) }
+            : last.map { SetDraft(weight: $0.weightLbs > 0 ? $0.weightLbs : nil, reps: $0.reps) }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            exercises.append(ExerciseDraft(
+                order: (exercises.map(\.order).max() ?? -1) + 1, name: name,
+                prescriptionText: "Added", prescription: nil,
+                equipment: StrengthProgression.equipment(for: name), suggestion: nil,
+                lastSummary: last.isEmpty ? nil : "Last time: " + last.map { "\(formatPounds($0.weightLbs))×\($0.reps)" }.joined(separator: ", "),
+                checkOnly: false, sets: sets))
+            addingExercise = false
+        }
+        PlanWorkoutLogStore.remember([name])
+    }
+
+    // MARK: - Autosave
+
+    @ViewBuilder
+    private var savedStatus: some View {
+        if let savedAt {
+            Label("Saved \(savedAt.formatted(.dateTime.hour().minute()))", systemImage: "checkmark.icloud")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(Neka.inkTertiary)
+                .labelStyle(.titleAndIcon)
+                .transition(.opacity)
+        }
+    }
+
+    /// Everything that changes what would be saved.
+    private var fingerprint: String {
+        let sets = exercises.map { e in
+            e.name + ":" + e.sets.map { "\($0.weight ?? -1)x\($0.reps)\($0.done ? "d" : "")" }.joined(separator: ",")
+        }.joined(separator: "|")
+        let times = [startedAt, endedAt].map { $0.map { "\(Int($0.timeIntervalSince1970))" } ?? "-" }.joined(separator: "-")
+        let cardio = "\(cardioKind ?? "-")\(cardioMinutes ?? -1)\(cardioMiles ?? -1)\(durationMinutes ?? -1)\(distanceMiles ?? -1)"
+        return [sets, times, cardio, notes].joined(separator: "#")
+    }
+
+    /// Something worth keeping: a finished set, a time, cardio or a note.
+    private var hasContent: Bool {
+        exercises.contains { $0.sets.contains(where: \.done) } || startedAt != nil || cardioKind != nil
+            || !notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCardio
+    }
+
+    private func scheduleAutosave() {
+        guard loaded, fingerprint != savedFingerprint else { return }
+        autosave?.cancel()
+        autosave = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.2))
+            guard !Task.isCancelled else { return }
+            persistIfNeeded()
+        }
+    }
+
+    private func flushAutosave() {
+        autosave?.cancel()
+        autosave = nil
+        persistIfNeeded()
+    }
+
+    private func persistIfNeeded() {
+        guard loaded, fingerprint != savedFingerprint, hasContent || hasExistingLog else { return }
+        persist()
+        withAnimation { savedAt = Date() }
+    }
+
+    /// Nothing to lose: it's been saving all along.
+    private func closeKeepingChanges() {
+        flushAutosave()
+        dismiss()
     }
 
     /// Every exercise in the plan, for matching typed names.
@@ -573,12 +934,21 @@ struct WorkoutLoggerView: View {
         guard !loaded else { return }
         loaded = true
 
+        known = PlanWorkoutLogStore.knownExercises(context: context)
         let existing = PlanWorkoutLogStore.log(for: dayKey, context: context)
         hasExistingLog = existing != nil
         let savedSets = existing.map { PlanWorkoutLogStore.sets(for: $0.id, context: context) } ?? []
         notes = existing?.notes ?? ""
         durationMinutes = existing?.durationMinutes ?? (isCardio && session.minutes > 0 ? Double(session.minutes) : nil)
         distanceMiles = existing?.distanceMiles
+        startedAt = existing?.startedAt
+        endedAt = existing?.endedAt
+        cardioKind = existing?.cardioKind
+        cardioMinutes = existing?.cardioMinutes
+        cardioMiles = existing?.cardioMiles
+        watch = detected
+        prefillFromWatch(hasLog: existing != nil)
+        defer { savedFingerprint = fingerprint }
 
         guard !isCardio else { return }
         let rounds = Self.rounds(in: session)
@@ -624,6 +994,54 @@ struct WorkoutLoggerView: View {
                 checkOnly: checkOnly, sets: sets
             )
         }
+        // Exercises you added that aren't in the plan.
+        let planNames = Set(session.exercises.map(\.name))
+        var extraNames: [String] = []
+        for s in savedSets where !planNames.contains(s.exerciseName) && !extraNames.contains(s.exerciseName) {
+            extraNames.append(s.exerciseName)
+        }
+        for name in extraNames {
+            let mine = savedSets.filter { $0.exerciseName == name }.sorted { $0.setIndex < $1.setIndex }
+            exercises.append(ExerciseDraft(
+                order: mine.first?.exerciseOrder ?? exercises.count, name: name,
+                prescriptionText: "\(mine.count) × \(mine.map(\.reps).max() ?? 0)",
+                prescription: .setsReps(sets: mine.count, reps: mine.map(\.reps).max() ?? 0, perSide: false),
+                equipment: StrengthProgression.equipment(for: name), suggestion: nil, lastSummary: nil,
+                checkOnly: false,
+                sets: mine.map { SetDraft(weight: $0.weightLbs > 0 ? $0.weightLbs : nil, reps: $0.reps, done: $0.completed) }))
+        }
+    }
+
+    /// Apple Health / Google Health sessions for this day, if the caller
+    /// didn't pass them. Filling them in doesn't count as an edit.
+    private func lookForWatchWorkouts() async {
+        if !loaded { loadIfNeeded() }
+        guard detected.isEmpty else { return }
+        let found = await WorkoutDetector.workouts(on: day, context: context)
+        guard !found.isEmpty else { return }
+        let untouched = fingerprint == savedFingerprint
+        watch = found
+        prefillFromWatch(hasLog: hasExistingLog)
+        if untouched { savedFingerprint = fingerprint }
+    }
+
+    /// Times and cardio from the watch, until you've saved your own.
+    private func prefillFromWatch(hasLog: Bool) {
+        guard !watch.isEmpty else { return }
+        if startedAt == nil {
+            let main = watch.first { $0.kind == .strength } ?? (isCardio ? watch.first : watch.first { !$0.isCardio })
+            if let main { startedAt = main.start; endedAt = main.end }
+        }
+        if isCardio {
+            if !hasLog, let w = watch.first(where: \.isCardio) ?? watch.first {
+                durationMinutes = (w.minutes).rounded()
+                if let mi = w.miles { distanceMiles = (mi * 100).rounded() / 100 }
+            }
+        } else if cardioKind == nil, let w = watch.first(where: \.isCardio) {
+            cardioKind = WorkoutDetector.title(for: w.kind)
+            cardioMinutes = w.minutes.rounded()
+            cardioMiles = w.miles.map { ($0 * 100).rounded() / 100 }
+        }
     }
 
     /// "4 rounds · 45 s on…" → 4; circuits default to 3.
@@ -637,9 +1055,9 @@ struct WorkoutLoggerView: View {
         return 3
     }
 
-    private func save() {
+    /// Writes the log as it stands (autosave and Done both land here).
+    private func persist() {
         let date = Calendar.current.startOfDay(for: day)
-        let notesSummary = adjustWeek()
         let log: PlanWorkoutLog
         if let existing = PlanWorkoutLogStore.log(for: dayKey, context: context) {
             log = existing
@@ -654,23 +1072,36 @@ struct WorkoutLoggerView: View {
         log.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         log.durationMinutes = isCardio ? durationMinutes : nil
         log.distanceMiles = isCardio ? distanceMiles : nil
+        log.startedAt = startedAt
+        log.endedAt = endedAt
+        log.cardioKind = isCardio ? nil : cardioKind
+        log.cardioMinutes = isCardio ? nil : cardioMinutes
+        log.cardioMiles = isCardio ? nil : cardioMiles
         log.savedAt = Date()
 
-        do {
-            for ex in exercises {
-                for (i, s) in ex.sets.enumerated() {
-                    context.insert(PlanSetLog(
-                        workoutID: log.id, date: date, exerciseName: ex.name,
-                        exerciseOrder: ex.order, setIndex: i,
-                        weightLbs: s.weight ?? 0, reps: s.reps,
-                        targetReps: ex.prescription?.reps, completed: s.done
-                    ))
-                }
+        for ex in exercises {
+            for (i, s) in ex.sets.enumerated() {
+                context.insert(PlanSetLog(
+                    workoutID: log.id, date: date, exerciseName: ex.name,
+                    exerciseOrder: ex.order, setIndex: i,
+                    weightLbs: s.weight ?? 0, reps: s.reps,
+                    targetReps: ex.prescription?.reps, completed: s.done
+                ))
             }
         }
         try? context.save()
-        PlanWorkoutLogStore.setDone(dayKey, true)
+        hasExistingLog = true
+        savedFingerprint = fingerprint
+        PlanWorkoutLogStore.remember(exercises.filter { $0.sets.contains(where: \.done) }.map(\.name))
+        if hasContent { PlanWorkoutLogStore.setDone(dayKey, true) }
         NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+    }
+
+    private func save() {
+        autosave?.cancel()
+        let notesSummary = adjustWeek()
+        persist()
+        PlanWorkoutLogStore.setDone(dayKey, true)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
@@ -731,6 +1162,9 @@ struct WorkoutLoggerView: View {
     }
 
     private func deleteLog() {
+        autosave?.cancel()
+        savedFingerprint = fingerprint
+        hasExistingLog = false
         if let existing = PlanWorkoutLogStore.log(for: dayKey, context: context) {
             PlanWorkoutLogStore.delete(existing, context: context)
         }
