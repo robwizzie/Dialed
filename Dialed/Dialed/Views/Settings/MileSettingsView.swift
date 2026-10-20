@@ -9,9 +9,14 @@
 //
 
 import SwiftUI
+import WidgetKit
 
 struct MileSettingsView: View {
+    @Environment(\.modelContext) private var modelContext
     @State private var settings = MileSettings.load()
+    @State private var historyStart = MileHistoryService.defaultStart()
+    @State private var history = MileHistory.load()
+    @State private var recalibrating = false
     @State private var goal: Double
     @State private var manual: Bool
     @State private var stride: Double
@@ -29,6 +34,7 @@ struct MileSettingsView: View {
         ScrollView {
             VStack(spacing: 16) {
                 goalCard
+                historyCard
                 strideCard
                 if manual { measureCard }
                 Text("Apple Health's walking + running distance is used whenever it's there — this only changes the step estimate and the goal.")
@@ -67,6 +73,87 @@ struct MileSettingsView: View {
         .frame(maxWidth: .infinity)
         .padding(16)
         .nekaCard()
+    }
+
+    // MARK: - History
+
+    /// Re-read every day from a start date — further back than the goal
+    /// existed, to pick up old walks, runs and workouts.
+    private var historyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header("History", "Count every day from a start date, using distance, workouts and steps.")
+            DatePicker("Count from", selection: $historyStart,
+                       in: (Calendar.current.date(byAdding: .day, value: -(MileHistoryService.maxDays - 1), to: Date()) ?? Date())...Date(),
+                       displayedComponents: .date)
+                .font(.system(size: 14, weight: .medium))
+            HStack(spacing: 8) {
+                quickStart("90 days", days: 90)
+                quickStart("6 months", days: 182)
+                quickStart("1 year", days: 365)
+                if let challenge = WeightChallenge.load() {
+                    Button("Challenge") { historyStart = Calendar.current.startOfDay(for: challenge.startDate) }
+                        .modifier(ChipStyle(on: Calendar.current.isDate(historyStart, inSameDayAs: challenge.startDate)))
+                }
+            }
+            Button {
+                Task { await recalibrate() }
+            } label: {
+                HStack {
+                    if recalibrating { ProgressView().tint(.white) }
+                    Text(recalibrating ? "Recalibrating…" : "Recalibrate history")
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(Neka.ink))
+            }
+            .buttonStyle(.dialedScale)
+            .disabled(recalibrating)
+
+            if let history {
+                let total = history.days.count
+                Text("\(history.doneCount(goal: goal)) of \(total) days at \(MileADay.format(goal)) · longest streak \(history.longestStreak(goal: goal)) · current \(history.currentStreak(today: Date(), goal: goal))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+                NavigationLink { MileHistoryView() } label: {
+                    Label("See every day", systemImage: "calendar")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                }
+            }
+        }
+        .padding(16)
+        .nekaCard()
+    }
+
+    private func quickStart(_ title: String, days: Int) -> some View {
+        let date = Calendar.current.startOfDay(for: Calendar.current.date(byAdding: .day, value: -(days - 1), to: Date()) ?? Date())
+        return Button(title) { historyStart = date }
+            .modifier(ChipStyle(on: Calendar.current.isDate(historyStart, inSameDayAs: date)))
+    }
+
+    private struct ChipStyle: ViewModifier {
+        let on: Bool
+        func body(content: Content) -> some View {
+            content
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(on ? .white : Neka.ink)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(on ? Neka.green : Neka.track))
+                .buttonStyle(.plain)
+        }
+    }
+
+    private func recalibrate() async {
+        recalibrating = true
+        save()
+        history = await MileHistoryService.rebuild(from: historyStart, context: modelContext)
+        settings = MileSettings.load()
+        WidgetCenter.shared.reloadAllTimelines()
+        recalibrating = false
+        NotificationCenter.default.post(name: MileSettings.didChange, object: nil)
     }
 
     // MARK: - Stride
@@ -153,6 +240,7 @@ struct MileSettingsView: View {
         var s = MileSettings.load()
         s.goalMiles = goal
         s.manualStepsPerMile = manual ? stride : nil
+        s.historyStart = Calendar.current.startOfDay(for: historyStart)
         s.save()
         settings = s
     }

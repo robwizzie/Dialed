@@ -30,7 +30,7 @@ struct TodayWidgetView: View {
 
     private var s: WidgetSnapshot { entry.today }
     /// The Dialed score, including today's mile once Home has published it.
-    private var dialed: Int { s.dialedScore(miles: entry.insights?.miles) }
+    private var dialed: Int { s.dialedScore(miles: entry.mile != nil ? entry.milesToday : entry.insights?.miles) }
     private var score: WidgetInsights.Score? { entry.insights?.score }
 
     var body: some View {
@@ -69,11 +69,13 @@ struct TodayWidgetView: View {
             Spacer(minLength: 4)
             HStack(spacing: 10) {
                 dial(size: 66)
-                VStack(alignment: .leading, spacing: 5) {
+                VStack(alignment: .leading, spacing: 3) {
                     legend(Theme.water, Fmt.int(s.waterOz), "oz")
                     legend(Theme.protein, Fmt.int(s.protein), "g")
                     legend(Theme.calories, Fmt.compact(Int(abs(s.caloriesLeft).rounded())),
                            s.caloriesLeft < 0 ? "over" : "left")
+                    legend(Theme.lavender, String(format: "%.1f", entry.milesToday),
+                           entry.mileDone ? "mi ✓" : "mi")
                 }
             }
             Spacer(minLength: 6)
@@ -86,16 +88,18 @@ struct TodayWidgetView: View {
             dial(size: 112)
             VStack(alignment: .leading, spacing: 0) {
                 header(compact: false)
-                Spacer(minLength: 6)
-                VStack(spacing: 7) {
+                Spacer(minLength: 4)
+                VStack(spacing: 5) {
                     metricRow("Water", value: "\(Fmt.int(s.waterOz))/\(Fmt.int(s.waterTargetOz)) oz",
                               progress: s.waterProgress, tint: Theme.water, pace: entry.pace)
                     metricRow("Protein", value: "\(Fmt.int(s.protein))/\(Fmt.int(s.proteinTarget)) g",
                               progress: s.proteinProgress, tint: Theme.protein, pace: entry.pace)
                     metricRow("Calories", value: caloriesShort,
                               progress: s.calorieProgress, tint: s.caloriesLeft < 0 ? Theme.rose : Theme.calories)
+                    metricRow(entry.mileDone ? "Mile ✓" : "Mile", value: mileValue,
+                              progress: entry.milesToday / max(0.1, entry.mileGoal), tint: Theme.lavender)
                 }
-                Spacer(minLength: 8)
+                Spacer(minLength: 6)
                 HStack(spacing: 6) {
                     waterButton(16, height: 28)
                     favoriteButton(height: 28)
@@ -138,22 +142,26 @@ struct TodayWidgetView: View {
                               progress: s.proteinProgress, tint: Theme.protein, pace: entry.pace)
                     metricRow("Calories", value: caloriesShort,
                               progress: s.calorieProgress, tint: s.caloriesLeft < 0 ? Theme.rose : Theme.calories)
+                    metricRow(entry.mileDone ? "Mile ✓" : "Mile", value: mileValue,
+                              progress: entry.milesToday / max(0.1, entry.mileGoal), tint: Theme.lavender)
                 }
             }
 
             if let i = entry.insights {
                 HStack(spacing: 8) {
-                    miniTile(icon: "figure.walk", title: "Steps", tint: Theme.green, wash: .mint,
-                             value: Fmt.compact(i.steps), unit: nil,
-                             note: i.stepProgress >= 1 ? "Goal hit 🎉" : "\(Fmt.compact(max(0, i.stepGoal - i.steps))) to go") {
-                        CapsuleBar(progress: i.stepProgress, tint: Theme.green, height: 5, pace: entry.pace)
+                    miniTile(icon: entry.ranToday ? "figure.run" : "figure.walk", title: "Mile a day",
+                             tint: Theme.lavender, wash: .lavender,
+                             value: String(format: "%.2f", entry.milesToday), unit: "mi",
+                             note: entry.mileStreak > 0 ? "🔥 \(entry.mileStreak) days · \(Fmt.compact(i.steps)) steps"
+                                                       : "\(Fmt.compact(i.steps)) steps") {
+                        MileWeekDots(days: entry.mileWeek, goal: entry.mileGoal, size: 11, showsDays: false)
                     }
-                    miniTile(icon: "moon.fill", title: "Sleep", tint: Theme.lavender, wash: .lavender,
+                    miniTile(icon: "moon.fill", title: "Sleep", tint: Theme.blue, wash: .sky,
                              value: i.sleepHours.map { String(format: "%.1f", $0) } ?? "—", unit: "h",
                              note: i.sleepHours.map { $0 >= 7 ? "Solid night" : "A bit short" }) {
-                        WeekBars(values: i.sleepWeek, tint: Theme.lavender, goal: 7, showsDays: false, today: entry.date)
+                        WeekBars(values: i.sleepWeek, tint: Theme.blue, goal: 7, showsDays: false, today: entry.date)
                     }
-                    miniTile(icon: "scalemass.fill", title: "Weight", tint: Theme.sky, wash: .sky,
+                    miniTile(icon: "scalemass.fill", title: "Weight", tint: Theme.sky, wash: .paper,
                              value: i.weight.map { String(format: "%.1f", $0) } ?? "—", unit: "lb",
                              note: i.weightChange.map { "\(Fmt.signed($0)) lb" }) {
                         Sparkline(values: i.weightTrend, tint: Theme.sky)
@@ -323,7 +331,7 @@ struct TodayWidgetView: View {
             .widgetAccentable()
             Gauge(value: s.waterProgress) { EmptyView() }
                 .gaugeStyle(.accessoryLinearCapacity)
-            Text("\(Fmt.int(s.proteinLeft)) g protein · \(caloriesShort)")
+            Text("\(entry.mileDone ? "✓" : "") \(String(format: "%.1f", entry.milesToday)) mi · \(Fmt.int(s.proteinLeft)) g · \(caloriesShort)")
                 .font(.system(size: 12))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -331,7 +339,12 @@ struct TodayWidgetView: View {
     }
 
     private var inline: some View {
-        Label("\(Fmt.int(s.waterOz)) oz · \(Fmt.int(s.protein)) g · \(caloriesShort)", systemImage: "drop.fill")
+        Label("\(Fmt.int(s.waterOz)) oz · \(String(format: "%.1f", entry.milesToday)) mi · \(caloriesShort)", systemImage: "drop.fill")
+    }
+
+    /// "0.62/1 mi · 🔥3".
+    private var mileValue: String {
+        entry.mileStreak > 1 ? "\(entry.mileShort) · 🔥\(entry.mileStreak)" : entry.mileShort
     }
 
     private var caloriesShort: String {

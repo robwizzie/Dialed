@@ -19,6 +19,18 @@ struct DialedEntry: TimelineEntry {
     let insights: WidgetInsights?
     let avatar: UIImage?
     var water: WaterPreset = .glasses
+    /// The daily mile, per day (from the app's MileHistory).
+    var mile: MileHistory? = nil
+
+    var mileGoal: Double { MileSettings.load().goalMiles }
+    /// The last seven days, oldest → today.
+    var mileWeek: [MileDay] { mile?.last(7, today: date) ?? [] }
+    var milesToday: Double { mileWeek.last?.miles ?? insights?.miles ?? 0 }
+    var ranToday: Bool { mileWeek.last?.ran ?? false }
+    var mileDone: Bool { MileADay.isDone(milesToday, goal: mileGoal) }
+    var mileStreak: Int { mile?.currentStreak(today: date, goal: mileGoal) ?? insights?.mileStreak ?? 0 }
+    /// "0.62/1 mi".
+    var mileShort: String { String(format: "%.2f/", milesToday) + MileADay.format(mileGoal) }
 
     /// Share of the day's targets you'd have by now (7 AM → 9 PM), the same
     /// curve the app's day score uses.
@@ -37,7 +49,8 @@ struct DialedEntry: TimelineEntry {
         return ("\(Fmt.int(waterBehind)) oz behind", "arrow.down.right", false)
     }
 
-    static let preview = DialedEntry(date: Date(), today: .placeholder, insights: .placeholder, avatar: nil)
+    static let preview = DialedEntry(date: Date(), today: .placeholder, insights: .placeholder, avatar: nil,
+                                     mile: .placeholder)
 }
 
 enum DialedTimeline {
@@ -46,10 +59,12 @@ enum DialedTimeline {
         let stored = bridge.readSnapshot()
         let insights = bridge.readInsights()
         if preview && stored == nil {
-            return [DialedEntry(date: now, today: .placeholder, insights: .placeholder, avatar: nil, water: water)]
+            return [DialedEntry(date: now, today: .placeholder, insights: .placeholder, avatar: nil, water: water,
+                                mile: .placeholder)]
         }
         let pending = bridge.pending()
         let avatar = WidgetBridge.avatarURL.flatMap { UIImage(contentsOfFile: $0.path) }
+        let mile = MileHistory.load()
 
         return dates(from: now).map { date in
             DialedEntry(
@@ -57,7 +72,8 @@ enum DialedTimeline {
                 today: stored?.display(with: pending, now: date) ?? .empty,
                 insights: insights?.display(now: date),
                 avatar: avatar,
-                water: water
+                water: water,
+                mile: mile
             )
         }
     }

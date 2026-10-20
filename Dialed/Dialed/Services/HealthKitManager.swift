@@ -346,6 +346,35 @@ class HealthKitManager: ObservableObject {
     }
 
     /// Fetch workouts for a specific date
+    /// On-foot workouts (walks, runs, hikes) between two dates, totalled
+    /// per day: miles, how many workouts, and whether any was a run. Used
+    /// by the daily mile so a logged walk or run counts even when the
+    /// phone's own distance missed it.
+    func fetchFootWorkoutMiles(from start: Date, to end: Date) async -> [Date: (miles: Double, count: Int, ran: Bool)] {
+        let calendar = Calendar.current
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: .strictStartDate)
+        let onFoot: Set<HKWorkoutActivityType> = [.walking, .running, .hiking, .wheelchairWalkPace, .wheelchairRunPace]
+        let workouts: [HKWorkout] = await withCheckedContinuation { continuation in
+            let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate,
+                                      limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, _ in
+                continuation.resume(returning: (samples as? [HKWorkout]) ?? [])
+            }
+            healthStore.execute(query)
+        }
+        var out: [Date: (miles: Double, count: Int, ran: Bool)] = [:]
+        for w in workouts where onFoot.contains(w.workoutActivityType) {
+            let miles = w.totalDistance?.doubleValue(for: .mile()) ?? 0
+            guard miles > 0 else { continue }
+            let day = calendar.startOfDay(for: w.startDate)
+            var entry = out[day] ?? (0, 0, false)
+            entry.miles += miles
+            entry.count += 1
+            entry.ran = entry.ran || w.workoutActivityType == .running || w.workoutActivityType == .wheelchairRunPace
+            out[day] = entry
+        }
+        return out
+    }
+
     func fetchWorkouts(for date: Date) async throws -> [WorkoutData] {
         let calendar = Calendar.current
         let startOfDay = calendar.startOfDay(for: date)
