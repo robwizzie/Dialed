@@ -2,7 +2,7 @@
 //  HomeFunCard.swift
 //  Dialed
 //
-//  "Active moments" on Home: the stretches your heart rate gave away
+//  "Bonus burn" on Home: the stretches your heart rate gave away
 //  (tap a "?" to say what it was, with your usual picks first), the ones
 //  you've named, and anything your watch recorded that isn't the gym —
 //  laid out on a strip of your day, 6 AM to midnight, with the minutes
@@ -24,7 +24,7 @@ struct HomeFunCard: View {
     @State private var pulse = false
 
     /// Shown in the header, Customize Home and the naming sheet.
-    static let title = "Active moments"
+    static let title = "Bonus burn"
 
     enum NamingTarget: Identifiable {
         case bout(ActiveBouts.Bout)
@@ -164,7 +164,7 @@ struct HomeFunCard: View {
                     .background(Circle().fill(Neka.track))
             }
             .buttonStyle(.dialedScale)
-            .accessibilityLabel("Add an active moment")
+            .accessibilityLabel("Add an activity")
         }
     }
 
@@ -351,7 +351,7 @@ struct ActiveMomentsStrip: View {
             .foregroundColor(Neka.inkTertiary)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(items.isEmpty ? "No active moments yet today" : "\(items.count) active moments today")
+        .accessibilityLabel(items.isEmpty ? "No bonus activity yet today" : "\(items.count) bonus activities today")
     }
 
     @ViewBuilder
@@ -439,7 +439,7 @@ struct FunActivitySheet: View {
                 .padding(16)
             }
             .nekaPageBackground()
-            .navigationTitle(bout == nil ? "Add an active moment" : "What was it?")
+            .navigationTitle(bout == nil ? "Add an activity" : "What was it?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }

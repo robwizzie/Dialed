@@ -10,7 +10,7 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, finalPush, wrapped, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, suggestions, tomorrow,
+    case morning, finalPush, wrapped, suggestions, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
          weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
@@ -29,8 +29,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .sideBet:      return "Side bet"
         case .futureYou:    return "Future you"
         case .workout:      return "Today's workout"
-        case .fun:          return "Active moments"
-        case .suggestions:  return "From recent days"
+        case .fun:          return "Bonus burn"
+        case .suggestions:  return "Waiting for you"
         case .tomorrow:     return "Tomorrow's wake-up"
         case .weeklyReview: return "Week in review"
         case .patterns:     return "Patterns"
@@ -144,13 +144,24 @@ struct HomeLayout: Equatable {
     static let didChange = Notification.Name("HomeLayoutDidChange")
 
     static func load(_ defaults: UserDefaults = .standard) -> HomeLayout {
-        guard let order = defaults.stringArray(forKey: orderKey) else { return .standard }
+        guard var order = defaults.stringArray(forKey: orderKey) else { return .standard }
+        // Once: suggestions to name or dismiss belong near the top.
+        if !defaults.bool(forKey: suggestionsTopKey) {
+            defaults.set(true, forKey: suggestionsTopKey)
+            order.removeAll { $0 == HomeSection.suggestions.rawValue }
+            let anchor = [HomeSection.wrapped, .finalPush, .morning].compactMap { order.firstIndex(of: $0.rawValue) }.first
+            order.insert(HomeSection.suggestions.rawValue, at: anchor.map { $0 + 1 } ?? 0)
+            defaults.set(order, forKey: orderKey)
+        }
         return HomeLayout(savedOrder: order, savedHidden: defaults.stringArray(forKey: hiddenKey) ?? [])
     }
+
+    private static let suggestionsTopKey = "home.layout.suggestionsTop.v1"
 
     func save(_ defaults: UserDefaults = .standard) {
         defaults.set(order.map(\.rawValue), forKey: Self.orderKey)
         defaults.set(hidden.map(\.rawValue).sorted(), forKey: Self.hiddenKey)
+        defaults.set(true, forKey: Self.suggestionsTopKey)
         NotificationCenter.default.post(name: Self.didChange, object: nil)
     }
 
