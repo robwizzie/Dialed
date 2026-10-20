@@ -39,3 +39,20 @@ CREATE TABLE IF NOT EXISTS stats (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (challenge_id, role)
 );
+
+-- v3: weekly side bets. Each side writes only its own score.
+CREATE TABLE IF NOT EXISTS bets (
+  id TEXT PRIMARY KEY,
+  challenge_id TEXT NOT NULL,
+  week TEXT NOT NULL,
+  metric TEXT NOT NULL,
+  stake TEXT NOT NULL,
+  proposer TEXT NOT NULL CHECK (proposer IN ('owner','friend')),
+  status TEXT NOT NULL DEFAULT 'proposed' CHECK (status IN ('proposed','active','declined','cancelled')),
+  owner_score REAL,
+  friend_score REAL,
+  paid INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS bets_by_challenge ON bets (challenge_id, week);

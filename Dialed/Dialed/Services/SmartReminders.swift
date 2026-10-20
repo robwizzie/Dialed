@@ -173,7 +173,7 @@ enum SmartReminders {
         inputs.proteinGrams = max(loggedProtein, hkProtein)
         inputs.proteinTarget = settings.proteinTargetGrams
         inputs.caloriesIn = max(loggedCalories, hkEnergy)
-        inputs.calorieTarget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: latestWeight)
+        inputs.calorieTarget = CalorieTarget.current(settings: settings, weight: latestWeight)
         inputs.steps = Int(max(hkSteps, Double(todayLog?.steps ?? 0)))
         inputs.stepGoal = 10_000
         inputs.weighedInToday = weights.contains { calendar.isDate($0.date, inSameDayAs: now) }

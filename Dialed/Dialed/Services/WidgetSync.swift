@@ -139,7 +139,17 @@ enum WidgetSync {
                 goalLossLbs: p.goalLossLbs,
                 lostLbs: p.lostLbs,
                 weighedInToday: p.weighedInToday,
-                weighInStreak: p.weighInStreak
+                weighInStreak: p.weighInStreak,
+                neededPace: home.race?.result.needed,
+                yourPace: home.race?.result.current,
+                raceStatus: home.race.map { r -> String in
+                    switch r.result.status {
+                    case .ahead:   return "ahead"
+                    case .onTrack: return "onTrack"
+                    case .behind:  return "behind"
+                    case .unknown: return "unknown"
+                    }
+                }
             )
         }
 

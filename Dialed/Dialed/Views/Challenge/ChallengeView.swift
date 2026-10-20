@@ -39,6 +39,7 @@ struct ChallengeView: View {
     @StateObject private var viewModel = ChallengeViewModel()
 
     @State private var sheet: Sheet?
+    @State private var showingWrapped = false
     @ObservedObject private var liveSync = ChallengeSync.shared
     @EnvironmentObject private var router: AppRouter
 
@@ -56,6 +57,8 @@ struct ChallengeView: View {
                         scoreboard(c, p)
                         headToHead(c, p)
                         if let race = viewModel.race { RacePaceCard(report: race) }
+                        wrappedButton(p)
+                        SideBetsSection()
                         LiveChallengeCard(sync: liveSync, friendName: c.friendDisplayName) { sheet = .live }
                         TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
                             .id("\(c.scoring.rawValue)-\(p.leader)-\(Int(p.margin * 10))")
@@ -99,6 +102,7 @@ struct ChallengeView: View {
                 sheet = request
                 router.challengeSheet = nil
             }
+            .fullScreenCover(isPresented: $showingWrapped) { WrappedView() }
             .sheet(item: $sheet, onDismiss: { Task { await viewModel.refresh(context: modelContext) } }) { sheet in
                 switch sheet {
                 case .setup:
@@ -183,6 +187,30 @@ struct ChallengeView: View {
     }
 
     // MARK: - Scoreboard
+
+    /// Dialed Wrapped: "so far" until the last day, then the full recap.
+    private func wrappedButton(_ p: WeightChallengeEngine.Progress) -> some View {
+        Button { showingWrapped = true } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "sparkles.rectangle.stack.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                Text(p.daysLeft == 0 ? "Dialed Wrapped" : "Dialed Wrapped so far")
+                    .font(.system(size: 14, weight: .bold))
+                Spacer()
+                Image(systemName: "play.fill")
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 13)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(LinearGradient(colors: [Neka.lavender, Neka.rose, Neka.amber],
+                                         startPoint: .leading, endPoint: .trailing))
+            )
+        }
+        .buttonStyle(.dialedScale)
+    }
 
     private func scoreboard(_ c: WeightChallenge, _ p: WeightChallengeEngine.Progress) -> some View {
         HStack(spacing: 18) {

@@ -13,6 +13,8 @@ struct NotificationsSettingsView: View {
     @State private var showPermissionAlert = false
     @AppStorage(HeadToHeadSync.weighInAlertsKey) private var friendWeighInAlerts = true
     @AppStorage(HeadToHeadSync.nudgesKey) private var trashTalkNudges = true
+    @AppStorage(FinalPushStore.notifyKey) private var finalPushCountdown = true
+    @AppStorage(SideBetsStore.alertsKey) private var sideBetAlerts = true
 
     var body: some View {
         List {
@@ -139,6 +141,37 @@ struct NotificationsSettingsView: View {
                                     .font(.body)
                                     .foregroundStyle(.primary)
                                 Text("When the lead changes or a streak hits — twice a week at most")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Toggle(isOn: $finalPushCountdown) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "timer")
+                                .foregroundStyle(Neka.amber)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Final push countdown")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("8 AM each of the last 14 days")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onChange(of: finalPushCountdown) { _, _ in
+                        Task { await FinalPushNotifications.reschedule(challenge: WeightChallenge.load()) }
+                    }
+                    Toggle(isOn: $sideBetAlerts) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "dice.fill")
+                                .foregroundStyle(Neka.lavender)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Side bets")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("When a bet is proposed, accepted or settled")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
