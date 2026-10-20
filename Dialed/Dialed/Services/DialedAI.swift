@@ -7,7 +7,8 @@
 //
 //    • Daily brief — a short, personal read on today for the Home screen
 //    • Ask Dialed — chat about your own numbers ("am I on pace?")
-//    • Meal estimate — "chipotle bowl, double chicken" → calories + protein
+//    • Meal estimate — "chipotle bowl, double chicken", or what Vision
+//      sees in a meal photo → calories, protein, carbs and fat
 //    • Trash talk — a message to send your challenge opponent
 //
 //  The app still targets iOS 17, so everything here is gated with
@@ -35,6 +36,8 @@ struct AIMealEstimate: Equatable {
     var name: String
     var calories: Int
     var proteinGrams: Int
+    var carbsGrams: Int? = nil
+    var fatGrams: Int? = nil
     var assumption: String
 }
 
@@ -124,28 +127,74 @@ enum DialedAI {
 
     // MARK: Meal estimate
 
-    static func estimateMeal(_ description: String) async -> AIMealEstimate? {
+    /// Estimate a meal from a description, and/or from what Vision found in
+    /// a photo of it (`seen`, e.g. ["grilled chicken", "rice", "broccoli"]).
+    static func estimateMeal(_ description: String, seen: [String] = []) async -> AIMealEstimate? {
         let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return nil }
+        guard !text.isEmpty || !seen.isEmpty else { return nil }
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *), isAvailable {
             let session = LanguageModelSession(instructions: """
-            You estimate nutrition for meals people describe in plain language. \
+            You estimate nutrition for meals people describe in plain language or photograph. \
             Assume typical US restaurant or home portions unless sizes are given. \
-            Be realistic, not optimistic — people underestimate calories.
+            Be realistic, not optimistic — people underestimate calories. \
+            When items come from a photo, treat them as one plate of food; ignore anything \
+            that isn't food (tableware, the table, hands).
             """)
+            var prompt = ""
+            if !seen.isEmpty { prompt += "A photo of the meal shows: \(seen.joined(separator: ", ")). " }
+            if !text.isEmpty { prompt += "The person says: \(text). " }
+            prompt += "Estimate this meal."
             do {
-                let response = try await session.respond(
-                    to: "Estimate this meal: \(text)",
-                    generating: GeneratedMeal.self
-                )
+                let response = try await session.respond(to: prompt, generating: GeneratedMeal.self)
                 let m = response.content
                 return AIMealEstimate(
                     name: m.name,
                     calories: max(0, min(4_000, m.calories)),
                     proteinGrams: max(0, min(300, m.proteinGrams)),
+                    carbsGrams: max(0, min(600, m.carbsGrams)),
+                    fatGrams: max(0, min(300, m.fatGrams)),
                     assumption: m.assumption
                 )
+            } catch {
+                return nil
+            }
+        }
+        #endif
+        return nil
+    }
+
+    // MARK: Workout from text
+
+    /// Read a typed gym log ("bench 185 for 8 then 7, squats felt heavy at
+    /// 225, five sets of five") into exercises and sets. Used when the rule
+    /// parser can't make sense of it.
+    static func parseWorkout(_ text: String) async -> [WorkoutTextParser.ParsedExercise]? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), isAvailable {
+            let session = LanguageModelSession(instructions: """
+            You turn a person's quick gym notes into a list of exercises with their sets. \
+            Only include what they actually wrote — never invent exercises, weights or reps. \
+            Weights are in pounds. Bodyweight exercises have weight 0.
+            """)
+            do {
+                let response = try await session.respond(to: "Gym notes: \(trimmed)", generating: GeneratedWorkout.self)
+                let out = response.content.exercises.compactMap { e -> WorkoutTextParser.ParsedExercise? in
+                    let count = min(e.reps.count, 12)
+                    let sets = (0..<count).compactMap { i -> WorkoutTextParser.ParsedSet? in
+                        let reps = e.reps[i]
+                        guard reps > 0, reps <= 100 else { return nil }
+                        let w = i < e.weightsLbs.count ? e.weightsLbs[i] : (e.weightsLbs.last ?? 0)
+                        return WorkoutTextParser.ParsedSet(weight: w > 0 ? min(w, 1_500) : nil, reps: reps)
+                    }
+                    let minutes = e.minutes > 0 ? e.minutes : nil
+                    let miles = e.miles > 0 ? e.miles : nil
+                    guard !e.name.isEmpty, !sets.isEmpty || minutes != nil || miles != nil else { return nil }
+                    return WorkoutTextParser.ParsedExercise(name: e.name, sets: sets, minutes: minutes, miles: miles)
+                }
+                return out.isEmpty ? nil : out
             } catch {
                 return nil
             }
@@ -271,6 +320,32 @@ struct GeneratedBrief {
 
 @available(iOS 26.0, *)
 @Generable
+struct GeneratedWorkout {
+    @Guide(description: "Every exercise the person wrote, in order")
+    var exercises: [GeneratedExercise]
+}
+
+@available(iOS 26.0, *)
+@Generable
+struct GeneratedExercise {
+    @Guide(description: "The exercise name as written, e.g. bench press, squat, lat pulldown")
+    var name: String
+
+    @Guide(description: "Weight in pounds for each set, one number per set; 0 for bodyweight")
+    var weightsLbs: [Double]
+
+    @Guide(description: "Reps for each set, one number per set")
+    var reps: [Int]
+
+    @Guide(description: "Minutes, for timed or cardio work; otherwise 0")
+    var minutes: Double
+
+    @Guide(description: "Miles, for walking, running or biking; otherwise 0")
+    var miles: Double
+}
+
+@available(iOS 26.0, *)
+@Generable
 struct GeneratedMeal {
     @Guide(description: "Short, tidy name for the meal")
     var name: String
@@ -280,6 +355,12 @@ struct GeneratedMeal {
 
     @Guide(description: "Estimated grams of protein as a whole number")
     var proteinGrams: Int
+
+    @Guide(description: "Estimated grams of carbohydrate as a whole number")
+    var carbsGrams: Int
+
+    @Guide(description: "Estimated grams of fat as a whole number")
+    var fatGrams: Int
 
     @Guide(description: "One short sentence naming the biggest portion assumption")
     var assumption: String
