@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS weighins (
   date TEXT NOT NULL,
   pounds REAL NOT NULL,
   updated_at TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual',
   PRIMARY KEY (challenge_id, role, date)
 );
 CREATE TABLE IF NOT EXISTS messages (
@@ -28,3 +29,13 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS messages_by_challenge ON messages (challenge_id, id);
+
+-- v2: where a weigh-in came from, and each side's stats card.
+-- (source column is in the CREATE above; existing DBs: ALTER TABLE weighins ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';)
+CREATE TABLE IF NOT EXISTS stats (
+  challenge_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner','friend')),
+  json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (challenge_id, role)
+);

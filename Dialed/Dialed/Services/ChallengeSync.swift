@@ -12,6 +12,7 @@
 //
 
 import Foundation
+import HealthKit
 #if canImport(Combine)
 import Combine
 #endif
@@ -51,6 +52,8 @@ final class ChallengeSync: ObservableObject {
 
     var isLive: Bool { challengeID != nil && token != nil }
     var messages: [ChallengeWire.Message] { state?.messages ?? [] }
+    /// Your friend's side, summarized for the Challenge tab.
+    var other: ChallengeWire.OtherSide? { state.map { ChallengeWire.otherSide($0) } }
 
     private var token: String? { try? KeychainStore.string(forKey: Keys.token) }
 
@@ -129,6 +132,41 @@ final class ChallengeSync: ObservableObject {
             lastError = nil
         } catch {
             lastError = "Sync failed: \(error.localizedDescription)"
+            return
+        }
+        await pushStats(challenge: challenge)
+    }
+
+    /// Your stats card for the shared page; only sent when it changed.
+    private var lastStats: ChallengeWire.OwnerStats?
+
+    private func pushStats(challenge: WeightChallenge) async {
+        let calendar = Calendar.current
+        let doneDays = (UserDefaults.standard.string(forKey: "workout.doneDays") ?? "")
+            .split(separator: ",").map(String.init)
+        let workouts = ChallengeWire.workoutCounts(doneDays: doneDays)
+        let steps = (try? await HealthKitManager.shared.fetchDailySums(.stepCount, unit: .count(), days: 7)) ?? [:]
+        let today = calendar.startOfDay(for: Date())
+        let past = steps.filter { $0.key < today }.map(\.value)
+        let event = GoalEvent.load()
+        let stats = ChallengeWire.OwnerStats(
+            goalLossLbs: challenge.goalLossLbs,
+            scoring: challenge.scoring.rawValue,
+            stepsAvg7: past.isEmpty ? nil : (past.reduce(0, +) / Double(past.count)).rounded(),
+            stepsToday: steps[today].map { $0.rounded() },
+            workoutsWeek: workouts.week,
+            workoutsTotal: workouts.total,
+            goalDayName: event?.name,
+            goalDayDate: event.map { ChallengeWire.dayKey($0.date) })
+        guard stats != lastStats else { return }
+        do {
+            var request = authorized("/stats", method: "PUT")
+            request.httpBody = try JSONEncoder().encode(stats)
+            let fresh: ChallengeWire.State = try await send(request)
+            state = fresh
+            lastStats = stats
+        } catch {
+            // Stats are a nice-to-have; the next sync retries.
         }
     }
 

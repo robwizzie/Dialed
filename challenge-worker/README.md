@@ -34,6 +34,15 @@ npx wrangler secret put CREATE_KEY
 
 Paste the same key into the "Create key" field in the app.
 
+## Automatic weigh-ins
+
+The friend's page has a **Sync your scale** card. On iPhone it walks
+through a Shortcuts automation (Time of Day → Find Health Samples:
+Weight today → Get Contents of URL POST to the `/scale` link), so any scale
+that writes to Apple Health (e.g. Fitdays/ABLEGRID) posts each morning's
+weight automatically. On Android it offers a home-screen quick log plus the
+same link for automation apps.
+
 ## Local test
 
 ```sh
@@ -51,4 +60,6 @@ npx wrangler dev
 | PUT | `/api/challenges/:id/weighins` | your own weigh-ins `{ weighins: [{ date, pounds }] }` |
 | DELETE | `/api/challenges/:id/weighins/:date` | your own |
 | POST | `/api/challenges/:id/messages` | `{ text }`, 280 chars max |
+| PUT | `/api/challenges/:id/stats` | your stats card (goal, steps, workouts…) |
+| POST | `/api/challenges/:id/scale?t=<token>` | automatic weigh-in: `{ "weight": "185.2 lb" }` (kg understood); dated by the caller's timezone |
 | GET | `/c/:id#t=<token>` | the friend's page |
