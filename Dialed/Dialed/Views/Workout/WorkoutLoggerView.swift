@@ -131,9 +131,14 @@ struct WorkoutLoggerView: View {
                         .fontWeight(.semibold)
                 }
             }
-            .onChange(of: fingerprint) { _, _ in scheduleAutosave() }
+            .onChange(of: fingerprint) { _, _ in
+                scheduleAutosave()
+                syncLiveActivity()
+            }
+            .onChange(of: restEndsAt) { _, _ in syncLiveActivity() }
             .onDisappear {
                 flushAutosave()
+                if WorkoutLiveActivityController.isRunning { WorkoutLiveActivityController.end(liveState) }
                 if hasExistingLog { onSaved() }
             }
             .safeAreaInset(edge: .bottom) {
@@ -595,6 +600,40 @@ struct WorkoutLoggerView: View {
     private func closeKeepingChanges() {
         flushAutosave()
         dismiss()
+    }
+
+    // MARK: - Live Activity
+
+    /// Lock Screen / Dynamic Island: starts with your first finished set
+    /// today and follows along until you close the logger.
+    private func syncLiveActivity() {
+        guard loaded, !isCardio, Calendar.current.isDateInToday(day) else { return }
+        if WorkoutLiveActivityController.isRunning {
+            WorkoutLiveActivityController.update(liveState)
+        } else if exercises.contains(where: { $0.sets.contains(where: \.done) }), !liveState.isFinished {
+            WorkoutLiveActivityController.start(title: session.title, state: liveState)
+        }
+    }
+
+    /// The next undone set (first exercise that still has one), sets done,
+    /// and the rest timer.
+    private var liveState: WorkoutActivityAttributes.ContentState {
+        let tracked = exercises.filter { !$0.checkOnly }
+        let all = tracked.flatMap(\.sets)
+        var state = WorkoutActivityAttributes.ContentState(
+            exercise: nil, setNumber: 0, setCount: 0, nextWeight: nil, nextReps: 0,
+            restEndsAt: restEndsAt.flatMap { $0 > Date() ? $0 : nil },
+            setsDone: all.filter(\.done).count, setsTotal: all.count)
+        for ex in tracked {
+            guard let i = ex.sets.firstIndex(where: { !$0.done }) else { continue }
+            state.exercise = ex.name
+            state.setNumber = i + 1
+            state.setCount = ex.sets.count
+            state.nextWeight = ex.tracksWeight ? ex.sets[i].weight : nil
+            state.nextReps = ex.sets[i].reps
+            break
+        }
+        return state
     }
 
     /// Every exercise in the plan, for matching typed names.
