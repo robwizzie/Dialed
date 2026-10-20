@@ -14,6 +14,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct SplashScreenView: View {
     @EnvironmentObject var appState: AppState

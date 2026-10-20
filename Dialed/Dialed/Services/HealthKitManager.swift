@@ -929,9 +929,9 @@ class HealthKitManager: ObservableObject {
         }
     }
 
-    enum SleepStage: String { case awake, rem, light, deep }
+    enum SleepStage: String, Codable { case awake, rem, light, deep }
 
-    struct SleepSegment: Equatable {
+    struct SleepSegment: Equatable, Codable {
         let start: Date
         let end: Date
         let stage: SleepStage

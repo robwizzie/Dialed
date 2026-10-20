@@ -50,10 +50,10 @@ final class GoogleHealthSyncService {
             try ingestSleep(sleeps)
         } catch { record(error) }
 
-        var vitals: [Date: (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?)] = [:]
-        func put(_ date: GHDate?, _ update: (inout (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?)) -> Void) {
+        var vitals: [Date: (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?, temp: Double?)] = [:]
+        func put(_ date: GHDate?, _ update: (inout (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?, temp: Double?)) -> Void) {
             guard let day = date?.date(calendar: calendar) else { return }
-            var row = vitals[day] ?? (nil, nil, nil, nil)
+            var row = vitals[day] ?? (nil, nil, nil, nil, nil)
             update(&row)
             vitals[day] = row
         }
@@ -83,8 +83,18 @@ final class GoogleHealthSyncService {
             }
         } catch { record(error) }
 
+        // Nightly skin temperature, stored as the offset from your 30-day
+        // baseline — the signal Illness Watch reads. Optional: not every
+        // watch reports it, so a failure here doesn't fail the sync.
+        let temps = try? await api.list("daily-sleep-temperature-derivations", filter: "daily_sleep_temperature_derivations.date >= \"\(sinceDay)\"")
+        for p in temps ?? [] {
+            guard let v = p.dailySleepTemperatureDerivations, let nightly = v.nightlyTemperatureCelsius,
+                  let baseline = v.baselineTemperatureCelsius else { continue }
+            put(v.date) { $0.temp = nightly - baseline }
+        }
+
         for (day, row) in vitals {
-            upsertDailySnapshot(day: day, rhr: row.rhr, hrv: row.hrv, spo2: row.spo2, breathing: row.br)
+            upsertDailySnapshot(day: day, rhr: row.rhr, hrv: row.hrv, spo2: row.spo2, breathing: row.br, skinTemp: row.temp)
         }
         try? context.save()
     }
@@ -167,6 +177,11 @@ final class GoogleHealthSyncService {
             session.remMinutes = sleep.minutes(of: "REM")
             session.lightMinutes = sleep.minutes(of: "LIGHT")
             session.awakeMinutes = sleep.minutes(of: "AWAKE") ?? sleep.summary?.minutesAwake?.value
+            session.stageTimeline = Self.segments(sleep.stages)
+            if let stages = sleep.stages {
+                // Each AWAKE segment between sleep is one wake-up.
+                session.awakeningCount = stages.filter { $0.type == "AWAKE" }.count
+            }
             if existing == nil {
                 context.insert(session)
             } else {
@@ -175,7 +190,25 @@ final class GoogleHealthSyncService {
         }
     }
 
-    private func upsertDailySnapshot(day: Date, rhr: Double?, hrv: Double?, spo2: Double?, breathing: Double?) {
+    /// Google stage types → the four stages the hypnogram draws. Classic
+    /// (non-staged) nights map ASLEEP to light and RESTLESS to awake.
+    static func segments(_ stages: [GHDataPoint.Sleep.StageSegment]?) -> [HealthKitManager.SleepSegment] {
+        (stages ?? []).compactMap { s in
+            guard let start = GHTime.parse(s.startTime), let end = GHTime.parse(s.endTime), end > start else { return nil }
+            let stage: HealthKitManager.SleepStage
+            switch s.type {
+            case "AWAKE", "RESTLESS": stage = .awake
+            case "LIGHT", "ASLEEP":   stage = .light
+            case "DEEP":              stage = .deep
+            case "REM":               stage = .rem
+            default:                  return nil
+            }
+            return HealthKitManager.SleepSegment(start: start, end: end, stage: stage)
+        }
+        .sorted { $0.start < $1.start }
+    }
+
+    private func upsertDailySnapshot(day: Date, rhr: Double?, hrv: Double?, spo2: Double?, breathing: Double?, skinTemp: Double?) {
         let externalID = "ghealth-daily-\(GHDate(day).iso)"
         let descriptor = FetchDescriptor<BiometricSnapshot>(predicate: #Predicate { $0.sourceExternalID == externalID })
         let existing = (try? context.fetch(descriptor))?.first
@@ -190,6 +223,7 @@ final class GoogleHealthSyncService {
         }
         if let spo2 { snapshot.spO2 = spo2 }
         if let breathing { snapshot.breathingRate = breathing }
+        if let skinTemp { snapshot.skinTemperatureDelta = skinTemp }
         if existing == nil { context.insert(snapshot) }
     }
 

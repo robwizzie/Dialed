@@ -74,4 +74,104 @@ final class HealthInsightsTests: XCTestCase {
         XCTAssertTrue(texts.contains { $0.contains("Late meals") })
         XCTAssertTrue(texts.contains { $0.contains("Fiber is 12") })
     }
+
+    // MARK: - Split nights
+
+    private func at(_ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        calendar.date(from: DateComponents(year: 2026, month: 10, day: day, hour: hour, minute: minute))!
+    }
+
+    private func piece(_ start: Date, _ end: Date, asleep: Int, deep: Int? = 40) -> HealthInsights.Night {
+        .init(wakeDay: calendar.startOfDay(for: end), bedtime: start, wakeTime: end,
+              inBedMinutes: Int(end.timeIntervalSince(start) / 60), asleepMinutes: asleep,
+              deepMinutes: deep, remMinutes: 30, lightMinutes: asleep - 70, awakeMinutes: 5, awakenings: 1, vendorScore: 80)
+    }
+
+    func testCombineJoinsASplitNight() throws {
+        // 11 PM–3 AM, up for 40 min, back down 3:40–7 AM.
+        let first = piece(at(18, 23), at(19, 3), asleep: 230)
+        let second = piece(at(19, 3, 40), at(19, 7), asleep: 190)
+        let night = try XCTUnwrap(HealthInsights.combine([second, first]))
+        XCTAssertEqual(night.bedtime, at(18, 23))
+        XCTAssertEqual(night.wakeTime, at(19, 7))
+        XCTAssertEqual(night.asleepMinutes, 420)
+        XCTAssertEqual(night.inBedMinutes, 480)
+        XCTAssertEqual(night.awakeMinutes, 5 + 5 + 40)
+        XCTAssertEqual(night.awakenings, 3)
+        XCTAssertEqual(night.deepMinutes, 80)
+        XCTAssertEqual(night.periods.count, 2)
+        XCTAssertNil(night.vendorScore, "A watch score for one piece isn't the whole night's")
+    }
+
+    func testCombineDropsDuplicatesAndNaps() throws {
+        let main = piece(at(18, 23), at(19, 7), asleep: 440)
+        let duplicate = piece(at(18, 23, 5), at(19, 6, 50), asleep: 400)
+        let nap = piece(at(19, 14), at(19, 14, 40), asleep: 35)
+        let night = try XCTUnwrap(HealthInsights.combine([nap, duplicate, main]))
+        XCTAssertEqual(night.asleepMinutes, 440)
+        XCTAssertEqual(night.vendorScore, 80)
+        XCTAssertEqual(night.periods.count, 1)
+        XCTAssertNil(HealthInsights.combine([]))
+    }
+
+    // MARK: - Tonight
+
+    func testSleepPlanAddsSomeDebtToTheTarget() throws {
+        let rested = (12...18).map { night($0, asleep: 450) }
+        let plan = try XCTUnwrap(HealthInsights.sleepPlan(history: rested, calendar: calendar))
+        XCTAssertEqual(plan.debtHours, 0, accuracy: 0.01)
+        XCTAssertEqual(plan.targetHours, 7.5, accuracy: 0.01)
+        // Bed 10:30 PM + 480 min in bed → wake 6:30 AM → asleep by 11:00 PM.
+        XCTAssertEqual(plan.wakeMinutes, 6 * 60 + 30)
+        XCTAssertEqual(plan.bedtimeMinutes, 23 * 60)
+
+        let short = (12...18).map { night($0, asleep: 360) }   // 1.5 h short × 7
+        let catchUp = try XCTUnwrap(HealthInsights.sleepPlan(history: short, calendar: calendar))
+        XCTAssertEqual(catchUp.debtHours, 10.5, accuracy: 0.01)
+        XCTAssertEqual(catchUp.targetHours, 8.5, accuracy: 0.01, "Payback is capped at an extra hour")
+        XCTAssertNil(HealthInsights.sleepPlan(history: Array(short.prefix(2)), calendar: calendar))
+    }
+
+    // MARK: - Stress
+
+    func testStressSitsBalancedAtBaselineAndRisesWithStrain() throws {
+        let normal = try XCTUnwrap(HealthInsights.stress(hrv: 60, hrvBaseline: [60, 60], restingHR: 58, rhrBaseline: [58, 58],
+                                                          sleepHours: 7.5, respiratory: 15, respBaseline: [15, 15]))
+        XCTAssertEqual(normal.label, "Balanced")
+        let strained = try XCTUnwrap(HealthInsights.stress(hrv: 42, hrvBaseline: [60, 60], restingHR: 64, rhrBaseline: [58, 58],
+                                                            sleepHours: 5, respiratory: 17, respBaseline: [15, 15]))
+        XCTAssertGreaterThanOrEqual(strained.score, 90)
+        XCTAssertEqual(strained.label, "High")
+        let relaxed = try XCTUnwrap(HealthInsights.stress(hrv: 75, hrvBaseline: [60, 60], restingHR: 54, rhrBaseline: [58, 58],
+                                                           sleepHours: 8.5, respiratory: nil, respBaseline: []))
+        XCTAssertEqual(relaxed.label, "Calm")
+        XCTAssertEqual(relaxed.contributors.map(\.name), ["HRV", "Resting HR", "Sleep"])
+        XCTAssertNil(HealthInsights.stress(hrv: 60, hrvBaseline: [60], restingHR: nil, rhrBaseline: [],
+                                           sleepHours: nil, respiratory: nil, respBaseline: []))
+    }
+
+    // MARK: - Illness watch
+
+    func testIllnessCheckEscalatesWithSignalsMovingTogether() throws {
+        let rhr = [56.0, 57, 56, 58, 57]
+        let hrv = [62.0, 60, 64, 61, 63]
+        let resp = [14.5, 14.8, 14.6, 14.7, 14.5]
+        let temp = [0.0, 0.1, -0.1, 0.05, 0.0]
+        let o2 = [97.0, 97, 96, 97, 97]
+        func check(rhr r: Double, hrv h: Double, resp b: Double, temp t: Double?) -> HealthInsights.IllnessCheck? {
+            HealthInsights.illnessCheck(restingHR: r, rhrBaseline: rhr, hrv: h, hrvBaseline: hrv,
+                                        respiratory: b, respBaseline: resp, skinTemp: t, skinTempBaseline: temp,
+                                        spO2: 97, spO2Baseline: o2)
+        }
+        XCTAssertEqual(try XCTUnwrap(check(rhr: 57, hrv: 61, resp: 14.6, temp: 0.1)).level, .clear)
+        XCTAssertEqual(try XCTUnwrap(check(rhr: 62, hrv: 48, resp: 14.6, temp: 0.1)).level, .watch)
+        XCTAssertEqual(try XCTUnwrap(check(rhr: 62, hrv: 61, resp: 14.6, temp: 0.9)).level, .alert, "Fever-like temp + one more")
+        let sick = try XCTUnwrap(check(rhr: 63, hrv: 47, resp: 16.5, temp: nil))
+        XCTAssertEqual(sick.level, .alert)
+        XCTAssertEqual(sick.flaggedCount, 3)
+        // Too little history → no verdict.
+        XCTAssertNil(HealthInsights.illnessCheck(restingHR: 70, rhrBaseline: [56, 57], hrv: 30, hrvBaseline: [60, 61],
+                                                 respiratory: nil, respBaseline: [], skinTemp: nil, skinTempBaseline: [],
+                                                 spO2: nil, spO2Baseline: []))
+    }
 }

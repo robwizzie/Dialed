@@ -38,7 +38,8 @@ enum Neka {
     /// Text/icon color on top of an `ink` fill.
     static let onInk = Color(light: .white, dark: Color(hex: "0E0F11"))
     static let inkSecondary = Color(light: Color(hex: "6E6E73"), dark: Color(hex: "A0A0A6"))
-    static let inkTertiary = Color(light: Color(hex: "A1A1A6"), dark: Color(hex: "6B6B72"))
+    /// Captions and footnotes — still ≥ 3.5:1 on cards so small text reads.
+    static let inkTertiary = Color(light: Color(hex: "7F7F85"), dark: Color(hex: "8E8E95"))
     static let hairline = Color(light: Color.black.opacity(0.08), dark: Color.white.opacity(0.1))
     /// Neutral track behind bars and rings.
     static let track = Color(light: Color.black.opacity(0.06), dark: Color.white.opacity(0.09))
@@ -62,6 +63,17 @@ enum Neka {
     static let lavenderSoft = Color(light: Color(hex: "EDE5FC"), dark: Color(hex: "29203D"))
     static let amber = Color(hex: "F2C14E")
     static let amberSoft = Color(light: Color(hex: "FFF4D6"), dark: Color(hex: "3A3018"))
+
+    // MARK: - Accent text
+
+    /// Deeper accents for small colored text (status lines, chips). The
+    /// accents above are tuned for fills and wash out as 11pt text on the
+    /// pastel cards.
+    static let greenText = Color(light: Color(hex: "2B7F45"), dark: Color(hex: "7DD89A"))
+    static let orangeText = Color(light: Color(hex: "B85A12"), dark: Color(hex: "FFB57A"))
+    static let skyText = Color(light: Color(hex: "1B6FA8"), dark: Color(hex: "8CCBF7"))
+    static let roseText = Color(light: Color(hex: "B8334B"), dark: Color(hex: "F59BAA"))
+    static let lavenderText = Color(light: Color(hex: "6A4BC4"), dark: Color(hex: "C4AEF5"))
 
     /// The yellow dot used on the hero body callouts.
     static let pulse = Color(hex: "F4D35E")

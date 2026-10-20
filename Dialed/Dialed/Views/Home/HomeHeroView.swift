@@ -3,9 +3,9 @@
 //  Dialed
 //
 //  The signature Home hero: your photo, lifted off its background, softly
-//  fading into the page, with live vitals pinned to your body by thin
-//  leader lines — heart at the head, breathing at the neck, blood oxygen
-//  at the shoulder, weight at the chest.
+//  fading into the page, with live vitals on frosted plates pinned to your
+//  body by thin leader lines — heart at the head, breathing at the neck,
+//  blood oxygen at the shoulder, weight at the chest.
 //
 //  With a mood avatar on, the illustration fills the hero, framed on the
 //  face, and the four vitals sit in a row of tiles along the bottom so
@@ -287,11 +287,15 @@ struct HomeHeroView: View {
 
     private struct Callout {
         let title: String
+        let icon: String
+        let tint: Color
         let value: String
         let unit: String
         let status: String
-        /// Top-left of the label, as a fraction of the hero.
-        let label: CGPoint
+        let hasData: Bool
+        /// Top of the plate, as a fraction of the hero's height. Plates sit
+        /// against the left or right edge so they never float mid-photo.
+        let top: CGFloat
         /// Where the dot sits on the body.
         let dot: CGPoint
         let labelOnLeft: Bool
@@ -300,38 +304,42 @@ struct HomeHeroView: View {
     private var calloutModels: [Callout] {
         [
             Callout(
-                title: "Heart",
+                title: "Heart", icon: "heart.fill", tint: Neka.orange,
                 value: heartRate.map { "\(Int($0.rounded()))" } ?? "--",
                 unit: "bpm",
                 status: heartRate == nil ? "No data" : (heartRateIsLive ? "Live" : "Resting"),
-                label: CGPoint(x: 0.05, y: 0.10),
+                hasData: heartRate != nil,
+                top: 0.12,
                 dot: CGPoint(x: 0.52, y: 0.22),
                 labelOnLeft: true
             ),
             Callout(
-                title: "Breathing",
+                title: "Breathing", icon: "lungs.fill", tint: Neka.sky,
                 value: breathingRate.map { String(format: "%.0f", $0) } ?? "--",
                 unit: "rpm",
                 status: breathingRate.map { (12...20).contains($0) ? "Normal" : "Check" } ?? "No data",
-                label: CGPoint(x: 0.68, y: 0.36),
+                hasData: breathingRate != nil,
+                top: 0.34,
                 dot: CGPoint(x: 0.56, y: 0.47),
                 labelOnLeft: false
             ),
             Callout(
-                title: "Blood O₂",
+                title: "Blood O₂", icon: "drop.fill", tint: Neka.lavender,
                 value: spO2.map { String(format: "%.0f", $0) } ?? "--",
                 unit: "%",
                 status: spO2.map { $0 >= 95 ? "Normal" : "Low" } ?? "No data",
-                label: CGPoint(x: 0.05, y: 0.46),
+                hasData: spO2 != nil,
+                top: 0.44,
                 dot: CGPoint(x: 0.36, y: 0.60),
                 labelOnLeft: true
             ),
             Callout(
-                title: "Weight",
+                title: "Weight", icon: "scalemass.fill", tint: Neka.green,
                 value: weight.map { String(format: "%.1f", $0) } ?? "--",
                 unit: "lb",
-                status: weightNote ?? "Step on the scale",
-                label: CGPoint(x: 0.68, y: 0.62),
+                status: weightNote ?? "Weigh in",
+                hasData: weight != nil,
+                top: 0.60,
                 dot: CGPoint(x: 0.58, y: 0.74),
                 labelOnLeft: false
             )
@@ -339,54 +347,77 @@ struct HomeHeroView: View {
     }
 
     private func callouts(w: CGFloat, h: CGFloat) -> some View {
-        let labelWidth: CGFloat = min(118, w * 0.3)
+        let plateWidth: CGFloat = min(112, w * 0.31)
+        let plateHeight: CGFloat = 70
+        let inset: CGFloat = 12
         return ZStack(alignment: .topLeading) {
             ForEach(calloutModels, id: \.title) { c in
-                let labelOrigin = CGPoint(x: c.label.x * w, y: c.label.y * h)
+                let plateX = c.labelOnLeft ? inset : w - inset - plateWidth
+                let plateY = c.top * h
                 let dot = CGPoint(x: c.dot.x * w, y: c.dot.y * h)
-                // Line runs from the end of the title row to the dot.
-                let lineStart = c.labelOnLeft
-                    ? CGPoint(x: labelOrigin.x + labelWidth * 0.62, y: labelOrigin.y + 8)
-                    : CGPoint(x: labelOrigin.x - 6, y: labelOrigin.y + 8)
+                // Line runs from the plate's inner edge to the dot.
+                let lineStart = CGPoint(x: c.labelOnLeft ? plateX + plateWidth : plateX, y: plateY + plateHeight / 2)
 
-                Path { p in
+                // Light halo under a dark core: visible on the backdrop and on
+                // dark clothing alike.
+                let leader = Path { p in
                     p.move(to: lineStart)
                     p.addLine(to: dot)
                 }
-                .stroke(Neka.ink.opacity(0.25), lineWidth: 0.8)
+                leader.stroke(Neka.surface.opacity(0.7), lineWidth: 2.4)
+                leader.stroke(Neka.ink.opacity(0.4), lineWidth: 0.9)
 
                 PulseDot()
                     .position(dot)
 
                 calloutLabel(c)
-                    .frame(width: labelWidth, alignment: .leading)
-                    .position(x: labelOrigin.x + labelWidth / 2, y: labelOrigin.y + 30)
+                    .frame(width: plateWidth, height: plateHeight)
+                    .position(x: plateX + plateWidth / 2, y: plateY + plateHeight / 2)
             }
         }
         .frame(width: w, height: h)
         .allowsHitTesting(false)
     }
 
+    /// A frosted plate so the reading stays legible over any photo.
     private func calloutLabel(_ c: Callout) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(c.title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(Neka.ink)
+            HStack(spacing: 4) {
+                Image(systemName: c.icon)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(c.tint)
+                Text(c.title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(Neka.inkSecondary)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(c.value)
                     .font(.system(size: 22, weight: .semibold))
-                    .foregroundColor(Neka.ink)
+                    .foregroundColor(c.hasData ? Neka.ink : Neka.inkTertiary)
                     .contentTransition(.numericText())
                 Text(c.unit)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(Neka.ink.opacity(0.8))
+                    .foregroundColor(Neka.inkSecondary)
             }
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             Text(c.status)
                 .font(.system(size: 10, weight: .medium))
                 .foregroundColor(Neka.inkSecondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+        .padding(.horizontal, 10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.regularMaterial)
+                .shadow(color: Neka.shadow, radius: 6, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Neka.cardStroke, lineWidth: 0.5)
+        )
         .accessibilityElement(children: .combine)
     }
 

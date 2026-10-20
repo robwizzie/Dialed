@@ -39,6 +39,10 @@ final class SleepSession {
     /// Number of awakenings.
     var awakeningCount: Int?
 
+    /// Stage-by-stage segments (JSON `[SleepSegment]`) when the source
+    /// reports them — drives the full-night hypnogram.
+    var stageTimelineData: Data?
+
     // MARK: - Vendor scores
     /// Fitbit "Sleep Score" (0–100) when present.
     var vendorSleepScore: Int?
@@ -87,6 +91,11 @@ final class SleepSession {
     var source: Source {
         get { Source(rawValue: sourceRaw) ?? .fitbit }
         set { sourceRaw = newValue.rawValue }
+    }
+
+    var stageTimeline: [HealthKitManager.SleepSegment] {
+        get { stageTimelineData.flatMap { try? JSONDecoder().decode([HealthKitManager.SleepSegment].self, from: $0) } ?? [] }
+        set { stageTimelineData = newValue.isEmpty ? nil : try? JSONEncoder().encode(newValue) }
     }
 
     /// Convenience: fractional hours asleep.

@@ -33,10 +33,13 @@ final class HealthDetailModel: ObservableObject {
     @Published private(set) var intakeHourly: [Double] = Array(repeating: 0, count: 24)
     @Published private(set) var burnHourly: [Double] = Array(repeating: 0, count: 24)
     @Published private(set) var readiness: Int?
+    @Published private(set) var stress: HealthInsights.Stress?
+    @Published private(set) var illness: HealthInsights.IllnessCheck?
 
     // MARK: Sleep
     @Published private(set) var nights: [HealthInsights.Night] = []
     @Published private(set) var hypnogram: [HealthKitManager.SleepSegment] = []
+    @Published private(set) var sleepPlan: HealthInsights.SleepPlan?
 
     // MARK: Nutrition
     @Published private(set) var nutrition = HealthInsights.NutritionDay(
@@ -93,12 +96,7 @@ final class HealthDetailModel: ObservableObject {
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day
         let settings = UserSettings.load()
 
-        // Apple Health reads, in parallel.
-        async let hkRHR = try? health.fetchSamples(.restingHeartRate, unit: .count().unitDivided(by: .minute()), from: windowStart, to: dayEnd)
-        async let hkHRV = try? health.fetchSamples(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: windowStart, to: dayEnd)
-        async let hkResp = try? health.fetchSamples(.respiratoryRate, unit: .count().unitDivided(by: .minute()), from: windowStart, to: dayEnd)
-        async let hkO2 = try? health.fetchSamples(.oxygenSaturation, unit: .percent(), from: windowStart, to: dayEnd)
-        async let hkWrist = try? health.fetchSamples(.appleSleepingWristTemperature, unit: .degreeCelsius(), from: windowStart, to: dayEnd)
+        // Apple Health reads, in parallel (and alongside loadSignals).
         async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 14)
         async let hkStepsHour = try? health.fetchHourlySums(.stepCount, unit: .count(), on: day)
         async let hkActiveHour = try? health.fetchHourlySums(.activeEnergyBurned, unit: .kilocalorie(), on: day)
@@ -112,15 +110,11 @@ final class HealthDetailModel: ObservableObject {
         async let hkSugar = try? health.fetchHourlySums(.dietarySugar, unit: .gram(), on: day)
         async let hkSodium = try? health.fetchHourlySums(.dietarySodium, unit: .gramUnit(with: .milli), on: day)
         async let hkCaffeine = try? health.fetchHourlySums(.dietaryCaffeine, unit: .gramUnit(with: .milli), on: day)
+
+        await loadSignals(context: context)
         let weights = await WeightDataSource.readings(context: context, since: windowStart)
 
         // Local data.
-        let snapshots = fetch(context, FetchDescriptor<BiometricSnapshot>(
-            predicate: #Predicate { $0.timestamp >= windowStart && $0.timestamp < dayEnd },
-            sortBy: [SortDescriptor(\.timestamp)]))
-        let sessions = fetch(context, FetchDescriptor<SleepSession>(
-            predicate: #Predicate { $0.logicalDate >= windowStart && $0.logicalDate < dayEnd },
-            sortBy: [SortDescriptor(\.logicalDate)]))
         let logs = fetch(context, FetchDescriptor<DayLog>(
             predicate: #Predicate { $0.date >= windowStart && $0.date < dayEnd }))
         let events = fetch(context, FetchDescriptor<ContextEvent>(
@@ -128,15 +122,6 @@ final class HealthDetailModel: ObservableObject {
         let foods = fetch(context, FetchDescriptor<FoodEntry>(
             predicate: #Predicate { $0.dayDate >= day && $0.dayDate < dayEnd }))
 
-        // ---- Body: watch (Google) first, Apple Health to fill gaps.
-        restingHR = merge(daily(snapshots) { $0.restingHeartRate }, averaged(await hkRHR ?? []))
-        hrv = merge(daily(snapshots) { $0.hrv }, averaged(await hkHRV ?? []))
-        respiratory = merge(daily(snapshots) { $0.breathingRate }, averaged(await hkResp ?? []))
-        spO2 = merge(daily(snapshots) { $0.spO2 }, averaged((await hkO2 ?? []).map { HealthKitManager.QuantityReading(date: $0.date, value: $0.value * 100) }))
-        let wrist = averaged(await hkWrist ?? [])
-        let wristMean = HealthInsights.mean(wrist.map(\.value))
-        skinTemp = merge(daily(snapshots) { $0.skinTemperatureDelta },
-                         wrist.map { DayValue(date: $0.date, value: $0.value - (wristMean ?? $0.value)) })
         weight = Dictionary(grouping: weights) { calendar.startOfDay(for: $0.date) }
             .map { DayValue(date: $0.key, value: $0.value.last!.pounds) }
             .sorted { $0.date < $1.date }
@@ -166,30 +151,6 @@ final class HealthDetailModel: ObservableObject {
         burnHourly = (0..<24).map { h in
             (basalTotal > 0 ? basal[h] : currentWeight * 12 / 24) + active[h]
         }
-
-        // ---- Sleep
-        var byNight: [Date: SleepSession] = [:]
-        for s in sessions {
-            let key = calendar.startOfDay(for: s.logicalDate)
-            if (byNight[key]?.asleepMinutes ?? 0) < s.asleepMinutes { byNight[key] = s }
-        }
-        nights = byNight.values.sorted { $0.logicalDate < $1.logicalDate }.map { s in
-            HealthInsights.Night(
-                wakeDay: calendar.startOfDay(for: s.logicalDate), bedtime: s.startTime, wakeTime: s.endTime,
-                inBedMinutes: s.inBedMinutes, asleepMinutes: s.asleepMinutes,
-                deepMinutes: s.deepMinutes, remMinutes: s.remMinutes, lightMinutes: s.lightMinutes,
-                awakeMinutes: s.awakeMinutes, awakenings: s.awakeningCount, vendorScore: s.vendorSleepScore)
-        }
-        if let night = lastNight {
-            hypnogram = await health.fetchSleepStages(from: night.bedtime.addingTimeInterval(-3600),
-                                                      to: night.wakeTime.addingTimeInterval(3600))
-        } else {
-            hypnogram = []
-        }
-        readiness = HealthInsights.readiness(
-            hrv: value(on: hrv), hrvBaseline: hrv.filter { $0.date < day }.map(\.value),
-            restingHR: value(on: restingHR), rhrBaseline: restingHR.filter { $0.date < day }.map(\.value),
-            sleepHours: lastNight?.hours)
 
         // ---- Nutrition
         let log = logs.first { calendar.isDate($0.date, inSameDayAs: day) }
@@ -233,6 +194,86 @@ final class HealthDetailModel: ObservableObject {
         meals = (dayMeals.map { Meal(time: $0.timestamp, name: Self.mealName($0), calories: $0.value ?? 0) }
                  + foods.map { Meal(time: $0.timestamp, name: $0.name, calories: $0.calories) })
             .sorted { $0.time < $1.time }
+    }
+
+    /// Overnight vitals, sleep, and the scores built from them (readiness,
+    /// stress, illness watch, tonight's plan) for `day`. All Home's Body
+    /// Check card needs, without the nutrition and hourly reads.
+    func loadSignals(context: ModelContext) async {
+        let day = self.day
+        let windowStart = calendar.date(byAdding: .day, value: -14, to: day) ?? day
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+
+        async let hkRHR = try? health.fetchSamples(.restingHeartRate, unit: .count().unitDivided(by: .minute()), from: windowStart, to: dayEnd)
+        async let hkHRV = try? health.fetchSamples(.heartRateVariabilitySDNN, unit: .secondUnit(with: .milli), from: windowStart, to: dayEnd)
+        async let hkResp = try? health.fetchSamples(.respiratoryRate, unit: .count().unitDivided(by: .minute()), from: windowStart, to: dayEnd)
+        async let hkO2 = try? health.fetchSamples(.oxygenSaturation, unit: .percent(), from: windowStart, to: dayEnd)
+        async let hkWrist = try? health.fetchSamples(.appleSleepingWristTemperature, unit: .degreeCelsius(), from: windowStart, to: dayEnd)
+
+        let snapshots = fetch(context, FetchDescriptor<BiometricSnapshot>(
+            predicate: #Predicate { $0.timestamp >= windowStart && $0.timestamp < dayEnd },
+            sortBy: [SortDescriptor(\.timestamp)]))
+        let sessions = fetch(context, FetchDescriptor<SleepSession>(
+            predicate: #Predicate { $0.logicalDate >= windowStart && $0.logicalDate < dayEnd },
+            sortBy: [SortDescriptor(\.logicalDate)]))
+
+        // ---- Body: watch (Google) first, Apple Health to fill gaps.
+        restingHR = merge(daily(snapshots) { $0.restingHeartRate }, averaged(await hkRHR ?? []))
+        hrv = merge(daily(snapshots) { $0.hrv }, averaged(await hkHRV ?? []))
+        respiratory = merge(daily(snapshots) { $0.breathingRate }, averaged(await hkResp ?? []))
+        spO2 = merge(daily(snapshots) { $0.spO2 }, averaged((await hkO2 ?? []).map { HealthKitManager.QuantityReading(date: $0.date, value: $0.value * 100) }))
+        let wrist = averaged(await hkWrist ?? [])
+        let wristMean = HealthInsights.mean(wrist.map(\.value))
+        skinTemp = merge(daily(snapshots) { $0.skinTemperatureDelta },
+                         wrist.map { DayValue(date: $0.date, value: $0.value - (wristMean ?? $0.value)) })
+
+        // ---- Sleep: every session that woke you that day, joined into one
+        // night (a split night is still one night).
+        nights = Dictionary(grouping: sessions) { calendar.startOfDay(for: $0.logicalDate) }
+            .compactMap { _, group in
+                HealthInsights.combine(group.map { s in
+                    HealthInsights.Night(
+                        wakeDay: calendar.startOfDay(for: s.logicalDate), bedtime: s.startTime, wakeTime: s.endTime,
+                        inBedMinutes: s.inBedMinutes, asleepMinutes: s.asleepMinutes,
+                        deepMinutes: s.deepMinutes, remMinutes: s.remMinutes, lightMinutes: s.lightMinutes,
+                        awakeMinutes: s.awakeMinutes, awakenings: s.awakeningCount, vendorScore: s.vendorSleepScore,
+                        segments: s.stageTimeline)
+                })
+            }
+            .sorted { $0.wakeDay < $1.wakeDay }
+        if let night = lastNight {
+            hypnogram = night.segments.isEmpty
+                ? await health.fetchSleepStages(from: night.bedtime.addingTimeInterval(-3600),
+                                                to: night.wakeTime.addingTimeInterval(3600))
+                : night.segments
+        } else {
+            hypnogram = []
+        }
+
+        // ---- Scores, each against the days before `day`.
+        let prior = { (series: [DayValue]) in series.filter { $0.date < day }.suffix(14).map(\.value) }
+        readiness = HealthInsights.readiness(
+            hrv: value(on: hrv), hrvBaseline: prior(hrv),
+            restingHR: value(on: restingHR), rhrBaseline: prior(restingHR),
+            sleepHours: lastNight?.hours)
+        stress = HealthInsights.stress(
+            hrv: value(on: hrv), hrvBaseline: prior(hrv),
+            restingHR: value(on: restingHR), rhrBaseline: prior(restingHR),
+            sleepHours: lastNight?.hours,
+            respiratory: value(on: respiratory), respBaseline: prior(respiratory))
+        // Illness watch only reads this day's overnight values — a stale
+        // reading from days ago shouldn't raise (or clear) a flag.
+        illness = HealthInsights.illnessCheck(
+            restingHR: exact(restingHR), rhrBaseline: prior(restingHR),
+            hrv: exact(hrv), hrvBaseline: prior(hrv),
+            respiratory: exact(respiratory), respBaseline: prior(respiratory),
+            skinTemp: exact(skinTemp), skinTempBaseline: prior(skinTemp),
+            spO2: exact(spO2), spO2Baseline: prior(spO2))
+        sleepPlan = HealthInsights.sleepPlan(history: nights.filter { $0.wakeDay <= day })
+    }
+
+    private func exact(_ series: [DayValue]) -> Double? {
+        series.first { calendar.isDate($0.date, inSameDayAs: day) }?.value
     }
 
     // MARK: - Helpers

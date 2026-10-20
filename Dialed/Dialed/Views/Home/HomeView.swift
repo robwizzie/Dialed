@@ -7,7 +7,8 @@
 //    1. "Hello, <name>." greeting, date, devices + avatar
 //    2. Hero — your photo with vitals pinned to your body
 //    3. Weight-loss challenge scoreboard
-//    4. Body state (Recovery / Readiness / Energy / Strain)
+//    4. Body state (Recovery / Readiness / Energy / Strain) + Body Check
+//       (stress and illness watch)
 //    5. Metric tiles — Weight, Water, HRV, Sleep, Resting HR, Activity
 //    6. Fuel — protein + calorie budget
 //    7. Today's timeline
@@ -27,6 +28,8 @@ struct HomeView: View {
     @StateObject private var stateModel = NowViewModel()
     @ObservedObject private var photos = ProfilePhotoStore.shared
     @StateObject private var briefModel = AIBriefModel()
+    /// Overnight vitals for the Body Check card (stress + illness watch).
+    @StateObject private var signals = HealthDetailModel()
     @ObservedObject private var studio = AvatarStudio.shared
     @AppStorage("avatar.useOnHome") private var useAvatarOnHome = true
     @State private var aiAvailability: AIAvailability = DialedAI.availability
@@ -85,6 +88,8 @@ struct HomeView: View {
                         )
                     }
                     HomeStateStrip(items: stateItems)
+                    HomeBodyCheckCard(stress: signals.stress, illness: signals.illness,
+                                      onOpen: { router.openHealth(.body) })
                     tiles
                     HomeFuelCard(
                         protein: viewModel.proteinGrams,
@@ -160,6 +165,8 @@ struct HomeView: View {
         // Skipped refreshes (tab re-appear within a minute) do nothing else.
         guard await viewModel.refresh(context: modelContext, force: force) else { return }
         await stateModel.refresh(context: modelContext)
+        signals.day = Calendar.current.startOfDay(for: Date())
+        await signals.loadSignals(context: modelContext)
         aiAvailability = DialedAI.availability
         await briefModel.refreshIfStale(viewModel.snapshot)
         // Once avatars are on, quietly fill in today's mood look.
