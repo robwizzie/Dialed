@@ -33,7 +33,7 @@ enum ReminderKind: String, CaseIterable, Codable, Identifiable {
     var detail: String {
         switch self {
         case .water:        return "11 AM, 2, 5 and 7:30 PM — only if you're behind"
-        case .protein:      return "1 and 6 PM, plus a nudge if nothing's logged since noon"
+        case .protein:      return "1 and 6 PM, plus a 3:30 nudge if you're behind your usual pace"
         case .weighIn:      return "7:30 AM, if you haven't stepped on the scale"
         case .steps:        return "6 PM, if you're short on steps"
         case .weeklyReview: return "Sundays at 6 PM: your week in one screen"
@@ -118,6 +118,9 @@ enum ReminderPlanner {
         var lastMealAt: Date?
         /// Smart nudges already delivered today (count against the cap).
         var deliveredToday = 0
+        /// When you usually eat your protein. With it, the mid-afternoon
+        /// protein nudge follows your own day ("60 g by 3:30 — a shake now").
+        var proteinCurve: ProteinPacing.Curve?
     }
 
     struct Reminder: Equatable, Identifiable {
@@ -207,7 +210,16 @@ enum ReminderPlanner {
                     body: body, route: .foodLog))
             }
 
-            if let t = at(15, 30), let noon = at(12),
+            if let curve = inputs.proteinCurve, let t = at(15, 30) {
+                // Your own pace: one nudge, only when you're well behind it.
+                let pace = ProteinPacing.status(actual: inputs.proteinGrams, target: inputs.proteinTarget, curve: curve,
+                                                now: t, lastMealAt: inputs.lastMealAt, calendar: calendar)
+                if pace.shouldNudge {
+                    candidates.append(Reminder(
+                        id: id(.protein, t), kind: .protein, fireDate: t,
+                        title: "Protein check 🍗", body: pace.message, route: .foodLog))
+                }
+            } else if let t = at(15, 30), let noon = at(12),
                inputs.lastMealAt.map({ $0 < noon }) ?? true,
                inputs.proteinGrams < inputs.proteinTarget * pace(at: t, calendar: calendar) * tolerance {
                 let since: String
