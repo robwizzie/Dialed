@@ -128,10 +128,8 @@ struct MainTabView: View {
     private func quickLogSheet(_ item: QuickLog) -> some View {
         switch item {
         case .water:
-            WaterCaptureSheet()
-                .environment(\.colorScheme, .dark)
-                .presentationDetents([.medium])
-                .presentationDragIndicator(.hidden)
+            WaterLogSheet()
+                .presentationDetents([.large])
         case .weighIn:
             WeighInSheet(lastWeight: nil)
                 .presentationDetents([.medium])
