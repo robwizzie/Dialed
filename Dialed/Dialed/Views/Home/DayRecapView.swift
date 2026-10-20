@@ -161,8 +161,7 @@ struct DayRecapContent: View {
         if let night = day?.night {
             row(icon: "moon.stars.fill", tint: Neka.lavender, fill: Neka.lavenderSoft,
                 title: "Slept \(Self.hours(night.asleepMinutes))",
-                detail: "\(night.bedtime.formatted(date: .omitted, time: .shortened)) → \(night.wakeTime.formatted(date: .omitted, time: .shortened)) · score \(HealthInsights.sleepScore(night))"
-                    + (night.vendorScore.map { " · Google \($0)" } ?? ""))
+                detail: "\(night.bedtime.formatted(date: .omitted, time: .shortened)) → \(night.wakeTime.formatted(date: .omitted, time: .shortened)) · score \(HealthInsights.sleepScore(night))")
                 .padding(14)
                 .nekaCard()
         } else if day != nil {

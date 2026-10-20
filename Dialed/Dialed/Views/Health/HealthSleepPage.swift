@@ -69,7 +69,7 @@ struct HealthSleepPage: View {
                     .foregroundColor(Neka.ink)
                 Spacer()
                 Button { explaining = night } label: {
-                    Label("Dialed vs Google", systemImage: "info.circle")
+                    Label("How it works", systemImage: "info.circle")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(Neka.inkSecondary)
                 }
@@ -81,18 +81,6 @@ struct HealthSleepPage: View {
                     .foregroundColor(Neka.ink)
                     .contentTransition(.numericText())
                 NekaPill(text: HealthInsights.label(for: score), tint: .white, fill: score >= 70 ? Neka.skyText : Neka.orangeText)
-                Spacer()
-                if let google = night.vendorScore {
-                    VStack(alignment: .trailing, spacing: 1) {
-                        Text("Google")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(Neka.inkTertiary)
-                        Text("\(google)")
-                            .font(.system(size: 17, weight: .semibold))
-                            .monospacedDigit()
-                            .foregroundColor(Neka.inkSecondary)
-                    }
-                }
             }
             HealthScoreBar(score: score)
             Text("Duration, time asleep in bed, deep + REM share and wake-ups.")

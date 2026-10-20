@@ -49,10 +49,6 @@ final class GoogleHealthSyncService {
             let sleeps = try await api.list("sleep", filter: "sleep.interval.end_time >= \"\(GHTime.rfc3339(since))\"")
             try ingestSleep(sleeps)
         } catch { record(error) }
-        // Not in Google's documented types; harmless 4xx if it doesn't exist.
-        if let scores = try? await api.list("daily-sleep-score", filter: "daily_sleep_score.date >= \"\(sinceDay)\"") {
-            try? ingestSleepScores(scores)
-        }
 
         var vitals: [Date: (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?, temp: Double?)] = [:]
         func put(_ date: GHDate?, _ update: (inout (rhr: Double?, hrv: Double?, spo2: Double?, br: Double?, temp: Double?)) -> Void) {
@@ -186,42 +182,11 @@ final class GoogleHealthSyncService {
                 // Each AWAKE segment between sleep is one wake-up.
                 session.awakeningCount = stages.filter { $0.type == "AWAKE" }.count
             }
-            if let score = sleep.vendorScore { session.vendorSleepScore = score }
             if existing == nil {
                 context.insert(session)
             } else {
                 session.updatedAt = Date()
             }
-        }
-    }
-
-    /// Daily scores matched to the night that ended on that date.
-    private func ingestSleepScores(_ points: [GHDataPoint]) throws {
-        let calendar = Calendar.current
-        for p in points {
-            guard let daily = p.dailySleepScore, let score = daily.vendorScore,
-                  let day = daily.date?.date(calendar: calendar) else { continue }
-            let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-            let descriptor = FetchDescriptor<SleepSession>(predicate: #Predicate { $0.logicalDate >= day && $0.logicalDate < next })
-            for session in try context.fetch(descriptor) where session.vendorSleepScore == nil {
-                session.vendorSleepScore = score
-            }
-        }
-    }
-
-    /// Latest sleep data point as raw JSON (Devices → data check).
-    func rawLatestSleep() async -> String {
-        let since = Date().addingTimeInterval(-3 * 86_400)
-        do {
-            var text = try await api.rawList("sleep", filter: "sleep.interval.end_time >= \"\(GHTime.rfc3339(since))\"")
-            if let scores = try? await api.rawList("daily-sleep-score", filter: nil) {
-                text += "\n\n// daily-sleep-score\n" + scores
-            } else {
-                text += "\n\n// daily-sleep-score: not available"
-            }
-            return text
-        } catch {
-            return "Couldn't load: \(error.localizedDescription)"
         }
     }
 

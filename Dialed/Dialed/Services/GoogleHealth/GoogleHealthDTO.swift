@@ -30,40 +30,6 @@ struct GHInt: Decodable, Equatable {
     }
 }
 
-/// A score that may arrive as 87, "87", or an object like
-/// {"overallScore": 87} / {"overall": 87} / {"value": 87}. Google doesn't
-/// document a sleep score in the v4 API, so this takes whatever shape shows up.
-struct GHScore: Decodable, Equatable {
-    let value: Int?
-
-    init(_ value: Int?) { self.value = value }
-
-    private struct Keys: CodingKey {
-        var stringValue: String
-        var intValue: Int? { nil }
-        init?(stringValue: String) { self.stringValue = stringValue }
-        init?(intValue: Int) { nil }
-    }
-
-    init(from decoder: Decoder) throws {
-        if let c = try? decoder.singleValueContainer() {
-            if let n = try? c.decode(Double.self) { value = Int(n.rounded()); return }
-            if let s = try? c.decode(String.self), let n = Double(s) { value = Int(n.rounded()); return }
-        }
-        if let o = try? decoder.container(keyedBy: Keys.self) {
-            for name in ["overallScore", "overall", "score", "value", "sleepScore"] {
-                guard let key = Keys(stringValue: name) else { continue }
-                if let n = try? o.decode(Double.self, forKey: key) { value = Int(n.rounded()); return }
-                if let s = try? o.decode(String.self, forKey: key), let n = Double(s) { value = Int(n.rounded()); return }
-            }
-        }
-        value = nil
-    }
-
-    /// Only a plausible 0–100 score counts.
-    var valid: Int? { value.flatMap { (1...100).contains($0) ? $0 : nil } }
-}
-
 struct GHDate: Codable, Equatable {
     var year: Int
     var month: Int
@@ -114,20 +80,6 @@ struct GHDataPoint: Decodable {
     let sleep: Sleep?
     let dailySleepTemperatureDerivations: DailySleepTemperature?
     let exercise: Exercise?
-    /// A separate daily sleep-score type, if the API ever serves one.
-    let dailySleepScore: DailySleepScore?
-
-    struct DailySleepScore: Decodable {
-        let date: GHDate?
-        let overallScore: GHScore?
-        let score: GHScore?
-        let sleepScore: GHScore?
-
-        var vendorScore: Int? {
-            let candidates: [GHScore?] = [overallScore, score, sleepScore]
-            return candidates.lazy.compactMap { $0?.valid }.first
-        }
-    }
 
     struct Weight: Decodable {
         let weightGrams: Double?
@@ -186,17 +138,6 @@ struct GHDataPoint: Decodable {
         let metadata: Metadata?
         /// Contiguous stage segments covering the whole sleep period.
         let stages: [StageSegment]?
-        // Candidate places for the watch's own score (undocumented).
-        let sleepScore: GHScore?
-        let score: GHScore?
-        let overallScore: GHScore?
-
-        /// The watch's sleep score when the data point carries one.
-        var vendorScore: Int? {
-            let candidates: [GHScore?] = [sleepScore, overallScore, score,
-                                          summary?.sleepScore, summary?.overallScore, summary?.score]
-            return candidates.lazy.compactMap { $0?.valid }.first
-        }
 
         struct StageSegment: Decodable {
             let type: String?
@@ -209,9 +150,6 @@ struct GHDataPoint: Decodable {
             let minutesAwake: GHInt?
             let minutesInSleepPeriod: GHInt?
             let stagesSummary: [Stage]?
-            let sleepScore: GHScore?
-            let score: GHScore?
-            let overallScore: GHScore?
         }
 
         struct Stage: Decodable {
