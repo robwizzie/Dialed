@@ -60,6 +60,13 @@ struct LoggedFood: Identifiable {
         case .entry(let f): return f.fatGrams
         }
     }
+    /// Servings the numbers cover (1 unless you changed it).
+    var servings: Double {
+        switch record {
+        case .meal(let e):  return e.mealServings ?? 1
+        case .entry(let f): return f.servings ?? 1
+        }
+    }
 }
 
 /// What the editor hands back.
@@ -70,6 +77,8 @@ struct FoodDraft: Equatable {
     var carbs: Double?
     var fat: Double?
     var time = Date()
+    /// Servings the numbers are for; changing it in the editor rescales them.
+    var servings: Double = 1
 
     init() {}
 
@@ -80,6 +89,7 @@ struct FoodDraft: Equatable {
         carbs = food.carbs
         fat = food.fat
         time = food.time
+        servings = food.servings
     }
 
     init(_ meal: SavedMeal) {
@@ -128,7 +138,7 @@ enum FoodLog {
     @discardableResult
     static func add(_ draft: FoodDraft, context: ModelContext) -> ContextEvent {
         let event = ContextEvent.meal(name: draft.name, calories: draft.calories, protein: draft.protein,
-                                      carbs: draft.carbs, fat: draft.fat, at: draft.time)
+                                      carbs: draft.carbs, fat: draft.fat, at: draft.time, servings: draft.servings)
         context.insert(event)
         finish(context)
         HealthWriteBack.sync(event)
@@ -139,7 +149,7 @@ enum FoodLog {
         switch food.record {
         case .meal(let e):
             e.updateMeal(name: draft.name, calories: draft.calories, protein: draft.protein,
-                         carbs: draft.carbs, fat: draft.fat, time: draft.time)
+                         carbs: draft.carbs, fat: draft.fat, time: draft.time, servings: draft.servings)
             HealthWriteBack.sync(e)
         case .entry(let f):
             let oldCalories = f.calories, oldProtein = f.proteinGrams
@@ -149,6 +159,7 @@ enum FoodLog {
             f.carbsGrams = draft.carbs
             f.fatGrams = draft.fat
             f.timestamp = draft.time
+            f.servings = draft.servings == 1 ? nil : draft.servings
             adjustDayLog(for: f, context: context, calories: draft.calories - oldCalories, protein: draft.protein - oldProtein)
         }
         finish(context)

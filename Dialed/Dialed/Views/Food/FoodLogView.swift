@@ -325,6 +325,7 @@ struct FoodLogView: View {
 
     private func macroLine(_ food: LoggedFood) -> String {
         var parts = ["\(Int(food.protein)) g protein"]
+        if food.servings != 1 { parts.insert(FoodEditSheet.servingsText(food.servings), at: 0) }
         if let c = food.carbs { parts.append("\(Int(c)) g carbs") }
         if let f = food.fat { parts.append("\(Int(f)) g fat") }
         return parts.joined(separator: " · ")
@@ -340,6 +341,8 @@ struct FoodEditSheet: View {
     var onDelete: () -> Void
 
     @State private var draft: FoodDraft
+    /// The numbers for one serving; servings × this is what's logged.
+    @State private var perServing: FoodDraft
     @State private var saveFavorite = false
     @State private var confirmDelete = false
 
@@ -347,10 +350,22 @@ struct FoodEditSheet: View {
         self.target = target
         self.onSave = onSave
         self.onDelete = onDelete
+        let start: FoodDraft
         switch target {
-        case .new(let d):         _draft = State(initialValue: d)
-        case .existing(let food): _draft = State(initialValue: FoodDraft(food))
+        case .new(let d):         start = d
+        case .existing(let food): start = FoodDraft(food)
         }
+        _draft = State(initialValue: start)
+        _perServing = State(initialValue: Self.scaled(start, by: 1 / max(start.servings, 0.01)))
+    }
+
+    private static func scaled(_ d: FoodDraft, by factor: Double) -> FoodDraft {
+        var out = d
+        out.calories = d.calories * factor
+        out.protein = d.protein * factor
+        out.carbs = d.carbs.map { $0 * factor }
+        out.fat = d.fat.map { $0 * factor }
+        return out
     }
 
     private var isNew: Bool { if case .new = target { return true } else { return false } }
@@ -362,6 +377,15 @@ struct FoodEditSheet: View {
                     TextField("What did you eat?", text: $draft.name)
                         .font(.system(size: 17, weight: .semibold))
                     DatePicker("Time", selection: $draft.time)
+                }
+                Section {
+                    servingsRow
+                } header: {
+                    Text("How much did you have?")
+                } footer: {
+                    Text(draft.servings == 1
+                         ? "Ate more or less than you logged? Change the servings and everything below scales with it."
+                         : "\(Int(perServing.calories.rounded())) calories per serving × \(Self.servingsText(draft.servings)).")
                 }
                 Section {
                     numberRow("Calories", value: $draft.calories, unit: "calories", steps: [-100, -25, 25, 100])
@@ -380,6 +404,10 @@ struct FoodEditSheet: View {
                     }
                 }
             }
+            .onChange(of: draft.calories) { _, _ in syncPerServing() }
+            .onChange(of: draft.protein) { _, _ in syncPerServing() }
+            .onChange(of: draft.carbs) { _, _ in syncPerServing() }
+            .onChange(of: draft.fat) { _, _ in syncPerServing() }
             .navigationTitle(isNew ? "Quick add" : "Edit food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -387,8 +415,8 @@ struct FoodEditSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isNew ? "Log" : "Save") {
                         if saveFavorite && !draft.name.isEmpty {
-                            SavedMealsManager.add(SavedMeal(name: draft.name, calories: draft.calories, proteinGrams: draft.protein,
-                                                            carbsGrams: draft.carbs, fatGrams: draft.fat))
+                            SavedMealsManager.add(SavedMeal(name: draft.name, calories: perServing.calories, proteinGrams: perServing.protein,
+                                                            carbsGrams: perServing.carbs, fatGrams: perServing.fat))
                         }
                         onSave(draft)
                         dismiss()
@@ -404,6 +432,84 @@ struct FoodEditSheet: View {
                 }
             }
         }
+    }
+
+    // MARK: - Servings
+
+    private static let quickServings: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
+
+    private var servingsRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Button { setServings(draft.servings - 0.25) } label: {
+                    Image(systemName: "minus").frame(width: 30, height: 30)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
+                .disabled(draft.servings <= 0.25)
+                Spacer()
+                VStack(spacing: 0) {
+                    Text(Self.servingsNumber(draft.servings))
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .contentTransition(.numericText(value: draft.servings))
+                    Text(draft.servings == 1 ? "serving" : "servings")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button { setServings(draft.servings + 0.25) } label: {
+                    Image(systemName: "plus").frame(width: 30, height: 30)
+                }
+                .buttonStyle(.bordered)
+                .buttonBorderShape(.circle)
+            }
+            HStack(spacing: 6) {
+                ForEach(Self.quickServings, id: \.self) { s in
+                    Button { setServings(s) } label: {
+                        Text(Self.servingsNumber(s) + "×")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(draft.servings == s ? Neka.ink : Neka.track))
+                            .foregroundColor(draft.servings == s ? Neka.onInk : Neka.ink)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func setServings(_ value: Double) {
+        let s = min(20, max(0.25, (value * 4).rounded() / 4))
+        withAnimation(.snappy) {
+            let time = draft.time, name = draft.name
+            draft = Self.scaled(perServing, by: s)
+            draft.servings = s
+            draft.time = time
+            draft.name = name
+        }
+        #if os(iOS)
+        UISelectionFeedbackGenerator().selectionChanged()
+        #endif
+    }
+
+    /// Typing a number or tapping ± changes what one serving is.
+    private func syncPerServing() {
+        let next = Self.scaled(draft, by: 1 / max(draft.servings, 0.01))
+        if next.calories != perServing.calories || next.protein != perServing.protein
+            || next.carbs != perServing.carbs || next.fat != perServing.fat {
+            perServing = next
+        }
+    }
+
+    static func servingsNumber(_ s: Double) -> String {
+        s.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    static func servingsText(_ s: Double) -> String {
+        servingsNumber(s) + (s == 1 ? " serving" : " servings")
     }
 
     private func numberRow(_ title: String, value: Binding<Double>, unit: String, steps: [Double]) -> some View {
