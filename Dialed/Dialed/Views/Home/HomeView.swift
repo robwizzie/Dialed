@@ -125,6 +125,7 @@ struct HomeView: View {
                         watchWorkouts = found
                         sheet = .logWorkout
                     })
+                    HomeFunCard()
                     if HomeWeeklyReviewCard.isShowing() {
                         HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
                     }
