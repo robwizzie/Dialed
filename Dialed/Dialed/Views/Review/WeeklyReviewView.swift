@@ -39,6 +39,7 @@ struct WeeklyReviewView: View {
                         patternsSection
                     }
                     goalCard(s)
+                    trophyLinks
                 } else {
                     ProgressView()
                         .frame(maxWidth: .infinity)
@@ -61,6 +62,47 @@ struct WeeklyReviewView: View {
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
             Task { await model.load(context: modelContext) }
         }
+    }
+
+    /// Badges and the habit heatmap.
+    private var trophyLinks: some View {
+        VStack(spacing: 0) {
+            NavigationLink { BadgesView() } label: {
+                trophyRow("medal.fill", "Badges", "Your trophy wall and what's next", Neka.amber, Neka.amberSoft)
+            }
+            Divider().overlay(Neka.hairline).padding(.leading, 62)
+            NavigationLink { HabitHeatmapView() } label: {
+                trophyRow("square.grid.3x3.fill", "Habit heatmap", "Twelve weeks of mile, protein, logging and workouts", Neka.green, Neka.greenSoft)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 4)
+        .nekaCard()
+    }
+
+    private func trophyRow(_ icon: String, _ title: String, _ subtitle: String, _ tint: Color, _ fill: Color) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(tint)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(fill))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Neka.inkTertiary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
     }
 
     // MARK: - Header
