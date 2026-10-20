@@ -120,7 +120,7 @@ struct AddFoodSheet: View {
 
     private var title: String {
         switch stage {
-        case .pick:     return "Add food"
+        case .pick:     return "Log food"
         case .photo:    return "Snap a meal"
         case .scan:     return "Scan barcode"
         case .describe: return "Describe it"

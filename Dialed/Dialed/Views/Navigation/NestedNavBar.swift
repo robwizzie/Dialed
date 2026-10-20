@@ -4,8 +4,9 @@
 //
 //  Floating bottom navigation with nested menus. Each section is a round
 //  avatar; the selected one springs open into a dark pill showing its
-//  name and a menu button. The menu nests: every tab has a Log submenu,
-//  Home adds Ask Dialed and a "Go to" submenu, Challenge adds weigh-ins.
+//  name and a menu button. A green "+" at the end opens the Log sheet from
+//  any tab. The menu nests: every tab has a Log submenu and "Everything"
+//  (the searchable directory), Home adds Ask Dialed, Challenge weigh-ins.
 //
 //  The pill is always dark glass so it reads on the light Neka screens and
 //  the legacy dark ones alike.
@@ -24,7 +25,7 @@ struct NestedNavBar: View {
     private let tabs: [AppTab] = [.home, .challenge, .plan, .trends, .settings]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(tabs, id: \.self) { tab in
                 if tab == router.tab {
                     pill(tab)
@@ -36,13 +37,14 @@ struct NestedNavBar: View {
                         #endif
                         router.select(tab)
                     } label: {
-                        avatar(tab, size: 44)
+                        avatar(tab, size: 40)
                             .matchedGeometryEffect(id: "avatar-\(tab.rawValue)", in: pillSpace)
                     }
                     .buttonStyle(.dialedScale)
                     .accessibilityLabel(tab.title)
                 }
             }
+            logButton
         }
         .padding(6)
         // One contained dock, so the bar reads as its own surface instead of
@@ -74,39 +76,70 @@ struct NestedNavBar: View {
         }
     }
 
+    // MARK: - Log
+
+    /// Always there, on every tab: one tap to log anything.
+    private var logButton: some View {
+        Button {
+            #if os(iOS)
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            #endif
+            router.quickLog = .hub
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 46, height: 46)
+                .background(
+                    Circle()
+                        .fill(LinearGradient(colors: [Color(hex: "6FD08C"), Neka.green],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .shadow(color: Neka.green.opacity(0.35), radius: 8, y: 3)
+                )
+                .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 1.5))
+        }
+        .buttonStyle(.dialedScale)
+        .accessibilityLabel("Log food, a workout, water or weight")
+    }
+
     // MARK: - Selected pill
 
+    /// The current tab, open: its avatar and name. The whole pill is the
+    /// tab's menu, so the "+" beside it has room.
     private func pill(_ tab: AppTab) -> some View {
-        HStack(spacing: 10) {
-            avatar(tab, size: 32)
-                .matchedGeometryEffect(id: "avatar-\(tab.rawValue)", in: pillSpace)
-            Text(tab.title)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .fixedSize()
-            Spacer(minLength: 4)
-            Menu {
-                menu(for: tab)
-            } label: {
-                Image(systemName: "line.3.horizontal.decrease")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(Color.white.opacity(0.12)))
+        Menu {
+            menu(for: tab)
+        } label: {
+            HStack(spacing: 8) {
+                avatar(tab, size: 32)
+                    .matchedGeometryEffect(id: "avatar-\(tab.rawValue)", in: pillSpace)
+                // On narrow phones a long name gives way to the chevron.
+                ViewThatFits(in: .horizontal) {
+                    Text(tab.title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize()
+                    Color.clear.frame(width: 0, height: 0)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
             }
-            .accessibilityLabel("\(tab.title) menu")
+            .padding(.leading, 7)
+            .padding(.trailing, 12)
+            .frame(height: 48)
+            .frame(maxWidth: .infinity)
+            .background(
+                Capsule()
+                    .fill(Color(hex: "17181B").opacity(0.94))
+                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                    .matchedGeometryEffect(id: "pill", in: pillSpace)
+            )
+            .contentShape(Capsule())
         }
-        .padding(.leading, 7)
-        .padding(.trailing, 6)
-        .frame(height: 48)
-        .frame(maxWidth: .infinity)
-        .background(
-            Capsule()
-                .fill(Color(hex: "17181B").opacity(0.94))
-                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
-                .matchedGeometryEffect(id: "pill", in: pillSpace)
-        )
+        .accessibilityLabel("\(tab.title) menu")
     }
 
     // MARK: - Nested menus
@@ -122,15 +155,7 @@ struct NestedNavBar: View {
             Button { router.openHome(.avatar) } label: {
                 Label("Your avatar & future you", systemImage: "person.crop.circle.badge.checkmark")
             }
-            Menu {
-                ForEach(HomeDestination.allCases, id: \.self) { destination in
-                    Button { router.openHome(destination) } label: {
-                        Label(destination.title, systemImage: destination.icon)
-                    }
-                }
-            } label: {
-                Label("Go to", systemImage: "square.grid.2x2")
-            }
+            everythingButton
             Divider()
             Button { router.openHome(.profile) } label: {
                 Label("Profile & photo", systemImage: "person.crop.circle")
@@ -139,6 +164,7 @@ struct NestedNavBar: View {
         case .challenge:
             let challenge = WeightChallenge.load()
             logMenu
+            everythingButton
             if let challenge {
                 Menu {
                     Button { router.openChallenge(.weighIn) } label: {
@@ -162,6 +188,7 @@ struct NestedNavBar: View {
 
         case .trends:
             logMenu
+            everythingButton
             ForEach(HealthSection.allCases) { section in
                 Button { router.openHealth(section) } label: {
                     Label(section.title, systemImage: section.icon)
@@ -170,6 +197,7 @@ struct NestedNavBar: View {
 
         case .plan, .settings:
             logMenu
+            everythingButton
             Button { router.openHome(.workout) } label: {
                 Label("Workout plan", systemImage: "dumbbell.fill")
             }
@@ -186,11 +214,18 @@ struct NestedNavBar: View {
         }
     }
 
-    /// "Log ▸ Add food / Snap a meal / Scan barcode / Water / Weigh in /
-    /// Voice note" — on every tab.
+    /// "Everything in Dialed": every screen, searchable.
+    private var everythingButton: some View {
+        Button { router.showDirectory = true } label: {
+            Label("Everything in Dialed", systemImage: "square.grid.2x2")
+        }
+    }
+
+    /// "Log ▸ Log food / Snap a meal / Scan barcode / … / Voice note" — on
+    /// every tab (the "+" opens the same things as a sheet).
     private var logMenu: some View {
         Menu {
-            ForEach(QuickLog.allCases) { item in
+            ForEach(QuickLog.menuItems) { item in
                 Button { router.quickLog = item } label: {
                     Label(item.title, systemImage: item.icon)
                 }

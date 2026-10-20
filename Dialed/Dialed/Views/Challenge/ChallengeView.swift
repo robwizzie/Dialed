@@ -45,6 +45,8 @@ struct ChallengeView: View {
 
     enum Sheet: String, Identifiable {
         case setup, edit, friend, weighIn, live, report
+        /// Opens Wrapped full screen (routed here from "Everything").
+        case wrapped
         var id: String { rawValue }
     }
 
@@ -100,7 +102,7 @@ struct ChallengeView: View {
             }
             .onChange(of: router.challengeSheet) { _, request in
                 guard let request else { return }
-                sheet = request
+                if request == .wrapped { showingWrapped = true } else { sheet = request }
                 router.challengeSheet = nil
             }
             .fullScreenCover(isPresented: $showingWrapped) { WrappedView() }
@@ -118,6 +120,8 @@ struct ChallengeView: View {
                         .presentationDetents([.medium])
                 case .report:
                     WeeklyReportView()
+                case .wrapped:
+                    WrappedView()
                 case .live:
                     if let c = viewModel.challenge {
                         LiveChallengeSheet(challenge: c, ownerStart: viewModel.progress?.startWeight, readings: viewModel.readings)

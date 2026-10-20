@@ -117,6 +117,12 @@ struct MainTabView: View {
         }) { item in
             quickLogSheet(item)
         }
+        // "Everything in Dialed" — from the Today menu, Settings and Home.
+        .sheet(isPresented: $router.showDirectory) {
+            AppDirectoryView()
+                .environmentObject(router)
+                .presentationDetents([.large])
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("NavigateToToday"))) { _ in
             router.select(.home)
         }
@@ -154,6 +160,16 @@ struct MainTabView: View {
     @ViewBuilder
     private func quickLogSheet(_ item: QuickLog) -> some View {
         switch item {
+        case .hub:
+            LogHubSheet(onPick: { router.quickLog = $0 }, onPhoto: {
+                router.quickLog = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(350))
+                    router.openHome(HomeDestination.progressPhotos)
+                }
+            })
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         case .water:
             WaterLogSheet()
                 .presentationDetents([.large])
@@ -169,6 +185,9 @@ struct MainTabView: View {
         case .scanFood:
             AddFoodSheet(start: .scan)
                 .presentationDetents([.large])
+        case .describeFood:
+            AddFoodSheet(start: .describe)
+                .presentationDetents([.large])
         case .eatingOut:
             EatingOutSheet()
                 .presentationDetents([.large])
@@ -176,6 +195,9 @@ struct MainTabView: View {
             WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),
                               session: WorkoutPlanStore.session(on: Date()))
                 .presentationDetents([.large])
+        case .activity:
+            FunActivitySheet(target: .manual, onDone: {})
+                .presentationDetents([.medium, .large])
         case .voice:
             VoiceCaptureSheet()
                 .environment(\.colorScheme, .dark)
