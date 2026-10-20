@@ -10,8 +10,8 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, finalPush, wrapped, hero, today, mile, challenge, race, futureYou, workout, fun, tomorrow,
-         weeklyReview, patterns, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
+    case morning, finalPush, wrapped, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
+         weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
 
@@ -22,15 +22,18 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .wrapped:      return "Dialed Wrapped"
         case .hero:         return "Photo & vitals"
         case .today:        return "Dialed today"
+        case .quests:       return "Daily quests"
         case .mile:         return "Mile a day"
         case .challenge:    return "Challenge"
         case .race:         return "Pace to win"
+        case .sideBet:      return "Side bet"
         case .futureYou:    return "Future you"
         case .workout:      return "Today's workout"
         case .fun:          return "Fun stuff"
         case .tomorrow:     return "Tomorrow's wake-up"
         case .weeklyReview: return "Week in review"
         case .patterns:     return "Patterns"
+        case .badges:       return "Badges"
         case .paths:        return "Paths"
         case .aiBrief:      return "AI brief"
         case .body:         return "Body state"
@@ -50,15 +53,18 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .wrapped:      return "gift.fill"
         case .hero:         return "person.crop.circle.fill"
         case .today:        return "gauge.with.dots.needle.67percent"
+        case .quests:       return "checklist.checked"
         case .mile:         return "figure.walk"
         case .challenge:    return "flag.2.crossed.fill"
         case .race:         return "speedometer"
+        case .sideBet:      return "dice.fill"
         case .futureYou:    return "sparkles"
         case .workout:      return "dumbbell.fill"
         case .fun:          return "figure.pickleball"
         case .tomorrow:     return "alarm.fill"
         case .weeklyReview: return "calendar.badge.checkmark"
         case .patterns:     return "chart.bar.xaxis"
+        case .badges:       return "trophy.fill"
         case .paths:        return "point.topleft.down.to.point.bottomright.curvepath.fill"
         case .aiBrief:      return "apple.intelligence"
         case .body:         return "waveform.path.ecg"
