@@ -19,7 +19,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         switch self {
         case .morning:      return "Morning brief"
         case .wakeSuggestion: return "Wake-up suggestion"
-        case .event:        return "Big day countdown"
+        case .event:        return "Big day"
         case .finalPush:    return "Final push"
         case .wrapped:      return "Dialed Wrapped"
         case .hero:         return "Photo & vitals"
@@ -88,7 +88,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         switch self {
         case .morning:      return "Mornings until noon"
         case .wakeSuggestion: return "When your calendar changes a morning"
-        case .event:        return "Before, on and after your event"
+        case .event:        return "Last week before and on your event"
         case .finalPush:    return "Last 14 days of a challenge"
         case .wrapped:      return "Around the challenge's end"
         case .tomorrow:     return "Evenings"

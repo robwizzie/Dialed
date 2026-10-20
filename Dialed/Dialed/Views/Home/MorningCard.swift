@@ -2,12 +2,13 @@
 //  MorningCard.swift
 //  Dialed
 //
-//  Good morning: the top of Home from 4 AM to noon. Last night's sleep
-//  paints the sky (a radiant sunrise for a great night, down to a grey
-//  drizzle for a rough one) with the score, hours, bed → wake and stage
-//  mix on a frosted panel over it. Below, the three most useful reads for
-//  the day (the rest one tap away) and one line worth knowing. Dismiss it
-//  and it stays tucked away until tomorrow.
+//  Good morning: the top of Home from 4 AM to noon. The whole card is the
+//  sky last night's sleep earned (a radiant sunrise for a great night,
+//  down to a grey drizzle for a rough one), with the sun riding an arc as
+//  high as the score. Over it: the greeting, the score and its verdict,
+//  the night in one frosted row, a line worth knowing, and a swipeable
+//  row of chips for the day. Dismiss it and it stays tucked away until
+//  tomorrow.
 //
 
 import SwiftUI
@@ -15,7 +16,7 @@ import SwiftUI
 struct HomeMorningCard: View {
     let firstName: String
     let night: HealthInsights.Night?
-    /// Recent nights (oldest first), for "vs your week".
+    /// Recent nights (oldest first), for how last night compares.
     let recentNights: [HealthInsights.Night]
     let readiness: Int?
     let weightReadings: [WeightReading]
@@ -28,48 +29,35 @@ struct HomeMorningCard: View {
     var onDismiss: () -> Void
 
     @State private var shownScore: Double = 0
-    @State private var showAllChips = false
     @Environment(\.colorScheme) private var scheme
     private let calendar = Calendar.current
 
     private var score: Int? { night.map(HealthInsights.sleepScore) }
     private var tier: SleepVisuals.MorningTier { SleepVisuals.MorningTier(score: score ?? 72) }
 
+    /// Text sits right on the sky: deep ink on a daytime sky, white at night.
+    private var ink: Color { scheme == .dark ? .white : Color(hex: "16202E") }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             header
+            // Open sky for the sun to climb.
+            Color.clear.frame(height: 84)
             hero
             chips
-            if let line = funLine {
-                HStack(spacing: 8) {
-                    Image(systemName: line.icon)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(line.tint)
-                        .frame(width: 26, height: 26)
-                        .background(Circle().fill(line.tint.opacity(0.15)))
-                    Text(line.text)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.track.opacity(0.7)))
-            }
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous)
-                .fill(Neka.surface)
-        )
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background { MorningSky(score: score, sunOnArc: score != nil) }
+        .clipShape(RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous)
-                .stroke(Neka.hairline, lineWidth: 0.5)
+                .stroke(.white.opacity(scheme == .dark ? 0.08 : 0.5), lineWidth: 0.5)
         )
+        .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.08), radius: 18, y: 8)
         .onAppear {
             withAnimation(.spring(response: 1.1, dampingFraction: 0.85).delay(0.2)) {
-                shownScore = Double(score ?? 0) / 100
+                shownScore = Double(score ?? 0)
             }
         }
     }
@@ -77,123 +65,106 @@ struct HomeMorningCard: View {
     // MARK: - Header
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 1) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(Date(), format: .dateTime.weekday(.wide).month(.wide).day())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: 12, weight: .semibold))
                     .tracking(0.3)
-                    .foregroundColor(Neka.inkTertiary)
-                Text(firstName.isEmpty ? "Good morning" : "Good morning, \(firstName)")
-                    .font(Neka.display(22, weight: .bold))
-                    .foregroundColor(Neka.ink)
+                    .foregroundColor(ink.opacity(0.7))
+                Text(firstName.isEmpty ? "Good morning" : "Good morning,\n\(firstName)")
+                    .font(Neka.display(26, weight: .bold))
+                    .foregroundColor(ink)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Neka.inkSecondary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Neka.track))
+                    .foregroundColor(ink.opacity(0.8))
+                    .frame(width: 30, height: 30)
+                    .background(.ultraThinMaterial, in: Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Hide until tomorrow")
         }
-        .padding(.horizontal, 2)
     }
 
-    // MARK: - Hero: the sky last night earned
+    // MARK: - Hero: score, verdict, the night in one row
 
     private var hero: some View {
         Button(action: onOpenSleep) {
-            ZStack(alignment: .bottom) {
-                MorningSky(score: score)
-                    .frame(height: 236)
-                Group {
-                    if let night, let score {
-                        sleepPanel(night, score: score)
-                    } else {
-                        noSleep
+            VStack(alignment: .leading, spacing: 10) {
+                if let night, let score {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("\(Int(shownScore.rounded()))")
+                                .font(.system(size: 64, weight: .bold, design: .rounded))
+                                .foregroundColor(ink)
+                                .contentTransition(.numericText(value: shownScore))
+                                .monospacedDigit()
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(HealthInsights.label(for: score).uppercased())
+                                    .font(.system(size: 11, weight: .heavy))
+                                    .tracking(0.8)
+                                    .foregroundColor(ink)
+                                Text("sleep score")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(ink.opacity(0.7))
+                            }
+                        }
+                        Text(tier.verdict(weekDelta: weekDelta(score)))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(ink)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
+                    sleepRow(night)
+                } else {
+                    noSleep
                 }
-                .padding(12)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .padding(10)
+                if let line = funLine {
+                    Label(line.text, systemImage: line.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(ink)
+                        .labelStyle(.titleAndIcon)
+                        .lineLimit(2)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial, in: Capsule())
+                }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay(alignment: .topLeading) {
-                Label(tierTitle, systemImage: tier.symbol)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Capsule().fill(.black.opacity(0.22)))
-                    .padding(12)
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .buttonStyle(.dialedScale)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(score.map { "Sleep score \($0), \(HealthInsights.label(for: $0)). \(tier.verdict)" } ?? "No sleep recorded")
+        .accessibilityHint("Opens sleep details")
     }
 
-    private var tierTitle: String {
-        switch tier {
-        case .radiant: return "Sunrise"
-        case .mellow:  return "Easy dawn"
-        case .hazy:    return "Hazy morning"
-        case .drizzly: return "Grey start"
-        }
-    }
-
-    private func sleepPanel(_ night: HealthInsights.Night, score: Int) -> some View {
-        HStack(alignment: .center, spacing: 14) {
-            ZStack {
-                Circle().stroke(Neka.ink.opacity(0.08), lineWidth: 9)
-                Circle()
-                    .trim(from: 0, to: shownScore)
-                    .stroke(AngularGradient(colors: MorningSky.ringColors(tier), center: .center),
-                            style: StrokeStyle(lineWidth: 9, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                VStack(spacing: -3) {
-                    Text("\(score)")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundColor(Neka.ink)
-                        .contentTransition(.numericText())
-                    Text(HealthInsights.label(for: score).uppercased())
-                        .font(.system(size: 8.5, weight: .heavy))
-                        .tracking(0.6)
-                        .foregroundColor(Neka.inkSecondary)
-                }
-            }
-            .frame(width: 78, height: 78)
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(tier.verdict)
-                    .font(.system(size: 13, weight: .semibold))
+    /// Hours, bed → wake and the stage mix on one frosted row.
+    private func sleepRow(_ night: HealthInsights.Night) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "moon.zzz.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.lavenderText)
+                Text(duration(night.asleepMinutes))
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
                     .foregroundColor(Neka.ink)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(duration(night.asleepMinutes))
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(Neka.ink)
-                    Text("\(night.bedtime.formatted(date: .omitted, time: .shortened)) – \(night.wakeTime.formatted(date: .omitted, time: .shortened))")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Neka.inkSecondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                stageBar(night)
-                if let delta = weekDelta(score) {
-                    Text(delta >= 0 ? "▲ \(delta) vs your week" : "▼ \(-delta) vs your week")
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .foregroundColor(delta >= 0 ? Neka.greenText : Neka.orangeText)
-                }
+                Text("\(night.bedtime.formatted(date: .omitted, time: .shortened)) – \(night.wakeTime.formatted(date: .omitted, time: .shortened))")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            stageBar(night)
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// Deep / REM / light / awake as one bar.
+    /// Deep / REM / light / awake as one slim bar.
     @ViewBuilder
     private func stageBar(_ n: HealthInsights.Night) -> some View {
         let parts: [(Int, Color, String)] = [
@@ -204,26 +175,25 @@ struct HomeMorningCard: View {
         ]
         let total = max(1, parts.reduce(0) { $0 + $1.0 })
         if parts.reduce(0, { $0 + $1.0 }) > 0 {
-            VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
                 GeometryReader { geo in
                     HStack(spacing: 2) {
                         ForEach(Array(parts.enumerated()), id: \.offset) { _, p in
                             if p.0 > 0 {
                                 Capsule().fill(p.1)
-                                    .frame(width: max(4, (geo.size.width - 6) * CGFloat(p.0) / CGFloat(total)))
+                                    .frame(width: max(3, (geo.size.width - 6) * CGFloat(p.0) / CGFloat(total)))
                             }
                         }
                     }
                 }
-                .frame(height: 6)
-                HStack(spacing: 8) {
-                    ForEach(Array(parts.prefix(2).enumerated()), id: \.offset) { _, p in
-                        HStack(spacing: 3) {
-                            Circle().fill(p.1).frame(width: 5, height: 5)
-                            Text("\(p.2) \(duration(p.0))")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(Neka.inkSecondary)
-                        }
+                .frame(height: 4)
+                ForEach(Array(parts.prefix(2).enumerated()), id: \.offset) { _, p in
+                    HStack(spacing: 3) {
+                        Circle().fill(p.1).frame(width: 5, height: 5)
+                        Text("\(p.2) \(duration(p.0))")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Neka.inkSecondary)
+                            .fixedSize()
                     }
                 }
             }
@@ -231,21 +201,21 @@ struct HomeMorningCard: View {
     }
 
     private var noSleep: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             Image(systemName: "moon.zzz.fill")
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(Neka.lavenderText)
-                .frame(width: 44, height: 44)
-                .background(Circle().fill(Neka.lavenderSoft))
             Text("No sleep from last night yet. Wear your watch to bed and tomorrow's sky shows how you slept.")
                 .font(.system(size: 13))
                 .foregroundColor(Neka.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
+        .padding(12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    // MARK: - Tiles
+    // MARK: - Chips
 
     private struct Tile: Identifiable {
         let id: String
@@ -294,50 +264,30 @@ struct HomeMorningCard: View {
         return out
     }
 
-    /// The first three as a tidy row; the rest one tap away.
+    /// Everything worth a glance today, as one row of frosted chips.
     private var chips: some View {
-        let list = tileList
-        let shown = showAllChips ? list : Array(list.prefix(3))
-        return VStack(spacing: 8) {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)],
-                      spacing: 8) {
-                ForEach(shown) { tile in
-                    Group {
-                        if let action = tile.action {
-                            Button(action: action) { tileBody(tile) }.buttonStyle(.dialedScale)
-                        } else {
-                            tileBody(tile)
-                        }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(tileList) { tile in
+                    if let action = tile.action {
+                        Button(action: action) { chip(tile) }.buttonStyle(.dialedScale)
+                    } else {
+                        chip(tile)
                     }
-                    .transition(.scale(scale: 0.9).combined(with: .opacity))
                 }
-            }
-            if list.count > 3 {
-                Button {
-                    withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showAllChips.toggle() }
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(showAllChips ? "Less" : "\(list.count - 3) more for today")
-                        Image(systemName: showAllChips ? "chevron.up" : "chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Neka.inkSecondary)
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.plain)
             }
         }
+        .scrollClipDisabled()
     }
 
-    private func tileBody(_ tile: Tile) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func chip(_ tile: Tile) -> some View {
+        HStack(spacing: 8) {
             Image(systemName: tile.icon)
-                .font(.system(size: 12, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundColor(tile.tint)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(tile.tint.opacity(0.14)))
-            VStack(alignment: .leading, spacing: 1) {
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(tile.tint.opacity(0.16)))
+            VStack(alignment: .leading, spacing: 0) {
                 Text(tile.title.uppercased())
                     .font(.system(size: 8.5, weight: .heavy))
                     .tracking(0.5)
@@ -346,14 +296,14 @@ struct HomeMorningCard: View {
                 Text(tile.value)
                     .font(.system(size: 12.5, weight: .semibold))
                     .foregroundColor(Neka.ink)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.8)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.track.opacity(0.7)))
+        .padding(.leading, 7)
+        .padding(.trailing, 12)
+        .padding(.vertical, 7)
+        .background(.ultraThinMaterial, in: Capsule())
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Helpers
