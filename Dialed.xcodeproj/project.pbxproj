@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C7D0A10D2F10A2B3005D4675 /* DialedWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = C7D0A1012F10A2B3005D4675 /* DialedWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		B2E94DBD2F0F64B7005D4675 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,13 +25,46 @@
 			remoteGlobalIDString = B2E94DAE2F0F64B2005D4675;
 			remoteInfo = Dialed;
 		};
+		C7D0A10E2F10A2B3005D4675 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B2E94DA72F0F64B2005D4675 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C7D0A1082F10A2B3005D4675;
+			remoteInfo = DialedWidgets;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C7D0A10C2F10A2B3005D4675 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				C7D0A10D2F10A2B3005D4675 /* DialedWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		B2E94DAF2F0F64B2005D4675 /* Dialed.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Dialed.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2E94DBC2F0F64B7005D4675 /* DialedTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DialedTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B2E94DC62F0F64B7005D4675 /* DialedUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DialedUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7D0A1012F10A2B3005D4675 /* DialedWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = DialedWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		C7D0A1042F10A2B3005D4675 /* Exceptions for "DialedWidgets" folder in "DialedWidgets" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				DialedWidgets.entitlements,
+				Info.plist,
+			);
+			target = C7D0A1082F10A2B3005D4675 /* DialedWidgets */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B2E94DB12F0F64B2005D4675 /* Dialed */ = {
@@ -43,6 +80,19 @@
 		B2E94DC92F0F64B7005D4675 /* DialedUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DialedUITests;
+			sourceTree = "<group>";
+		};
+		C7D0A1022F10A2B3005D4675 /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		C7D0A1032F10A2B3005D4675 /* DialedWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				C7D0A1042F10A2B3005D4675 /* Exceptions for "DialedWidgets" folder in "DialedWidgets" target */,
+			);
+			path = DialedWidgets;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -69,6 +119,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C7D0A1062F10A2B3005D4675 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -78,6 +135,8 @@
 				B2E94DB12F0F64B2005D4675 /* Dialed */,
 				B2E94DBF2F0F64B7005D4675 /* DialedTests */,
 				B2E94DC92F0F64B7005D4675 /* DialedUITests */,
+				C7D0A1022F10A2B3005D4675 /* Shared */,
+				C7D0A1032F10A2B3005D4675 /* DialedWidgets */,
 				B2E94DB02F0F64B2005D4675 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +147,7 @@
 				B2E94DAF2F0F64B2005D4675 /* Dialed.app */,
 				B2E94DBC2F0F64B7005D4675 /* DialedTests.xctest */,
 				B2E94DC62F0F64B7005D4675 /* DialedUITests.xctest */,
+				C7D0A1012F10A2B3005D4675 /* DialedWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,13 +162,16 @@
 				B2E94DAB2F0F64B2005D4675 /* Sources */,
 				B2E94DAC2F0F64B2005D4675 /* Frameworks */,
 				B2E94DAD2F0F64B2005D4675 /* Resources */,
+				C7D0A10C2F10A2B3005D4675 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C7D0A10F2F10A2B3005D4675 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B2E94DB12F0F64B2005D4675 /* Dialed */,
+				C7D0A1022F10A2B3005D4675 /* Shared */,
 			);
 			name = Dialed;
 			packageProductDependencies = (
@@ -163,6 +226,29 @@
 			productReference = B2E94DC62F0F64B7005D4675 /* DialedUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		C7D0A1082F10A2B3005D4675 /* DialedWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C7D0A1092F10A2B3005D4675 /* Build configuration list for PBXNativeTarget "DialedWidgets" */;
+			buildPhases = (
+				C7D0A1052F10A2B3005D4675 /* Sources */,
+				C7D0A1062F10A2B3005D4675 /* Frameworks */,
+				C7D0A1072F10A2B3005D4675 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C7D0A1032F10A2B3005D4675 /* DialedWidgets */,
+				C7D0A1022F10A2B3005D4675 /* Shared */,
+			);
+			name = DialedWidgets;
+			packageProductDependencies = (
+			);
+			productName = DialedWidgets;
+			productReference = C7D0A1012F10A2B3005D4675 /* DialedWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -184,6 +270,9 @@
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = B2E94DAE2F0F64B2005D4675;
 					};
+					C7D0A1082F10A2B3005D4675 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 				};
 			};
 			buildConfigurationList = B2E94DAA2F0F64B2005D4675 /* Build configuration list for PBXProject "Dialed" */;
@@ -203,6 +292,7 @@
 				B2E94DAE2F0F64B2005D4675 /* Dialed */,
 				B2E94DBB2F0F64B7005D4675 /* DialedTests */,
 				B2E94DC52F0F64B7005D4675 /* DialedUITests */,
+				C7D0A1082F10A2B3005D4675 /* DialedWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +313,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B2E94DC42F0F64B7005D4675 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C7D0A1072F10A2B3005D4675 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +350,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C7D0A1052F10A2B3005D4675 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +369,11 @@
 			isa = PBXTargetDependency;
 			target = B2E94DAE2F0F64B2005D4675 /* Dialed */;
 			targetProxy = B2E94DC72F0F64B7005D4675 /* PBXContainerItemProxy */;
+		};
+		C7D0A10F2F10A2B3005D4675 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C7D0A1082F10A2B3005D4675 /* DialedWidgets */;
+			targetProxy = C7D0A10E2F10A2B3005D4675 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -402,8 +511,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Dialed-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and to take your progress photos.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed saves the meals and water you log (calories, protein, carbs, fat and water) to Apple Health so every app sees the same intake. You can turn this off in the Food log.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -438,8 +548,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = "Dialed-Info.plist";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Dialed uses the camera to scan food barcodes and to take your progress photos.";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Dialed reads your weigh-ins from your smart scale, water from your smart bottle, and sleep, heart, activity and nutrition data so your dashboard, daily score and weight-loss challenge stay up to date automatically.";
-				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed can optionally write nutrition data to Apple Health to keep all your health metrics in one place.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Dialed saves the meals and water you log (calories, protein, carbs, fat and water) to Apple Health so every app sees the same intake. You can turn this off in the Food log.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -534,6 +645,60 @@
 			};
 			name = Release;
 		};
+		C7D0A10A2F10A2B3005D4675 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DialedWidgets/DialedWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NS237SS5KD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DialedWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Dialed;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.robertwiscount.Dialed.DialedWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		C7D0A10B2F10A2B3005D4675 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = DialedWidgets/DialedWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NS237SS5KD;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = DialedWidgets/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Dialed;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = org.robertwiscount.Dialed.DialedWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -569,6 +734,15 @@
 			buildConfigurations = (
 				B2E94DD72F0F64B7005D4675 /* Debug */,
 				B2E94DD82F0F64B7005D4675 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C7D0A1092F10A2B3005D4675 /* Build configuration list for PBXNativeTarget "DialedWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C7D0A10A2F10A2B3005D4675 /* Debug */,
+				C7D0A10B2F10A2B3005D4675 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
