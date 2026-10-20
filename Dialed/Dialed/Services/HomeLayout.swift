@@ -10,7 +10,7 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, finalPush, wrapped, suggestions, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
+    case morning, event, finalPush, wrapped, suggestions, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
          weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
@@ -18,6 +18,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .morning:      return "Morning brief"
+        case .event:        return "Big day countdown"
         case .finalPush:    return "Final push"
         case .wrapped:      return "Dialed Wrapped"
         case .hero:         return "Photo & vitals"
@@ -50,6 +51,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .morning:      return "sun.horizon.fill"
+        case .event:        return "sparkles"
         case .finalPush:    return "flame.fill"
         case .wrapped:      return "gift.fill"
         case .hero:         return "person.crop.circle.fill"
@@ -83,6 +85,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     var note: String? {
         switch self {
         case .morning:      return "Mornings until noon"
+        case .event:        return "Before, on and after your event"
         case .finalPush:    return "Last 14 days of a challenge"
         case .wrapped:      return "Around the challenge's end"
         case .tomorrow:     return "Evenings"
