@@ -48,6 +48,12 @@ struct SettingsView: View {
                         row("alarm", "Wake-up times", wakeSummary,
                             tint: Neka.amber, fill: Neka.amberSoft) { WakeScheduleView() }
                         divider
+                        row("calendar", "Calendars", CalendarService.shared.isConnected ? "Connected · wake-up suggestions on" : "Apple & Google · suggest wake-ups",
+                            tint: Neka.sky, fill: Neka.skySoft) { CalendarSettingsView() }
+                        divider
+                        row("calendar.badge.clock", "Schedule", "Your week: wake-ups, events, workouts, meals",
+                            tint: Neka.lavender, fill: Neka.lavenderSoft) { ScheduleView() }
+                        divider
                         row("slider.horizontal.3", "Home screen", "Reorder or hide Home's cards",
                             tint: Neka.sky, fill: Neka.skySoft) { HomeLayoutEditor(inSheet: false) }
                         divider
