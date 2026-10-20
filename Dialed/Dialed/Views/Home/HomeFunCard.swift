@@ -154,6 +154,7 @@ struct FunActivitySheet: View {
     @State private var suggestions: [String] = []
     @State private var start = Date().addingTimeInterval(-3600)
     @State private var minutes: Double = 60
+    @State private var askProtection = false
 
     private var bout: ActiveBouts.Bout? {
         if case .bout(let b) = target { return b }
@@ -180,10 +181,10 @@ struct FunActivitySheet: View {
                         HStack(spacing: 8) {
                             TextField("Laser tag, moving furniture…", text: $custom)
                                 .submitLabel(.done)
-                                .onSubmit { save(custom) }
+                                .onSubmit { submitCustom() }
                                 .padding(12)
                                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Neka.track))
-                            Button("Save") { save(custom) }
+                            Button("Save") { submitCustom() }
                                 .font(.system(size: 14, weight: .semibold))
                                 .disabled(custom.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
@@ -211,6 +212,13 @@ struct FunActivitySheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            }
+            .confirmationDialog("Protection used?", isPresented: $askProtection, titleVisibility: .visible) {
+                Button("Yes") { save(ActiveBouts.intimacy, protection: true) }
+                Button("No") { save(ActiveBouts.intimacy, protection: false) }
+                Button("Skip") { save(ActiveBouts.intimacy, protection: nil) }
+            } message: {
+                Text("Saved to Apple Health's Sexual Activity, which only you can see.")
             }
             .onAppear {
                 let history = FunActivityService.history(context: context)
@@ -279,7 +287,9 @@ struct FunActivitySheet: View {
     private func chips(_ names: [String]) -> some View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8) {
             ForEach(names, id: \.self) { name in
-                Button { save(name) } label: {
+                Button {
+                    if name == ActiveBouts.intimacy { askProtection = true } else { save(name) }
+                } label: {
                     HStack(spacing: 8) {
                         Image(systemName: ActiveBouts.symbol(for: name))
                             .font(.system(size: 14, weight: .semibold))
@@ -301,15 +311,26 @@ struct FunActivitySheet: View {
         }
     }
 
-    private func save(_ name: String) {
+    /// "sex", "hooked up"… → Intimacy (and its Health entry).
+    private func submitCustom() {
+        let words = ["sex", "intimacy", "intimate", "sexual activity", "hooked up", "hookup", "made love"]
+        if words.contains(custom.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)) {
+            askProtection = true
+        } else {
+            save(custom)
+        }
+    }
+
+    private func save(_ name: String, protection: Bool? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         if let b = bout {
-            FunActivityService.name(b, as: trimmed, context: context)
+            FunActivityService.name(b, as: trimmed, protectionUsed: protection, context: context)
         } else {
-            // A rough burn for hand-entered ones: a moderate ~6 calories a minute.
-            FunActivityService.add(name: trimmed, start: start, minutes: minutes, calories: (minutes * 6).rounded(),
-                                   context: context)
+            // A rough burn for hand-entered ones: ~6 calories a minute (about 4 for intimacy).
+            let perMinute = trimmed == ActiveBouts.intimacy ? 4.0 : 6.0
+            FunActivityService.add(name: trimmed, start: start, minutes: minutes, calories: (minutes * perMinute).rounded(),
+                                   protectionUsed: protection, context: context)
         }
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
