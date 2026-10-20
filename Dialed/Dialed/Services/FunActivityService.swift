@@ -50,6 +50,8 @@ enum FunActivityService {
         // named isn't a mystery bout.
         var busy = await WorkoutDetector.busyIntervals(on: date, context: context)
         busy += logged.map { DateInterval(start: $0.timestamp, end: $0.timestamp.addingTimeInterval(($0.value ?? 0) * 60)) }
+        // A scary movie or a big game raises your heart rate too; it isn't exercise.
+        busy += PulseSessionStore.shared.intervals(on: date)
 
         var settings = ActiveBouts.Settings()
         settings.weightLbs = await weight ?? 200
