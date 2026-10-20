@@ -65,7 +65,7 @@ enum HeadToHeadSync {
             await post(id: "\(idPrefix)weighin_\(HeadToHead.key(newest))", title: alert.title, body: alert.body, at: nil)
         }
 
-        if nudgesOn, let reason = HeadToHead.nudgeReason(before: before, after: after, newest: newest, prior: prior),
+        if nudgesOn, !EventModeStore.isEventDay(now), let reason = HeadToHead.nudgeReason(before: before, after: after, newest: newest, prior: prior),
            let at = HeadToHead.nudgeTime(now: now, sent: sentDates) {
             let snapshot = HealthSnapshot.challenge(updated, progress)
             let line = await DialedAI.trashTalk(snapshot, tone: .savage) ?? HeadToHead.cannedLine(reason, friendName: name)

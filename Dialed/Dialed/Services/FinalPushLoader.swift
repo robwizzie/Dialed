@@ -55,8 +55,8 @@ enum FinalPushNotifications {
                   let morning = calendar.date(bySettingHour: 8, minute: 0, second: 0, of: day),
                   morning > now else { continue }
             let left = FinalPush.daysLeft(end: challenge.endDate, now: morning, calendar: calendar)
-            // Day 14 already has its own note.
-            guard left < FinalPush.windowDays else { continue }
+            // Day 14 already has its own note; the big day (a wedding) gets none.
+            guard left < FinalPush.windowDays, !EventModeStore.isEventDay(day, calendar: calendar) else { continue }
             let phase = FinalPush.phase(daysLeft: left)
             let content = UNMutableNotificationContent()
             content.title = phase.title
