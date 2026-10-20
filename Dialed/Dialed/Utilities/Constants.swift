@@ -42,6 +42,12 @@ struct Constants {
         case closeTheDay = "Close the Day"
         case pmSkincare = "PM Skincare"
 
+        /// The built-in tasks Dialed still uses. Skincare is retired; its
+        /// cases stay only so older saved items decode.
+        static var active: [ChecklistType] {
+            allCases.filter { $0 != .amSkincare && $0 != .pmSkincare }
+        }
+
         var defaultTime: DateComponents {
             switch self {
             case .amSkincare:

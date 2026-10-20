@@ -47,6 +47,8 @@ struct SplashScreenView: View {
             // Run the legacy → Dialed 2.0 migration once. Cheap no-op
             // after the first launch; failure mode is "try again next launch".
             LegacyMigrationService.runIfNeeded(context: modelContext)
+            // Skincare / face-wash tasks were dropped; clear any saved ones once.
+            SkincareCleanup.runIfNeeded(context: modelContext)
         }
     }
 

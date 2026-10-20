@@ -63,7 +63,7 @@ struct UserSettings: Codable {
         calorieTarget: nil,
         expectedWorkoutsPerWeek: 6,
         notificationsEnabled: true,
-        enabledNotifications: Set(Constants.ChecklistType.allCases.map { $0.rawValue }),
+        enabledNotifications: Set(Constants.ChecklistType.active.map { $0.rawValue }),
         healthKitEnabled: false,
         customChecklistTimes: nil
     )
