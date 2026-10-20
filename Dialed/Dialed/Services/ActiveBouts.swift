@@ -112,6 +112,7 @@ enum ActiveBouts {
 
     static let activities: [Activity] = [
         .init(name: "Pickleball", symbol: "figure.pickleball"),
+        .init(name: intimacy, symbol: "heart.fill"),
         .init(name: "Basketball", symbol: "figure.basketball"),
         .init(name: "Tennis", symbol: "figure.tennis"),
         .init(name: "Golf", symbol: "figure.golf"),
@@ -128,6 +129,9 @@ enum ActiveBouts {
         .init(name: "Bowling", symbol: "figure.bowling"),
         .init(name: "Climbing", symbol: "figure.climbing")
     ]
+
+    /// Sex, discreetly named; it also goes to Health's Sexual Activity.
+    static let intimacy = "Intimacy"
 
     static func symbol(for name: String) -> String {
         activities.first { $0.name.lowercased() == name.lowercased() }?.symbol ?? "figure.mixed.cardio"
