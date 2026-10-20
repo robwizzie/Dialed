@@ -111,7 +111,8 @@ enum WeightChallengeEngine {
     // MARK: - Daily series
 
     /// Collapse raw readings into one per calendar day (earliest reading wins
-    /// — morning weight is the most repeatable) and attach a smoothed trend.
+    /// — morning weight is the most repeatable) and attach a smoothed trend
+    /// (each day moves it `smoothing` of the way toward the scale).
     static func dailySeries(
         _ readings: [WeightReading],
         calendar: Calendar = .current,
@@ -124,10 +125,16 @@ enum WeightChallengeEngine {
             earliestByDay[day] = r
         }
         var trend: Double?
+        var previous: Date?
         return earliestByDay.keys.sorted().map { day in
             let lbs = earliestByDay[day]!.pounds
-            let next = trend.map { $0 + smoothing * (lbs - $0) } ?? lbs
+            // Days between weigh-ins count: after a long gap the trend
+            // catches up to the scale instead of crawling from months ago.
+            let gap = previous.map { max(1, Double(calendar.dateComponents([.day], from: $0, to: day).day ?? 1)) } ?? 1
+            let alpha = 1 - pow(1 - smoothing, gap)
+            let next = trend.map { $0 + alpha * (lbs - $0) } ?? lbs
             trend = next
+            previous = day
             return DailyWeight(day: day, pounds: lbs, trend: next)
         }
     }
