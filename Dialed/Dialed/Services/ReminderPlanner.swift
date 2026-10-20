@@ -54,7 +54,7 @@ enum ReminderKind: String, CaseIterable, Codable, Identifiable {
 /// Where tapping a reminder takes you. Carried in the notification's
 /// userInfo as `ReminderRoute.userInfoKey`.
 enum ReminderRoute: String, Codable, Equatable {
-    case water, weighIn, foodLog, weeklyReview, home, challenge
+    case water, weighIn, foodLog, weeklyReview, home, challenge, weeklyReport, progressPhoto
 
     static let userInfoKey = "dialedRoute"
 }

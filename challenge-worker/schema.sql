@@ -56,3 +56,13 @@ CREATE TABLE IF NOT EXISTS bets (
   updated_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS bets_by_challenge ON bets (challenge_id, week);
+
+-- v4: each side's latest weekly report (the Sunday summary), shown on the other side's page.
+CREATE TABLE IF NOT EXISTS reports (
+  challenge_id TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('owner','friend')),
+  week TEXT NOT NULL,
+  json TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (challenge_id, role)
+);

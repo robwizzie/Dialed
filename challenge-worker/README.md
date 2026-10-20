@@ -64,6 +64,7 @@ npx wrangler dev
 | POST | `/api/challenges/:id/scale?t=<token>` | automatic weigh-in: `{ "weight": "185.2 lb" }` (kg understood); dated by the caller's timezone |
 | POST | `/api/challenges/:id/bets` | propose this week's side bet `{ week, metric, stake }` (one open bet per week) |
 | PATCH | `/api/challenges/:id/bets/:betId` | `{ action: accept \| decline \| cancel \| paid \| unpaid }` and/or `{ score }` (your own number only) |
+| POST | `/api/challenges/:id/reports` | your Sunday report `{ week, report: { weekNumber, headline, subline, rows: [{ title, you, friend, winner }], betLine, standing, nudge } }` (latest per side; shown on the other side's page) |
 | GET | `/c/:id#t=<token>` | the friend's page |
 
 ## Side bets (v3)
@@ -82,3 +83,20 @@ npx wrangler deploy
 
 Until then the app keeps bets on the phone and you type your friend's
 number in.
+
+## Weekly reports (v4)
+
+Every Sunday from 7 PM the app posts a summary of the week (who took it on
+weight, steps, miles, workouts, PRs, the side bet and the overall
+standing). The friend's page shows the latest one as a "Week N report"
+card. GET responses include `reports` keyed "owner" / "friend".
+
+To turn them on for an existing server, add the table and redeploy:
+
+```sh
+npx wrangler d1 execute dialed-challenge --remote --file schema.sql
+npx wrangler deploy
+```
+
+Until then the app still builds the report and offers "Text it" to send
+it over Messages.

@@ -58,6 +58,21 @@ final class ProgressPhotoIndexTests: XCTestCase {
         XCTAssertNil(index.latest(before: date(10, 1)))
     }
 
+    func testGhostFollowsThePose() throws {
+        let old = ProgressPhotoEntry(date: date(9, 20))                  // before poses: counts as front
+        let side = ProgressPhotoEntry(date: date(10, 4), pose: .side)
+        let front = ProgressPhotoEntry(date: date(10, 11), pose: .front)
+        let index = ProgressPhotoIndex(entries: [old, side, front])
+        XCTAssertEqual(index.latest(pose: .front), front)
+        XCTAssertEqual(index.latest(pose: .front, before: date(10, 11)), old)
+        XCTAssertEqual(index.latest(pose: .side), side)
+        XCTAssertNil(index.latest(pose: .back))
+
+        // Older JSON without a pose still decodes.
+        let decoded = ProgressPhotoIndex.decode(try index.encoded())
+        XCTAssertEqual(decoded.entries.map(\.pose), [nil, .side, .front])
+    }
+
     func testWeeksNewestFirst() {
         let index = ProgressPhotoIndex(entries: [
             ProgressPhotoEntry(date: date(10, 4)),      // Sun, week of Oct 4
