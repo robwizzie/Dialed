@@ -178,6 +178,7 @@ enum SmartReminders {
         inputs.stepGoal = 10_000
         inputs.weighedInToday = weights.contains { calendar.isDate($0.date, inSameDayAs: now) }
         inputs.lastMealAt = lastMeal
+        inputs.proteinCurve = ProteinPacing.curve(context: context, now: now)
         inputs.deliveredToday = await deliveredToday(calendar: calendar, now: now)
         return inputs
     }
