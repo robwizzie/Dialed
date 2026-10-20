@@ -159,6 +159,20 @@ struct HomeView: View {
                     MealPlanView()
                 case .schedule:
                     ScheduleView()
+                case .metabolism:
+                    MetabolismView()
+                case .wakeUp:
+                    WakeScheduleView()
+                case .calendars:
+                    CalendarSettingsView()
+                case .badges:
+                    BadgesView()
+                case .habits:
+                    HabitHeatmapView()
+                case .notifications:
+                    NotificationsSettingsView()
+                case .activity:
+                    SuggestedActivityPage()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -343,7 +357,7 @@ struct HomeView: View {
                 ForEach(layout.visible) { section in
                     sectionView(section)
                 }
-                moreLinks
+                exploreRow
                 customizeButton
             }
         } else {
@@ -764,47 +778,16 @@ struct HomeView: View {
         .buttonStyle(.dialedScale)
     }
 
-    private var moreLinks: some View {
-        VStack(spacing: 0) {
-            moreRow(icon: "clock.arrow.circlepath", title: "Day timeline", subtitle: "Everything you've logged today", tint: Neka.lavender, fill: Neka.lavenderSoft) {
-                TimelineView()
-            }
-            Divider().overlay(Neka.hairline).padding(.leading, 62)
-            Button { path.append(.foodLog) } label: {
-                moreLabel(icon: "fork.knife", title: "Food log", subtitle: "See and edit everything you ate", tint: Neka.orange, fill: Neka.orangeSoft)
-            }
-            .buttonStyle(.plain)
-            Divider().overlay(Neka.hairline).padding(.leading, 62)
-            moreRow(icon: "calendar", title: "Score calendar", subtitle: "Streaks and past days", tint: Neka.green, fill: Neka.greenSoft) {
-                CalendarView()
-            }
-            Divider().overlay(Neka.hairline).padding(.leading, 62)
-            Button { path.append(.progressPhotos) } label: {
-                moreLabel(icon: "camera.fill", title: "Progress photos", subtitle: "Weekly photo, same pose, side by side", tint: Neka.lavender, fill: Neka.lavenderSoft)
-            }
-            .buttonStyle(.plain)
+    /// One row to everything else (Food log, Trend weight, Schedule,
+    /// Badges…), so Home stays short and nothing is hard to find.
+    private var exploreRow: some View {
+        Button { router.showDirectory = true } label: {
+            moreLabel(icon: "square.grid.2x2.fill", title: "Everything in Dialed",
+                      subtitle: "Food log, trend weight, schedule, badges and more",
+                      tint: Neka.ink, fill: Neka.track)
+                .nekaCard()
         }
-        .padding(.vertical, 4)
-        .nekaCard()
-    }
-
-    private func moreRow<Destination: View>(
-        icon: String,
-        title: String,
-        subtitle: String,
-        tint: Color,
-        fill: Color,
-        @ViewBuilder destination: @escaping () -> Destination
-    ) -> some View {
-        NavigationLink {
-            // Legacy screens are designed dark. Lazy so CalendarView (whose
-            // init opens a ModelContainer) is only built when tapped.
-            LazyDestination(build: destination)
-                .environment(\.colorScheme, .dark)
-        } label: {
-            moreLabel(icon: icon, title: title, subtitle: subtitle, tint: tint, fill: fill)
-        }
-        .buttonStyle(.plain)
+        .buttonStyle(.dialedScale)
     }
 
     private func moreLabel(icon: String, title: String, subtitle: String, tint: Color, fill: Color) -> some View {

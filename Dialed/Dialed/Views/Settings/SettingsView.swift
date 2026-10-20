@@ -37,6 +37,12 @@ struct SettingsView: View {
 
                     profileCard
 
+                    group("Find anything") {
+                        actionRow("square.grid.2x2.fill", "Everything in Dialed",
+                                  "Every screen, grouped and searchable",
+                                  tint: Neka.ink, fill: Neka.track) { router.showDirectory = true }
+                    }
+
                     group("Your plan") {
                         row("target", "Daily targets",
                             "\(Int(settings.proteinTargetGrams)) g protein · \(Int(settings.waterTargetOz)) oz water",

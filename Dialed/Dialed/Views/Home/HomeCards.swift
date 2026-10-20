@@ -269,16 +269,18 @@ struct HomeFuelCard: View {
                         .background(Capsule().fill(Neka.track))
                 }
                 .buttonStyle(.dialedScale)
-                Button(action: onLogMeal) {
-                    Label("Log meal", systemImage: "plus")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Neka.track))
-                }
-                .buttonStyle(.dialedScale)
             }
+            // The main thing this card is for.
+            Button(action: onLogMeal) {
+                Label("Log food", systemImage: "plus")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(Neka.onInk)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(Capsule().fill(Neka.ink))
+            }
+            .buttonStyle(.dialedScale)
+            .accessibilityHint("Snap, scan, describe or pick a recent food")
             if let event = eventDay {
                 // The big day: no budget, no bars.
                 Label("\(event): nothing to count today. Enjoy every bite.", systemImage: "party.popper.fill")
