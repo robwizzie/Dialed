@@ -26,7 +26,10 @@ final class NowViewModel: ObservableObject {
     func refresh(context: ModelContext) async {
         let now = Date()
 
-        // 1. Load the baseline, latest sleep, latest biometric.
+        // 1. Load the baseline, latest sleep, latest biometric. Refresh the
+        //    baseline first — no-op unless it's a new logical day or new
+        //    sleep/biometric rows have synced since the last compute.
+        BaselineEngine.recomputeIfNeeded(now: now, context: context)
         let baseline = latestBaseline(context: context)
         let lastSleep = latestSleep(context: context)
         let latestBio = latestBiometric(context: context)
