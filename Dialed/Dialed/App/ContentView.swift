@@ -127,6 +127,8 @@ struct MainTabView: View {
         // Smart reminders: re-plan on launch / foreground / after logging,
         // and open the right place when one is tapped.
         .smartReminders(router: router)
+        // Wind-down and good-morning notes for the week ahead.
+        .task { await WakeNotifications.reschedule() }
         // Widget taps (dialed://…, see WidgetLink).
         .onOpenURL { url in
             if let link = WidgetLink(url: url) { open(link) }

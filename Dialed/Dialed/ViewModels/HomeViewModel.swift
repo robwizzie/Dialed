@@ -64,6 +64,9 @@ final class HomeViewModel: ObservableObject {
     @Published var latestWeight: WeightReading?
     @Published var challenge: WeightChallenge?
     @Published var progress: WeightChallengeEngine.Progress?
+    /// "You need 1.3 lb/week to beat Dave" — refreshed every 10 minutes at most.
+    @Published var race: RacePace.Report?
+    private var raceCheckedAt: Date?
 
     // MARK: - Tiles
 
@@ -96,6 +99,10 @@ final class HomeViewModel: ObservableObject {
     @Published var proteinTarget: Double = 190
     @Published var caloriesIn: Double = 0
     @Published var calorieTarget: Double = 2_200
+    /// Calories every workout and activity burned today (added to the budget on screen).
+    @Published var earned = EarnedCalories.Day()
+    /// What you can eat today: the target plus what you've earned.
+    var calorieBudget: Double { calorieTarget + earned.earned }
 
     // MARK: - Timeline & coach
 
@@ -232,8 +239,13 @@ final class HomeViewModel: ObservableObject {
         latestWeight = merged.last
         if let challenge {
             progress = WeightChallengeEngine.progress(challenge: challenge, readings: merged, now: now)
+            if force || race == nil || now.timeIntervalSince(raceCheckedAt ?? .distantPast) > 600 {
+                raceCheckedAt = now
+                race = await RacePace.report(challenge: challenge, readings: merged, context: context, now: now)
+            }
         } else {
             progress = nil
+            race = nil
         }
 
         // ---- Water: devices report running totals, quick-captures add on top.
@@ -277,6 +289,7 @@ final class HomeViewModel: ObservableObject {
         caloriesIn = max(loggedCalories, hkEnergyToday)
         proteinTarget = settings.proteinTargetGrams
         calorieTarget = settings.calorieTarget ?? Self.estimatedCutCalories(weight: latestWeight?.pounds ?? settings.currentWeight)
+        earned = await EarnedCalories.day(now, context: context)
         currentWeightForPaths = latestWeight?.pounds ?? settings.currentWeight
 
         // ---- Past week of days for "if every day were like…"
@@ -471,7 +484,7 @@ final class HomeViewModel: ObservableObject {
         s.proteinGrams = proteinGrams
         s.proteinTarget = proteinTarget
         s.caloriesIn = caloriesIn
-        s.calorieTarget = calorieTarget
+        s.calorieTarget = calorieBudget
         s.nextUp = timeline
             .filter { $0.status == .upcoming || $0.status == .active }
             .prefix(3)

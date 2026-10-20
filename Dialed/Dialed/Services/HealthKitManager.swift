@@ -69,6 +69,10 @@ class HealthKitManager: ObservableObject {
         if let bodyFatType = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) {
             types.insert(bodyFatType)
         }
+        // Smart-scale body composition (Trend weight screen).
+        if let leanType = HKObjectType.quantityType(forIdentifier: .leanBodyMass) {
+            types.insert(leanType)
+        }
 
         // Home body callouts + fuel card
         let extra: [HKQuantityTypeIdentifier] = [
@@ -103,7 +107,10 @@ class HealthKitManager: ObservableObject {
 
     /// Types we ask to write — meals and water logged in Dialed.
     nonisolated static let typesToShare: Set<HKSampleType> = {
-        Set(intakeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+        var types: Set<HKSampleType> = Set(intakeIdentifiers.compactMap { HKObjectType.quantityType(forIdentifier: $0) })
+        // Intimacy logged in Dialed → Health's Sexual Activity.
+        types.insert(HKCategoryType(.sexualActivity))
+        return types
     }()
 
     nonisolated private init() {}

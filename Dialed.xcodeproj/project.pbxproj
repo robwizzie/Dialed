@@ -518,6 +518,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick meal and progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -556,6 +557,7 @@
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Dialed uses the microphone to capture voice notes — log water, meals, mood, or workouts hands-free.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Dialed lets you pick meal and progress photos from your library. They stay on your device.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Dialed transcribes voice captures on-device so you can quickly log entries without typing.";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

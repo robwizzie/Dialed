@@ -134,6 +134,38 @@ enum HealthWriteBack {
         }
     }
 
+    // MARK: - Sexual activity
+
+    /// Intimacy logged as a fun activity → Health's Sexual Activity.
+    static func syncIntimacy(eventID: UUID, start: Date, minutes: Double) {
+        guard isEnabled, HKHealthStore.isHealthDataAvailable() else { return }
+        let type = HKCategoryType(.sexualActivity)
+        guard store.authorizationStatus(for: type) == .sharingAuthorized else { return }
+        let metadata: [String: Any] = [
+            HKMetadataKeySyncIdentifier: syncIdentifier(eventID: eventID, suffix: "intimacy"),
+            HKMetadataKeySyncVersion: NSNumber(value: Int64(Date().timeIntervalSince1970 * 1000))
+        ]
+        let sample = HKCategorySample(type: type, value: HKCategoryValue.notApplicable.rawValue,
+                                      start: start, end: start.addingTimeInterval(max(1, minutes) * 60), metadata: metadata)
+        store.save(sample) { _, error in
+            if let error { print("⚠️ [HealthWriteBack] save failed: \(error.localizedDescription)") }
+        }
+    }
+
+    static func removeIntimacy(eventID: UUID) {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        let type = HKCategoryType(.sexualActivity)
+        guard store.authorizationStatus(for: type) == .sharingAuthorized else { return }
+        let predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            HKQuery.predicateForObjects(withMetadataKey: HKMetadataKeySyncIdentifier,
+                                        allowedValues: [syncIdentifier(eventID: eventID, suffix: "intimacy")]),
+            HKQuery.predicateForObjects(from: [HKSource.default()])
+        ])
+        store.deleteObjects(of: type, predicate: predicate) { _, _, error in
+            if let error { print("⚠️ [HealthWriteBack] delete failed: \(error.localizedDescription)") }
+        }
+    }
+
     // MARK: - Helpers
 
     private static func deleteSamples(_ identifier: HKQuantityTypeIdentifier, syncIdentifier: String) {

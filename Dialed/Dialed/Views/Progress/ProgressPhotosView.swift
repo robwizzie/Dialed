@@ -36,6 +36,8 @@ struct ProgressPhotosView: View {
     @State private var detail: ProgressPhotoEntry?
     @State private var retakeAfterDetail: ProgressPhotoEntry?
     @State private var pickerItem: PhotosPickerItem?
+    /// Trend weight and body fat around each photo, for the grid badges.
+    @State private var stats = PhotoStatsData()
 
     private var hasThisWeek: Bool { store.index.hasPhoto(inWeekOf: Date()) }
 
@@ -45,7 +47,7 @@ struct ProgressPhotosView: View {
                 header
                 if store.entries.count >= 2, let first = store.index.first, let latest = store.index.latest {
                     NavigationLink {
-                        ProgressCompareView(before: first, after: latest)
+                        PhotoCompareView(before: first, after: latest)
                     } label: {
                         compareTeaser(first: first, latest: latest)
                     }
@@ -69,6 +71,7 @@ struct ProgressPhotosView: View {
         .nekaPageBackground()
         .navigationTitle("Progress photos")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: store.entries.count) { stats = await PhotoStatsData.load(for: store.entries, context: context) }
         .fullScreenCover(item: $capture, onDismiss: {
             if let image = captured {
                 let replacing = lastCaptureReplacing
@@ -206,6 +209,10 @@ struct ProgressPhotosView: View {
     }
 
     private func compareSubtitle(first: ProgressPhotoEntry, latest: ProgressPhotoEntry) -> String {
+        let a = stats.stats(for: first), b = stats.stats(for: latest)
+        if a.trend != nil || a.bodyFat != nil {
+            return PhotoStats.delta(from: a, at: first.date, to: b, at: latest.date).summary
+        }
         let days = Calendar.current.dateComponents([.day], from: first.date, to: latest.date).day ?? 0
         var text = "\(max(1, days / 7)) week\(days / 7 == 1 ? "" : "s") apart"
         if let change = ProgressPhotoIndex.weightChange(from: first, to: latest) {
@@ -237,12 +244,18 @@ struct ProgressPhotosView: View {
             .aspectRatio(3.0 / 4.0, contentMode: .fit)
             .overlay { thumb(entry) }
             .overlay(alignment: .bottomLeading) {
+                let s = stats.stats(for: entry)
                 VStack(alignment: .leading, spacing: 0) {
                     Text(entry.date.formatted(.dateTime.month(.abbreviated).day()))
                         .font(.system(size: 11, weight: .bold))
-                    if let w = entry.weightLbs {
-                        Text("\(String(format: "%.1f", w)) lb")
+                    // Trend weight when known (steadier than one weigh-in), else the scale.
+                    if let w = s.trend ?? entry.weightLbs {
+                        Text("\(String(format: "%.1f", w)) lb\(s.trend != nil ? " trend" : "")")
                             .font(.system(size: 10, weight: .medium))
+                    }
+                    if let f = s.bodyFat {
+                        Text("\(PhotoStats.percent(f)) fat")
+                            .font(.system(size: 9, weight: .medium))
                     }
                 }
                 .foregroundColor(.white)
@@ -396,7 +409,7 @@ struct ProgressPhotoDetailView: View {
                         let other = entry.id == store.index.first?.id ? store.index.latest : store.index.first
                         if let other {
                             NavigationLink {
-                                ProgressCompareView(
+                                PhotoCompareView(
                                     before: other.date < entry.date ? other : entry,
                                     after: other.date < entry.date ? entry : other
                                 )
