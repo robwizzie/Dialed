@@ -193,6 +193,25 @@ final class ChallengeSync: ObservableObject {
 
     /// Propose this week's side bet. False (with `lastError`) when it didn't go through.
     @discardableResult
+    /// Send your Sunday report so it shows on your friend's page.
+    /// False when not live or the server predates reports.
+    func postReport(_ report: WeeklyHeadToHeadReport.Report) async -> Bool {
+        struct Row: Encodable { let title: String; let you: String; let friend: String?; let winner: String? }
+        struct Payload: Encodable {
+            let weekNumber: Int; let headline: String; let subline: String
+            let rows: [Row]; let betLine: String?; let standing: String?; let nudge: String
+        }
+        struct Body: Encodable { let week: String; let report: Payload }
+        let payload = Payload(weekNumber: report.weekNumber, headline: report.headline, subline: report.subline,
+                              rows: report.rows.map { Row(title: $0.title, you: $0.you, friend: $0.friend, winner: $0.winner) },
+                              betLine: report.betLine, standing: report.standing, nudge: report.nudge)
+        let before = lastError
+        let sent = await betRequest("/reports", method: "POST", body: Body(week: report.week, report: payload))
+        // A server without /reports isn't an error worth showing.
+        if !sent { lastError = before }
+        return sent
+    }
+
     func proposeBet(week: String, metric: SideBets.Metric, stake: String) async -> Bool {
         struct Body: Encodable { let week: String; let metric: String; let stake: String }
         return await betRequest("/bets", method: "POST", body: Body(week: week, metric: metric.rawValue, stake: stake))
