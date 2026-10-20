@@ -71,7 +71,7 @@ enum DaySuggestions {
 
     /// Gym and bike sessions a watch recorded on a day with nothing logged.
     /// Runs and walks already count toward the mile and earned calories on
-    /// their own, and other sports show as active moments, so they're left out.
+    /// their own, and other sports show as bonus burn, so they're left out.
     static func unloggedWorkouts(_ workouts: [DetectedWorkout], loggedDays: Set<Date>, dismissed: Set<String>,
                                  calendar: Calendar = .current) -> [DetectedWorkout] {
         workouts.filter { w in

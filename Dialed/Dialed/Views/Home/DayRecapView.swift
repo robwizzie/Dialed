@@ -4,7 +4,7 @@
 //
 //  Any past day at a glance: the Dialed score, the night before, food,
 //  protein and water against target, the mile, workouts, calories earned,
-//  the weigh-in, active moments and quests. Step a day with the chevrons
+//  the weigh-in, bonus burn and quests. Step a day with the chevrons
 //  or a swipe, or jump with the calendar. Anything still waiting from that
 //  day (an unnamed stretch, a watch session you never logged) can be
 //  added right here.
