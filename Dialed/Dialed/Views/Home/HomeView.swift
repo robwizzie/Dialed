@@ -42,6 +42,7 @@ struct HomeView: View {
 
     @State private var sheet: HomeSheet?
     @State private var watchWorkouts: [DetectedWorkout] = []
+    @State private var layout = HomeLayout.load()
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
 
@@ -57,7 +58,7 @@ struct HomeView: View {
     }
 
     enum HomeSheet: String, Identifiable {
-        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout
+        case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout, customize
         var id: String { rawValue }
     }
 
@@ -67,103 +68,11 @@ struct HomeView: View {
                 VStack(spacing: 16) {
                     header
                         .padding(.top, 8)
-                    if showsMorning {
-                        HomeMorningCard(
-                            firstName: viewModel.firstName,
-                            night: signals.lastNight,
-                            recentNights: signals.nights,
-                            readiness: signals.readiness,
-                            weightReadings: viewModel.weightReadings,
-                            mileStreak: viewModel.mileStreak,
-                            progress: viewModel.progress,
-                            friendName: viewModel.challenge?.friendDisplayName,
-                            goalEvent: viewModel.goalEvent,
-                            onWeighIn: { sheet = .weighIn },
-                            onOpenSleep: { router.openHealth(.sleep) },
-                            onDismiss: {
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                                    morningDismissedDay = Self.dayKey(Date())
-                                }
-                            }
-                        )
-                        .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
+                    ForEach(layout.visible) { section in
+                        sectionView(section)
                     }
-                    hero
-                    HomeDialedTodayCard(
-                        waterOz: viewModel.waterOz,
-                        waterTarget: viewModel.waterTargetOz,
-                        protein: viewModel.proteinGrams,
-                        proteinTarget: viewModel.proteinTarget,
-                        calories: viewModel.caloriesIn,
-                        calorieTarget: viewModel.calorieBudget,
-                        miles: viewModel.milesToday,
-                        onLogWater: { sheet = .water }
-                    )
-                    HomeMileCard(
-                        miles: viewModel.milesToday,
-                        week: viewModel.milesWeek,
-                        streak: viewModel.mileStreak,
-                        ran: viewModel.ranToday,
-                        goal: viewModel.mileGoal
-                    )
-                    .onTapGesture { path.append(.mileHistory) }
-                    HomeChallengeCard(
-                        challenge: viewModel.challenge,
-                        progress: viewModel.progress,
-                        onSetUp: { sheet = .challengeSetup }
-                    )
-                    .onTapGesture {
-                        if viewModel.challenge != nil { onOpenChallenge() }
-                    }
-                    HomeFutureYouCard(
-                        event: viewModel.goalEvent,
-                        projection: viewModel.goalProjection,
-                        image: studio.futureImage ?? photos.thumbnail,
-                        onOpen: { sheet = .avatar }
-                    )
-                    HomeWorkoutCard(onOpen: { path.append(.workout) }, onLog: { found in
-                        watchWorkouts = found
-                        sheet = .logWorkout
-                    })
-                    HomeFunCard()
-                    if HomeTomorrowWakeCard.isShowing {
-                        HomeTomorrowWakeCard()
-                    }
-                    if HomeWeeklyReviewCard.isShowing() {
-                        HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
-                    }
-                    if !viewModel.pathScenarios.isEmpty {
-                        HomePathsCard(
-                            scenarios: viewModel.pathScenarios,
-                            targetDate: viewModel.pathTargetDate,
-                            eventName: viewModel.goalEvent.flatMap { $0.date == viewModel.pathTargetDate ? $0.name : nil }
-                        )
-                    }
-                    if aiAvailability != .unsupportedDevice {
-                        AIBriefCard(
-                            model: briefModel,
-                            availability: aiAvailability,
-                            onRegenerate: { Task { await briefModel.generate(viewModel.snapshot) } },
-                            onAsk: { sheet = .ask }
-                        )
-                    }
-                    HomeStateStrip(items: stateItems)
-                    HomeBodyCheckCard(stress: signals.stress, illness: signals.illness,
-                                      onOpen: { router.openHealth(.body) })
-                    tiles
-                    HomeFuelCard(
-                        protein: viewModel.proteinGrams,
-                        proteinTarget: viewModel.proteinTarget,
-                        calories: viewModel.caloriesIn,
-                        calorieTarget: viewModel.calorieBudget,
-                        earned: viewModel.earned,
-                        onLogMeal: { sheet = .meal },
-                        onOpenLog: { path.append(.foodLog) },
-                        onEatingOut: { sheet = .eatingOut }
-                    )
-                    HomeTimelineCard(items: viewModel.timeline)
-                    HomeCoachCard(insights: viewModel.insights)
                     moreLinks
+                    customizeButton
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 24)
@@ -182,6 +91,9 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: MileSettings.didChange)) { _ in
                 Task { await refreshAll(force: true) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: HomeLayout.didChange)) { _ in
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { layout = HomeLayout.load() }
             }
             .onReceive(NotificationCenter.default.publisher(for: GoalEvent.didChangeNotification)) { _ in
                 viewModel.refreshGoal()
@@ -220,6 +132,8 @@ struct HomeView: View {
                     ProgressPhotosView()
                 case .mileHistory:
                     MileHistoryView()
+                case .weightTrend:
+                    TrendWeightView()
                 }
             }
             .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
@@ -393,7 +307,7 @@ struct HomeView: View {
     private var tiles: some View {
         let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
         return LazyVGrid(columns: columns, spacing: 12) {
-            Button(action: onOpenChallenge) { weightTile }
+            Button { path.append(.weightTrend) } label: { weightTile }
                 .buttonStyle(.dialedScale)
             Button { sheet = .water } label: { waterTile }
                 .buttonStyle(.dialedScale)
@@ -412,7 +326,8 @@ struct HomeView: View {
     private var weightTile: some View {
         let trend: [Double] = viewModel.progress?.series.suffix(30).map(\.trend)
             ?? WeightChallengeEngine.dailySeries(viewModel.weightReadings).suffix(30).map(\.trend)
-        let value: String = viewModel.latestWeight.map { String(format: "%.1f", $0.pounds) } ?? "--"
+        // The headline is the trend; the scale's reading sits underneath.
+        let value: String = trend.last.map { String(format: "%.1f", $0) } ?? "--"
         var pill: (text: String, tint: Color, fill: Color)? = nil
         if let lost = viewModel.progress?.lostLbs {
             let amount = String(format: "%.1f", abs(lost))
@@ -421,7 +336,9 @@ struct HomeView: View {
                 : (text: "+\(amount) lb", tint: Neka.rose, fill: Neka.roseSoft)
         }
         var footer = "Connect your scale"
-        if let start = viewModel.progress?.startWeight {
+        if let scale = viewModel.latestWeight?.pounds {
+            footer = "Scale \(String(format: "%.1f", scale))"
+        } else if let start = viewModel.progress?.startWeight {
             footer = "Start \(String(format: "%.1f", start))"
         }
         var footerTrailing: String? = nil
@@ -430,7 +347,7 @@ struct HomeView: View {
         }
 
         return HomeMetricTile(
-            title: "Weight",
+            title: "Trend weight",
             value: value,
             unit: "lb",
             wash: .mint,
@@ -554,6 +471,146 @@ struct HomeView: View {
 
     // MARK: - More
 
+    // MARK: - Sections (order and visibility from HomeLayout)
+
+    @ViewBuilder
+    private func sectionView(_ section: HomeSection) -> some View {
+        switch section {
+        case .morning:
+            if showsMorning {
+                HomeMorningCard(
+                    firstName: viewModel.firstName,
+                    night: signals.lastNight,
+                    recentNights: signals.nights,
+                    readiness: signals.readiness,
+                    weightReadings: viewModel.weightReadings,
+                    mileStreak: viewModel.mileStreak,
+                    progress: viewModel.progress,
+                    friendName: viewModel.challenge?.friendDisplayName,
+                    goalEvent: viewModel.goalEvent,
+                    onWeighIn: { sheet = .weighIn },
+                    onOpenSleep: { router.openHealth(.sleep) },
+                    onDismiss: {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                            morningDismissedDay = Self.dayKey(Date())
+                        }
+                    }
+                )
+                .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
+            }
+        case .hero:
+            hero
+        case .today:
+            HomeDialedTodayCard(
+                waterOz: viewModel.waterOz,
+                waterTarget: viewModel.waterTargetOz,
+                protein: viewModel.proteinGrams,
+                proteinTarget: viewModel.proteinTarget,
+                calories: viewModel.caloriesIn,
+                calorieTarget: viewModel.calorieBudget,
+                miles: viewModel.milesToday,
+                onLogWater: { sheet = .water }
+            )
+        case .mile:
+            HomeMileCard(
+                miles: viewModel.milesToday,
+                week: viewModel.milesWeek,
+                streak: viewModel.mileStreak,
+                ran: viewModel.ranToday,
+                goal: viewModel.mileGoal
+            )
+            .onTapGesture { path.append(.mileHistory) }
+        case .challenge:
+            HomeChallengeCard(
+                challenge: viewModel.challenge,
+                progress: viewModel.progress,
+                onSetUp: { sheet = .challengeSetup }
+            )
+            .onTapGesture {
+                if viewModel.challenge != nil { onOpenChallenge() }
+            }
+        case .race:
+            if let race = viewModel.race {
+                RacePaceCard(report: race)
+                    .onTapGesture { onOpenChallenge() }
+            }
+        case .futureYou:
+            HomeFutureYouCard(
+                event: viewModel.goalEvent,
+                projection: viewModel.goalProjection,
+                image: studio.futureImage ?? photos.thumbnail,
+                onOpen: { sheet = .avatar }
+            )
+        case .workout:
+            HomeWorkoutCard(onOpen: { path.append(.workout) }, onLog: { found in
+                watchWorkouts = found
+                sheet = .logWorkout
+            })
+        case .fun:
+            HomeFunCard()
+        case .tomorrow:
+            if HomeTomorrowWakeCard.isShowing {
+                HomeTomorrowWakeCard()
+            }
+        case .weeklyReview:
+            if HomeWeeklyReviewCard.isShowing() {
+                HomeWeeklyReviewCard(onOpen: { path.append(.weeklyReview) })
+            }
+        case .patterns:
+            HomePatternCard(onOpenReview: { path.append(.weeklyReview) })
+        case .paths:
+            if !viewModel.pathScenarios.isEmpty {
+                HomePathsCard(
+                    scenarios: viewModel.pathScenarios,
+                    targetDate: viewModel.pathTargetDate,
+                    eventName: viewModel.goalEvent.flatMap { $0.date == viewModel.pathTargetDate ? $0.name : nil }
+                )
+            }
+        case .aiBrief:
+            if aiAvailability != .unsupportedDevice {
+                AIBriefCard(
+                    model: briefModel,
+                    availability: aiAvailability,
+                    onRegenerate: { Task { await briefModel.generate(viewModel.snapshot) } },
+                    onAsk: { sheet = .ask }
+                )
+            }
+        case .body:
+            HomeStateStrip(items: stateItems)
+            HomeBodyCheckCard(stress: signals.stress, illness: signals.illness,
+                              onOpen: { router.openHealth(.body) })
+        case .tiles:
+            tiles
+        case .fuel:
+            HomeFuelCard(
+                protein: viewModel.proteinGrams,
+                proteinTarget: viewModel.proteinTarget,
+                calories: viewModel.caloriesIn,
+                calorieTarget: viewModel.calorieBudget,
+                earned: viewModel.earned,
+                onLogMeal: { sheet = .meal },
+                onOpenLog: { path.append(.foodLog) },
+                onEatingOut: { sheet = .eatingOut }
+            )
+        case .timeline:
+            HomeTimelineCard(items: viewModel.timeline)
+        case .coach:
+            HomeCoachCard(insights: viewModel.insights)
+        }
+    }
+
+    private var customizeButton: some View {
+        Button { sheet = .customize } label: {
+            Label("Customize Home", systemImage: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Neka.inkSecondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(Neka.track))
+        }
+        .buttonStyle(.dialedScale)
+    }
+
     private var moreLinks: some View {
         VStack(spacing: 0) {
             moreRow(icon: "clock.arrow.circlepath", title: "Day timeline", subtitle: "Everything you've logged today", tint: Neka.lavender, fill: Neka.lavenderSoft) {
@@ -655,6 +712,9 @@ struct HomeView: View {
                 .presentationDetents([.large])
         case .challengeSetup:
             ChallengeSetupSheet(existing: nil, suggestedStartWeight: viewModel.latestWeight?.pounds)
+                .presentationDetents([.large])
+        case .customize:
+            HomeLayoutEditor()
                 .presentationDetents([.large])
         case .logWorkout:
             WorkoutLoggerView(day: Calendar.current.startOfDay(for: Date()),
