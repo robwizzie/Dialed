@@ -145,4 +145,11 @@ enum SleepVisuals {
         if now < t.wake { return "Past bedtime. Lights out now" }
         return "Morning!"
     }
+
+    /// The countdown only once wind-down is within `hours` (and through the
+    /// night); earlier than that a "12 h 49 m" is just noise.
+    static func countdownIfSoon(_ t: Tonight, now: Date = Date(), hours: Double = 3) -> String? {
+        guard now >= t.windDown.addingTimeInterval(-hours * 3600), now < t.wake else { return nil }
+        return countdown(t, now: now)
+    }
 }

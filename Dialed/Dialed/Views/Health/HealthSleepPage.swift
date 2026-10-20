@@ -16,6 +16,9 @@ struct HealthSleepPage: View {
     @State private var scrubbedNight: Date?
     @State private var scrubbedTime: Date?
     @State private var explaining: HealthInsights.Night?
+    @State private var wakeSchedule = WakeSchedule.load()
+    /// The morning whose wake-up is being edited from the Tonight card.
+    @State private var editingWake: Date?
 
     private let deepBlue = Color(hex: "4C6FE0")
     private let calendar = Calendar.current
@@ -114,96 +117,102 @@ struct HealthSleepPage: View {
     /// Wake from your wake-up schedule when you've set one, else your usual
     /// from the last week; bedtime pays back a capped slice of sleep debt.
     private var tonightPlan: SleepVisuals.Tonight? {
-        SleepVisuals.tonight(schedule: WakeSchedule.load(),
+        SleepVisuals.tonight(schedule: wakeSchedule,
                              learnedWakeMinutes: model.sleepPlan?.wakeMinutes,
                              debtHours: model.sleepPlan?.debtHours ?? 0)
     }
 
+    /// One big time, one line under it, one row for the alarm. Tap the card
+    /// (or the alarm) to change that morning's wake-up.
     private func tonightCard(_ t: SleepVisuals.Tonight) -> some View {
         SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = context.date
-            VStack(alignment: .leading, spacing: 14) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("TONIGHT")
-                            .font(.system(size: 10, weight: .heavy))
-                            .tracking(1)
-                            .foregroundColor(.white.opacity(0.65))
-                        Text("Be asleep by")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text(t.bedtime.formatted(date: .omitted, time: .shortened))
-                            .font(.system(size: 40, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
-                            .contentTransition(.numericText())
-                        Text(SleepVisuals.countdown(t, now: now))
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("TONIGHT")
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(1)
+                        .foregroundColor(.white.opacity(0.6))
+                    Text("Be asleep by")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.8))
+                    Text(t.bedtime.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .contentTransition(.numericText())
+                    Text("Wind down \(t.windDown.formatted(date: .omitted, time: .shortened)) · \(hoursText(t.targetHours)) of sleep")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.75))
+                    if let soon = SleepVisuals.countdownIfSoon(t, now: now) {
+                        Text(soon)
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: "FFD38A"))
+                            .padding(.top, 2)
                     }
-                    Spacer()
-                    Label(t.wake.formatted(date: .omitted, time: .shortened),
-                          systemImage: t.fromSchedule ? "alarm.fill" : "sun.horizon.fill")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.white.opacity(0.16)))
-                        .padding(.top, 26)
                 }
 
-                NightArc(tonight: t, now: now)
-                    .frame(height: 86)
-
-                HStack(spacing: 8) {
-                    nightStat("Wind down", t.windDown.formatted(date: .omitted, time: .shortened), "sparkles")
-                    nightStat("Sleep", hoursText(t.targetHours), "bed.double.fill")
-                    nightStat(t.fromSchedule ? "Alarm" : "Usual wake", t.wake.formatted(date: .omitted, time: .shortened),
-                              t.fromSchedule ? "alarm.fill" : "sun.max.fill")
+                Button { editingWake = Calendar.current.startOfDay(for: t.wake) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: t.fromSchedule ? "alarm.fill" : "sun.horizon.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Color(hex: "FFD38A"))
+                        Text(alarmLine(t))
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                        Spacer(minLength: 6)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.12)))
                 }
+                .buttonStyle(.plain)
+                .accessibilityHint("Change this wake-up")
 
-                Text(debtLine(t))
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.82))
-                    .fixedSize(horizontal: false, vertical: true)
+                if t.debtHours >= 0.5 {
+                    Text(String(format: "%.1f h short this week, so tonight adds %d min.", t.debtHours, t.extraMinutes))
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.6))
+                }
             }
-            .padding(16)
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .background(NightSky(debtHours: t.debtHours))
             .clipShape(RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous))
+            .onTapGesture { editingWake = Calendar.current.startOfDay(for: t.wake) }
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Tonight: be asleep by \(t.bedtime.formatted(date: .omitted, time: .shortened)), \(t.fromSchedule ? "alarm" : "wake") at \(t.wake.formatted(date: .omitted, time: .shortened))")
+        .sheet(item: Binding(get: { editingWake.map { WakeEditTarget(date: $0) } }, set: { editingWake = $0?.date })) { target in
+            WakeDaySheet(date: target.date, schedule: $wakeSchedule, showsAllSettings: true)
+                .presentationDetents([.medium, .large])
+        }
+        .onChange(of: wakeSchedule) { _, s in s.save() }
+        .onReceive(NotificationCenter.default.publisher(for: .wakeScheduleDidChange)) { _ in
+            let fresh = WakeSchedule.load()
+            if fresh != wakeSchedule { wakeSchedule = fresh }
+        }
     }
 
-    private func nightStat(_ title: String, _ value: String, _ symbol: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Label(title.uppercased(), systemImage: symbol)
-                .font(.system(size: 8.5, weight: .heavy))
-                .tracking(0.4)
-                .foregroundColor(.white.opacity(0.7))
-                .lineLimit(1)
-            Text(value)
-                .font(.system(size: 14, weight: .bold))
-                .monospacedDigit()
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.1)))
+    private struct WakeEditTarget: Identifiable {
+        let date: Date
+        var id: Date { date }
+    }
+
+    /// "Alarm 8:30 AM · Math mission", or the usual wake when nothing's set.
+    private func alarmLine(_ t: SleepVisuals.Tonight) -> String {
+        let time = t.wake.formatted(date: .omitted, time: .shortened)
+        guard t.fromSchedule else { return "Usual wake \(time) · set a wake-up" }
+        let alarm = WakeAlarmSettings.load()
+        return alarm.enabled ? "Alarm \(time) · \(alarm.effectiveMission.title) mission" : "Wake-up \(time)"
     }
 
     private func hoursText(_ hours: Double) -> String {
         let m = Int((hours * 60).rounded())
         return m % 60 == 0 ? "\(m / 60) h" : "\(m / 60) h \(m % 60) m"
-    }
-
-    private func debtLine(_ t: SleepVisuals.Tonight) -> String {
-        let source = t.fromSchedule ? "Planned around your alarm." : "Planned around your usual wake time. Set a wake-up in Settings to lock it in."
-        if t.debtHours >= 0.5 {
-            return String(format: "You're %.1f h short this week, so tonight adds %d min to pay some back. ", t.debtHours, t.extraMinutes) + source
-        }
-        return "No sleep debt this week. Same window keeps it that way. " + source
     }
 
     /// Minutes past midnight → "10:45 PM".

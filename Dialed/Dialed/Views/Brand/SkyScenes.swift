@@ -5,8 +5,8 @@
 //  Living skies drawn in SwiftUI, no image assets. MorningSky reacts to
 //  last night's score: a radiant sunrise with turning rays (85+), a mellow
 //  dawn (70–84), a hazy morning behind cloud (50–69), or a grey drizzle.
-//  NightSky is tonight: a crescent moon and twinkling stars, warmer and
-//  moodier the more sleep you owe. Clouds drift and stars twinkle unless
+//  NightSky is tonight: a quiet gradient, a few faint stars and a small
+//  crescent, warmer and moodier the more sleep you owe. Clouds drift and stars twinkle unless
 //  Reduce Motion is on.
 //
 
@@ -243,45 +243,44 @@ struct NightSky: View {
     }
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 20, paused: reduceMotion)) { context in
+        // A slow twinkle is enough; the card isn't the show.
+        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 8, paused: reduceMotion)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
             GeometryReader { geo in
                 let w = geo.size.width, h = geo.size.height
                 ZStack {
                     LinearGradient(colors: Self.colors(SleepVisuals.DebtTier(debtHours: debtHours)),
-                                   startPoint: .top, endPoint: .bottom)
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                    // A few faint stars, mostly up and to the right, away from the text.
                     Canvas { ctx, size in
-                        for i in 0..<46 {
+                        for i in 0..<18 {
                             let seed = Double(i) * 57.31
-                            let x = (seed * 9.7).truncatingRemainder(dividingBy: Double(size.width))
-                            let y = (seed * 3.3).truncatingRemainder(dividingBy: Double(size.height) * 0.75)
-                            let twinkle = 0.45 + 0.55 * abs(sin(t * (0.6 + Double(i % 5) * 0.25) + seed))
-                            let r = 0.8 + Double(i % 3) * 0.55
+                            let x = size.width * (0.35 + 0.65 * (seed * 0.137).truncatingRemainder(dividingBy: 1))
+                            let y = size.height * 0.7 * (seed * 0.071).truncatingRemainder(dividingBy: 1)
+                            let twinkle = 0.35 + 0.35 * abs(sin(t * (0.4 + Double(i % 4) * 0.15) + seed))
+                            let r = 0.6 + Double(i % 3) * 0.4
                             ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r * 2, height: r * 2)),
-                                     with: .color(.white.opacity(twinkle * 0.85)))
+                                     with: .color(.white.opacity(twinkle * 0.6)))
                         }
                     }
-                    // Crescent moon with a soft glow.
-                    ZStack {
-                        Circle().fill(Color(hex: "FFF4D2").opacity(0.18))
-                            .frame(width: h * 0.62, height: h * 0.62)
-                            .blur(radius: 14)
-                        Circle()
-                            .fill(LinearGradient(colors: [Color(hex: "FFF6DC"), Color(hex: "F5DFA8")], startPoint: .top, endPoint: .bottom))
-                            .frame(width: h * 0.3, height: h * 0.3)
-                            .mask(
-                                ZStack {
-                                    Rectangle()
-                                    Circle()
-                                        .frame(width: h * 0.3, height: h * 0.3)
-                                        .offset(x: h * 0.09, y: -h * 0.05)
-                                        .blendMode(.destinationOut)
-                                }
-                                .compositingGroup()
-                            )
-                            .rotationEffect(.degrees(-18 + 2 * sin(t * 0.3)))
-                    }
-                    .position(x: w * 0.84, y: h * 0.26)
+                    // A small crescent tucked in the top corner.
+                    let d = min(34, h * 0.2)
+                    Circle()
+                        .fill(LinearGradient(colors: [Color(hex: "FFF6DC"), Color(hex: "F5DFA8")], startPoint: .top, endPoint: .bottom))
+                        .frame(width: d, height: d)
+                        .mask(
+                            ZStack {
+                                Rectangle()
+                                Circle()
+                                    .frame(width: d, height: d)
+                                    .offset(x: d * 0.32, y: -d * 0.18)
+                                    .blendMode(.destinationOut)
+                            }
+                            .compositingGroup()
+                        )
+                        .shadow(color: Color(hex: "FFF4D2").opacity(0.35), radius: 8)
+                        .rotationEffect(.degrees(-18))
+                        .position(x: w - 30, y: 30)
                 }
             }
         }
@@ -319,56 +318,5 @@ struct HillShape: Shape {
         p.addLine(to: CGPoint(x: r.minX, y: r.maxY))
         p.closeSubpath()
         return p
-    }
-}
-
-/// The night's arc: wind-down, bedtime and wake along a horizon, with a
-/// glowing dot for now.
-struct NightArc: View {
-    let tonight: SleepVisuals.Tonight
-    let now: Date
-
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width, h = geo.size.height
-            let start = min(now, tonight.windDown)
-            let point = { (date: Date) -> CGPoint in
-                let f = SleepVisuals.fraction(date, from: start, to: tonight.wake)
-                let angle = Double.pi * (1 - f)
-                return CGPoint(x: w / 2 + CGFloat(cos(angle)) * (w / 2 - 14),
-                               y: h - CGFloat(sin(angle)) * (h - 14))
-            }
-            ZStack {
-                Path { p in
-                    p.addArc(center: CGPoint(x: w / 2, y: h), radius: w / 2 - 14,
-                             startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-                }
-                .stroke(.white.opacity(0.22), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [3, 5]))
-                // Asleep stretch, bedtime → wake.
-                Path { p in
-                    let a = 180 * (1 - SleepVisuals.fraction(tonight.bedtime, from: start, to: tonight.wake))
-                    p.addArc(center: CGPoint(x: w / 2, y: h), radius: w / 2 - 14,
-                             startAngle: .degrees(180 + (180 - a)), endAngle: .degrees(0), clockwise: false)
-                }
-                .stroke(LinearGradient(colors: [Color(hex: "B49CFF"), Color(hex: "FFD38A")], startPoint: .leading, endPoint: .trailing),
-                        style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                marker(point(tonight.windDown), "sparkles")
-                marker(point(tonight.bedtime), "moon.fill")
-                marker(point(tonight.wake), "sun.max.fill")
-                Circle().fill(.white)
-                    .frame(width: 10, height: 10)
-                    .shadow(color: .white.opacity(0.8), radius: 6)
-                    .position(point(now))
-            }
-        }
-    }
-
-    private func marker(_ p: CGPoint, _ symbol: String) -> some View {
-        Image(systemName: symbol)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundColor(.white)
-            .frame(width: 24, height: 24)
-            .background(Circle().fill(.white.opacity(0.18)))
-            .position(p)
     }
 }

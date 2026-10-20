@@ -73,6 +73,14 @@ struct DevicesView: View {
     @AppStorage(GoogleHealthConfig.clientIDDefaultsKey) private var savedClientID = ""
     @State private var clientIDDraft = ""
     @State private var showSetupSteps = false
+    /// Raw JSON of the latest Google sleep data point (diagnostic).
+    @State private var rawSleep: RawSleepText?
+    @State private var loadingRawSleep = false
+
+    struct RawSleepText: Identifiable {
+        let text: String
+        var id: String { text }
+    }
 
     var body: some View {
         ScrollView {
@@ -110,6 +118,31 @@ struct DevicesView: View {
         .nekaPageBackground()
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.refresh(context: modelContext) }
+        .sheet(item: $rawSleep) { raw in
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("What Google sends for your latest night. Dialed reads a sleep score from sleepScore, overallScore or score (on the night or its summary) if one appears here.")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                        Text(raw.text)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundColor(Neka.ink)
+                            .textSelection(.enabled)
+                    }
+                    .padding(16)
+                }
+                .nekaPageBackground()
+                .navigationTitle("Raw sleep data")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) { Button("Done") { rawSleep = nil } }
+                    ToolbarItem(placement: .cancellationAction) {
+                        ShareLink(item: raw.text) { Image(systemName: "square.and.arrow.up") }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Pixel Watch (Google Health)
@@ -143,6 +176,19 @@ struct DevicesView: View {
                         .foregroundColor(Neka.rose)
                         .padding(.horizontal, 12)
                 }
+                Button {
+                    loadingRawSleep = true
+                    Task {
+                        let text = await GoogleHealthSyncService(modelContext: modelContext).rawLatestSleep()
+                        loadingRawSleep = false
+                        rawSleep = RawSleepText(text: text)
+                    }
+                } label: {
+                    Label(loadingRawSleep ? "Loading…" : "Raw Google sleep data", systemImage: "curlybraces")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                .disabled(loadingRawSleep)
             } else if GoogleHealthConfig.clientID == nil {
                 clientIDSetup
             } else {
