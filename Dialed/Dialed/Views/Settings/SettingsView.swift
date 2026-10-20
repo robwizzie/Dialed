@@ -45,6 +45,12 @@ struct SettingsView: View {
                         row("checklist", "Daily routine", "Your recurring tasks and times",
                             tint: Neka.orange, fill: Neka.orangeSoft) { ManageDailyRoutineView() }
                         divider
+                        row("alarm", "Wake-up times", wakeSummary,
+                            tint: Neka.amber, fill: Neka.amberSoft) { WakeScheduleView() }
+                        divider
+                        row("slider.horizontal.3", "Home screen", "Reorder or hide Home's cards",
+                            tint: Neka.sky, fill: Neka.skySoft) { HomeLayoutEditor(inSheet: false) }
+                        divider
                         row("figure.walk", "Mile a day", "\(MileADay.format(MileSettings.load().goalMiles)) goal · recalibrate steps per mile",
                             tint: Neka.lavender, fill: Neka.lavenderSoft) { MileSettingsView() }
                         divider
@@ -219,6 +225,13 @@ struct SettingsView: View {
             VStack(spacing: 0) { content() }
                 .nekaCard()
         }
+    }
+
+    /// "Tomorrow 6:30 AM · 8 h sleep goal"
+    private var wakeSummary: String {
+        let s = WakeSchedule.load()
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        return "Tomorrow \(s.minutes(on: tomorrow).map(WakeSchedule.clock) ?? "sleep in") · \(WakeSchedule.duration(s.sleepGoalMinutes)) sleep goal"
     }
 
     private var divider: some View {

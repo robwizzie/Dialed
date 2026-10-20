@@ -251,6 +251,8 @@ enum PlanGenerator {
     static func defaultWakeTime(for date: Date, baseline: PersonalBaseline?) -> Date {
         let calendar = Calendar.current
         let dayStart = calendar.startOfDay(for: date)
+        // Your scheduled wake-up wins; then your usual; then 7:00.
+        if let scheduled = WakeSchedule.load().wake(on: date, calendar: calendar) { return scheduled }
         if let comps = baseline?.wakeTimeMedianComponents {
             return calendar.date(bySettingHour: comps.hour, minute: comps.minute,
                                   second: 0, of: dayStart) ?? dayStart

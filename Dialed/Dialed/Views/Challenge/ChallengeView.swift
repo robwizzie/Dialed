@@ -16,6 +16,7 @@ final class ChallengeViewModel: ObservableObject {
     @Published var challenge: WeightChallenge?
     @Published var readings: [WeightReading] = []
     @Published var progress: WeightChallengeEngine.Progress?
+    @Published var race: RacePace.Report?
 
     func refresh(context: ModelContext) async {
         let challenge = WeightChallenge.load()
@@ -25,6 +26,11 @@ final class ChallengeViewModel: ObservableObject {
         let start = calendar.date(byAdding: .day, value: -7, to: challenge?.startDate ?? today) ?? today
         readings = await WeightDataSource.readings(context: context, since: min(start, today))
         progress = challenge.map { WeightChallengeEngine.progress(challenge: $0, readings: readings) }
+        if let challenge {
+            race = await RacePace.report(challenge: challenge, readings: readings, context: context)
+        } else {
+            race = nil
+        }
     }
 }
 
@@ -49,6 +55,7 @@ struct ChallengeView: View {
                     if let c = viewModel.challenge, let p = viewModel.progress {
                         scoreboard(c, p)
                         headToHead(c, p)
+                        if let race = viewModel.race { RacePaceCard(report: race) }
                         LiveChallengeCard(sync: liveSync, friendName: c.friendDisplayName) { sheet = .live }
                         TrashTalkCard(snapshot: trashTalkSnapshot(c, p))
                             .id("\(c.scoring.rawValue)-\(p.leader)-\(Int(p.margin * 10))")

@@ -22,6 +22,8 @@ struct StrengthProgressView: View {
     @State private var series: [Lift: [Point]] = [:]
     @State private var weights: [WeightChallengeEngine.DailyWeight] = []
     @State private var loading = true
+    /// Every weighted exercise's best estimated max, strongest first.
+    @State private var bests: [StrengthMilestones.Best] = []
 
     private var points: [Point] { series[lift] ?? [] }
 
@@ -31,6 +33,7 @@ struct StrengthProgressView: View {
                 headlineCard
                 liftGrid
                 liftChartCard
+                if !bests.isEmpty { milestonesCard }
                 weightChartCard
                 Text("e1RM = estimated one-rep max (Epley: weight × (1 + reps ÷ 30)), from the best finished set of each session. Log workouts from the plan to fill this in.")
                     .font(.system(size: 11))
@@ -65,6 +68,9 @@ struct StrengthProgressView: View {
             next[l] = StrengthProgression.e1RMSeries(sessions)
         }
         series = next
+        bests = StrengthMilestones.bests(sets.filter(\.completed).map {
+            StrengthMilestones.SetRecord(exercise: $0.exerciseName, date: $0.date, weight: $0.weightLbs, reps: $0.reps)
+        }).values.sorted { $0.e1RM > $1.e1RM }
 
         let earliest = sets.first?.date ?? Date()
         let sixtyDaysAgo = Calendar.current.date(byAdding: .day, value: -60, to: Date()) ?? Date()
@@ -131,6 +137,49 @@ struct StrengthProgressView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .nekaCard(wash: .sky)
+    }
+
+    // MARK: - Estimated max & next milestones
+
+    private var milestonesCard: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Estimated max & next milestones")
+                .font(Neka.title)
+                .foregroundColor(Neka.ink)
+                .padding(.bottom, 6)
+            ForEach(Array(bests.prefix(8).enumerated()), id: \.element.exercise) { i, best in
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(best.exercise)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Best \(formatPounds(best.heaviest.weight)) × \(best.heaviest.reps)")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                        if let next = StrengthMilestones.nextMilestone(for: best) {
+                            Label(next.text, systemImage: next.withinReach ? "flame.fill" : "flag.checkered")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(next.withinReach ? Neka.orangeText : Neka.greenText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(formatPounds(best.e1RM.rounded()))
+                            .font(.system(size: 20, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundColor(Neka.ink)
+                        Text("est. max")
+                            .font(.system(size: 10))
+                            .foregroundColor(Neka.inkTertiary)
+                    }
+                }
+                .padding(.vertical, 8)
+                if i < min(bests.count, 8) - 1 { Divider().overlay(Neka.hairline) }
+            }
+        }
+        .padding(16)
+        .nekaCard()
     }
 
     // MARK: - Lift picker
