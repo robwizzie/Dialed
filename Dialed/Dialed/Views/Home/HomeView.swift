@@ -518,6 +518,12 @@ struct HomeView: View {
                 miles: viewModel.milesToday,
                 onLogWater: { sheet = .water }
             )
+        case .quests:
+            HomeQuestsCard()
+        case .sideBet:
+            HomeSideBetCard(onOpen: { onOpenChallenge() })
+        case .badges:
+            HomeBadgesStrip()
         case .mile:
             HomeMileCard(
                 miles: viewModel.milesToday,
