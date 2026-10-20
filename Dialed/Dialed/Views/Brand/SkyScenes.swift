@@ -16,9 +16,13 @@ import SwiftUI
 
 struct MorningSky: View {
     let tier: SleepVisuals.MorningTier
+    /// When set, the sun climbs an arc from the horizon and sits as high as
+    /// the score (0…1, 1 = the top), with the day's path drawn faintly.
+    let sunProgress: Double?
 
-    init(score: Int?) {
+    init(score: Int?, sunOnArc: Bool = false) {
         tier = SleepVisuals.MorningTier(score: score ?? 72)
+        sunProgress = sunOnArc ? score.map { SleepVisuals.arcProgress(score: $0) } : nil
     }
 
     @Environment(\.colorScheme) private var scheme
@@ -32,6 +36,7 @@ struct MorningSky: View {
                 ZStack {
                     LinearGradient(colors: Self.skyColors(tier, dark: scheme == .dark),
                                    startPoint: .top, endPoint: .bottom)
+                    if let p = sunProgress { arcTrack(progress: p, w: w, h: h) }
                     sun(t: t, w: w, h: h)
                     clouds(t: t, w: w, h: h)
                     if tier == .drizzly { rain(t: t, w: w, h: h) }
@@ -73,7 +78,7 @@ struct MorningSky: View {
     private func sun(t: Double, w: CGFloat, h: CGFloat) -> some View {
         switch tier {
         case .radiant:
-            let size = h * 0.42
+            let size = h * (sunProgress == nil ? 0.42 : 0.2)
             ZStack {
                 // Turning rays.
                 ForEach(0..<12, id: \.self) { i in
@@ -93,9 +98,9 @@ struct MorningSky: View {
                     .frame(width: size, height: size)
                     .shadow(color: Color(hex: "FFB347").opacity(0.6), radius: 18)
             }
-            .position(x: w * 0.78, y: h * 0.42)
+            .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.78, y: h * 0.42)))
         case .mellow:
-            let size = h * 0.36
+            let size = h * (sunProgress == nil ? 0.36 : 0.18)
             ZStack {
                 Circle()
                     .fill(RadialGradient(colors: [Color(hex: "FFE7B0").opacity(0.75), .clear],
@@ -106,15 +111,61 @@ struct MorningSky: View {
                     .fill(LinearGradient(colors: [Color(hex: "FFE3A0"), Color(hex: "FFC27A")], startPoint: .top, endPoint: .bottom))
                     .frame(width: size, height: size)
             }
-            .position(x: w * 0.76, y: h * 0.62)
+            .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.76, y: h * 0.62)))
         case .hazy:
             Circle()
                 .fill(Color(hex: "FFF1D6").opacity(0.55))
-                .frame(width: h * 0.32, height: h * 0.32)
+                .frame(width: h * (sunProgress == nil ? 0.32 : 0.18), height: h * (sunProgress == nil ? 0.32 : 0.18))
                 .blur(radius: 6)
-                .position(x: w * 0.74, y: h * 0.4)
+                .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.74, y: h * 0.4)))
         case .drizzly:
             EmptyView()
+        }
+    }
+
+    // MARK: Score arc
+
+    /// A point on the sun's half-circle path, `t` 0 (left horizon) → 1
+    /// (right horizon). Kept to the right side, clear of the greeting.
+    private func pathPoint(_ t: Double, w: CGFloat, h: CGFloat) -> CGPoint {
+        let angle = Double.pi * (1 - t)
+        let center = CGPoint(x: w * 0.72, y: h * 0.46)
+        let rx = w * 0.22, ry = h * 0.34
+        return CGPoint(x: center.x + CGFloat(cos(angle)) * rx, y: center.y - CGFloat(sin(angle)) * ry)
+    }
+
+    /// The score climbs the left half: 0 on the horizon, 100 at the top.
+    private func arcPoint(_ p: Double, w: CGFloat, h: CGFloat) -> CGPoint {
+        pathPoint(p / 2, w: w, h: h)
+    }
+
+    private func sunPosition(w: CGFloat, h: CGFloat, fallback: CGPoint) -> CGPoint {
+        sunProgress.map { arcPoint($0, w: w, h: h) } ?? fallback
+    }
+
+    private func arcPath(to t: Double, w: CGFloat, h: CGFloat) -> Path {
+        Path { path in
+            let steps = 40
+            for i in 0...steps {
+                let pt = pathPoint(t * Double(i) / Double(steps), w: w, h: h)
+                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+            }
+        }
+    }
+
+    private func arcTrack(progress: Double, w: CGFloat, h: CGFloat) -> some View {
+        let lit: Color = tier == .drizzly || tier == .hazy ? .white.opacity(0.75) : Color(hex: "FFF3C4")
+        return ZStack {
+            arcPath(to: 1, w: w, h: h)
+                .stroke(.white.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 5]))
+            arcPath(to: progress / 2, w: w, h: h)
+                .stroke(lit, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+            if tier == .drizzly {
+                // No sun on a grey morning; a small marker still shows the score.
+                Circle().fill(.white.opacity(0.85))
+                    .frame(width: 9, height: 9)
+                    .position(arcPoint(progress, w: w, h: h))
+            }
         }
     }
 

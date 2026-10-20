@@ -37,6 +37,12 @@ enum SleepVisuals {
             }
         }
 
+        /// The verdict with how the night compares to your week folded in.
+        func verdict(weekDelta: Int?) -> String {
+            guard let d = weekDelta, abs(d) >= 3 else { return verdict }
+            return verdict + (d > 0 ? " \(d) above your week." : " \(-d) under your week.")
+        }
+
         var symbol: String {
             switch self {
             case .radiant: return "sun.max.fill"
@@ -45,6 +51,11 @@ enum SleepVisuals {
             case .drizzly: return "cloud.drizzle.fill"
             }
         }
+    }
+
+    /// How high the morning sun sits on its arc: the score as 0…1.
+    static func arcProgress(score: Int) -> Double {
+        min(1, max(0.04, Double(score) / 100))
     }
 
     // MARK: - Tonight

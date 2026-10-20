@@ -2,10 +2,10 @@
 //  EventMode.swift
 //  Dialed
 //
-//  The run-up to a big day (your brother's wedding): a countdown, then a
-//  "look your best" final week — less salt and fewer carbs so you hold
-//  less water, plenty to drink, sleep first — then the day itself, when
-//  nothing gets tracked and nothing nags, and a no-guilt day after.
+//  The run-up to a big day (your brother's wedding): a "look your best"
+//  final week — less salt and fewer carbs so you hold less water, plenty
+//  to drink, sleep first — then the day itself, when nothing gets tracked
+//  and nothing nags, and a no-guilt day after. Further out it stays quiet.
 //  Pure Foundation, tested; EventModeStore reads the saved event.
 //
 
@@ -14,8 +14,8 @@ import Foundation
 enum EventMode {
 
     enum Phase: Equatable {
-        /// More than a week out.
-        case countdown(daysLeft: Int)
+        /// More than a week out: nothing to show yet.
+        case ahead(daysLeft: Int)
         /// The last seven days.
         case lookYourBest(daysLeft: Int)
         /// The day itself: have fun, track nothing.
@@ -27,7 +27,7 @@ enum EventMode {
 
         var daysLeft: Int? {
             switch self {
-            case .countdown(let d), .lookYourBest(let d): return d
+            case .ahead(let d), .lookYourBest(let d): return d
             case .eventDay: return 0
             default: return nil
             }
@@ -37,8 +37,6 @@ enum EventMode {
     static let lookYourBestDays = 7
     /// Sodium stays under this during the final week.
     static let sodiumLimitMg = 2_000
-    /// A countdown before this many days out is just a date.
-    static let countdownDays = 45
 
     static func phase(event: Date, now: Date = Date(), calendar: Calendar = .current) -> Phase {
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: now),
@@ -47,7 +45,7 @@ enum EventMode {
         case 0:                         return .eventDay
         case -1:                        return .recovery
         case 1...lookYourBestDays:      return .lookYourBest(daysLeft: days)
-        case (lookYourBestDays + 1)...: return .countdown(daysLeft: days)
+        case (lookYourBestDays + 1)...: return .ahead(daysLeft: days)
         default:                        return .none
         }
     }
@@ -57,22 +55,11 @@ enum EventMode {
         return calendar.isDate(event, inSameDayAs: date)
     }
 
-    /// When the countdown is measured from: 30 days out, or the first
-    /// weigh-in after that if you started later.
-    static func countdownStart(event: Date, calendar: Calendar = .current) -> Date {
-        calendar.date(byAdding: .day, value: -30, to: calendar.startOfDay(for: event)) ?? event
-    }
-
     // MARK: - Copy
 
     static func isWedding(_ name: String) -> Bool {
         let n = name.lowercased()
         return n.contains("wedding") || n.contains("marri")
-    }
-
-    /// "Suit-fit countdown" for a wedding, else "Countdown".
-    static func countdownTitle(_ name: String) -> String {
-        isWedding(name) ? "Suit-fit countdown" : "Countdown"
     }
 
     static func eventDayTitle(_ name: String) -> String {
