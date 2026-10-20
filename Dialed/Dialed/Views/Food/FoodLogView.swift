@@ -251,6 +251,30 @@ struct FoodLogView: View {
                 shortcut("barcode.viewfinder", "Scan a barcode", .scan)
                 shortcut("text.bubble.fill", "Describe a meal", .describe)
             }
+            NavigationLink { MealPlanView() } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "list.bullet.clipboard.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Neka.greenText)
+                        .frame(width: 34, height: 34)
+                        .background(Circle().fill(Neka.greenSoft))
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Meal plan")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Go-to meals for the week and a grocery list")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface))
+            }
+            .buttonStyle(.dialedScale)
             if !favorites.isEmpty {
                 chips(title: "Favorites", items: favorites.map(FoodDraft.init), icon: "star.fill")
             }
