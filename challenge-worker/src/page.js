@@ -333,6 +333,93 @@ function weighInCard(me) {
           el("button", { class: "ghost", onclick: async () => { state = await api("/weighins/" + w.date, { method: "DELETE" }); render(); } }, "Remove")))))) : null);
 }
 
+// Weekly side bets: one metric, Monday–Sunday, a stake.
+const BET_METRICS = {
+  steps: ["👟", "Most steps", true], miles: ["🚶", "Most miles", true], workouts: ["🏋️", "Most workouts", true],
+  prs: ["🏆", "Most PRs", true], skippedDays: ["📅", "Fewest skipped days", false], proteinDays: ["🥩", "Most protein days", true],
+};
+const STAKES = ["Loser buys wings 🍗", "Loser does 50 burpees", "Loser buys coffee for a week ☕️",
+                "Loser picks the next cheat meal", "Loser posts a gym selfie 📸", "Loser buys the next round 🍺"];
+const mondayKey = (key = todayKey()) => { const d = new Date(t(key)); d.setDate(d.getDate() - (d.getDay() + 6) % 7); return d.toISOString().slice(0, 10); };
+const weekOver = (b) => t(todayKey()) >= t(b.week) + 7 * DAY - 12 * 36e5;
+const betScore = (b, role) => role === "owner" ? b.ownerScore : b.friendScore;
+const fmtScore = (metric, v) => v == null ? "—" : metric === "miles" ? f1(v) : Math.round(v).toLocaleString();
+function betWinner(b) {
+  const o = b.ownerScore, f = b.friendScore;
+  if (b.status !== "active" || !weekOver(b) || o == null || f == null) return null;
+  if (Math.abs(o - f) < 1e-4) return "tie";
+  return (o > f) === BET_METRICS[b.metric][2] ? "owner" : "friend";
+}
+function owesLine(b, winner, me, them) {
+  if (!winner || winner === "tie") return "Dead even — nobody owes anybody.";
+  const loser = winner === me.role ? them.name : "You";
+  const stake = b.stake.trim();
+  if (/^loser /i.test(stake)) {
+    let rest = stake.slice(6);
+    if (loser === "You") rest = rest.replace(/^(\\S+)/, w => ({ does: "do", has: "have", is: "are", goes: "go" })[w] || w.replace(/ies$/, "y").replace(/(ch|sh|ss)es$/, "$1").replace(/([^s])s$/, "$1"));
+    return loser + " " + rest;
+  }
+  return loser === "You" ? "You owe " + them.name + ": " + stake : them.name + " owes you: " + stake;
+}
+
+function betsCard(me, them) {
+  const bets = state.bets || [];
+  const week = mondayKey();
+  const cur = bets.find(b => b.week === week && (b.status === "proposed" || b.status === "active"));
+  const patchBet = async (b, body) => { state = await api("/bets/" + b.id, { method: "PATCH", body: JSON.stringify(body) }); render(); };
+  const body = [];
+  if (cur) {
+    const [icon, title] = BET_METRICS[cur.metric] || ["🎲", cur.metric];
+    body.push(el("div", { class: "between" }, el("b", {}, icon + " " + title), el("span", { class: "pill orange" }, cur.stake)));
+    if (cur.status === "proposed" && cur.proposer !== me.role) {
+      body.push(el("p", { class: "muted" }, them.name + " wants this bet for the week. You in?"),
+        el("div", { class: "row" },
+          el("button", { onclick: () => patchBet(cur, { action: "accept" }) }, "Accept 🤝"),
+          el("button", { class: "ghost", style: { width: "100%" }, onclick: () => patchBet(cur, { action: "decline" }) }, "Pass")));
+    } else if (cur.status === "proposed") {
+      body.push(el("p", { class: "muted" }, "Waiting for " + them.name + " to accept."),
+        el("button", { class: "ghost", onclick: () => patchBet(cur, { action: "cancel" }) }, "Cancel bet"));
+    } else {
+      const mine = betScore(cur, me.role), theirs = betScore(cur, them.role);
+      const max = Math.max(1, mine || 0, theirs || 0);
+      const bar = (s, v) => el("div", { style: { marginTop: "10px" } },
+        el("div", { class: "between tiny" }, el("span", {}, s.name), el("b", {}, fmtScore(cur.metric, v))),
+        el("div", { class: "bar", style: { marginTop: "4px" } }, el("i", { style: { width: Math.max(2, (v || 0) / max * 100) + "%", background: COLORS[s.role] } })));
+      const input = el("input", { type: "number", inputmode: "decimal", step: cur.metric === "miles" ? "0.1" : "1", placeholder: "Your total this week", value: mine ?? "" });
+      const daysLeft = Math.max(0, Math.round((t(week) + 7 * DAY - t(todayKey())) / DAY));
+      body.push(bar(me, mine), bar(them, theirs),
+        el("p", { class: "tiny" }, daysLeft + (daysLeft === 1 ? " day" : " days") + " left · update your number any time"),
+        el("div", { class: "row" }, input, el("button", { style: { flex: "0 0 84px" }, onclick: async () => {
+          const v = parseFloat(input.value); if (!(v >= 0)) return input.focus();
+          await patchBet(cur, { score: v }); toast("Saved");
+        } }, "Save")));
+    }
+  } else {
+    const metric = el("select", { style: { width: "100%", font: "inherit", fontSize: "16px", padding: "12px", borderRadius: "14px", border: "0", background: "var(--track)", color: "var(--ink)" } },
+      Object.entries(BET_METRICS).map(([k, [icon, title]]) => el("option", { value: k }, icon + " " + title)));
+    const stake = el("input", { list: "stakes", placeholder: "Loser buys wings 🍗", maxlength: "80" });
+    body.push(el("p", { class: "muted", style: { marginTop: 0 } }, "A mini-battle for this week, on top of the race."),
+      el("label", {}, "Battle"), metric, el("div", { style: { height: "10px" } }),
+      el("label", {}, "Stakes"), stake, el("datalist", { id: "stakes" }, STAKES.map(s => el("option", { value: s }))),
+      el("div", { style: { height: "12px" } }),
+      el("button", { onclick: async () => {
+        state = await api("/bets", { method: "POST", body: JSON.stringify({ week, metric: metric.value, stake: stake.value.trim() || STAKES[0] }) });
+        toast("Bet sent to " + them.name); render();
+      } }, "Propose bet 🎲"));
+  }
+  const settled = bets.filter(b => b.status === "active" && b.week < week && betWinner(b));
+  if (settled.length) {
+    body.push(el("details", { style: { marginTop: "12px" } }, el("summary", { class: "muted" }, "Past bets (" + settled.length + ") ›"),
+      el("div", { class: "list" }, settled.map(b => {
+        const w = betWinner(b);
+        return el("div", {}, el("span", {}, (w === me.role ? "🏆 " : w === "tie" ? "🤝 " : "😬 ") + owesLine(b, w, me, them),
+            el("div", { class: "tiny" }, BET_METRICS[b.metric]?.[1] + " · " + fmtScore(b.metric, betScore(b, me.role)) + " vs " + fmtScore(b.metric, betScore(b, them.role)))),
+          w === "tie" ? null : el("button", { class: "ghost", onclick: () => patchBet(b, { action: b.paid ? "unpaid" : "paid" }) }, b.paid ? "Paid ✓" : "Mark paid"));
+      }))));
+  }
+  return el("div", { class: "card" }, el("h2", {}, "🎲 Side bet"), body);
+}
+
 function chatCard(me, them) {
   const c = state.challenge;
   const text = el("input", { maxlength: "280", placeholder: "Say something…", enterkeyhint: "send" });
@@ -388,7 +475,7 @@ function render() {
       el("b", {}, "No weigh-in yet today"), el("div", { class: "muted" }, me.auto ? "Your scale syncs this automatically after you step on it." : "Step on the scale and log it below — it keeps your streak alive.")));
   }
 
-  app.append(autoSyncCard(me), weighInCard(me));
+  app.append(betsCard(me, them), autoSyncCard(me), weighInCard(me));
   const theirs = statsCard(them, false), mine = statsCard(me, true);
   if (theirs) app.append(theirs);
   if (mine) app.append(mine);

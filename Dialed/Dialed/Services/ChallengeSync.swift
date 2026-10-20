@@ -189,6 +189,36 @@ final class ChallengeSync: ObservableObject {
         }
     }
 
+    // MARK: - Side bets
+
+    /// Propose this week's side bet. False (with `lastError`) when it didn't go through.
+    @discardableResult
+    func proposeBet(week: String, metric: SideBets.Metric, stake: String) async -> Bool {
+        struct Body: Encodable { let week: String; let metric: String; let stake: String }
+        return await betRequest("/bets", method: "POST", body: Body(week: week, metric: metric.rawValue, stake: stake))
+    }
+
+    /// Accept / decline / cancel / paid / unpaid, and/or your own score for the week.
+    @discardableResult
+    func updateBet(id: String, action: String? = nil, score: Double? = nil) async -> Bool {
+        struct Body: Encodable { let action: String?; let score: Double? }
+        return await betRequest("/bets/\(id)", method: "PATCH", body: Body(action: action, score: score))
+    }
+
+    private func betRequest<B: Encodable>(_ path: String, method: String, body: B) async -> Bool {
+        guard isLive else { return false }
+        do {
+            var request = authorized(path, method: method)
+            request.httpBody = try JSONEncoder().encode(body)
+            apply(try await send(request))
+            lastError = nil
+            return true
+        } catch {
+            lastError = "Side bet: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     private func apply(_ fresh: ChallengeWire.State) {
         state = fresh
         lastSync = Date()

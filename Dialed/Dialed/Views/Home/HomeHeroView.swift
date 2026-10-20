@@ -39,6 +39,7 @@ struct HomeHeroView: View {
     var onTapMood: () -> Void = {}
 
     private let height: CGFloat = 430
+    @ObservedObject private var studio = AvatarStudio.shared
 
     var body: some View {
         GeometryReader { geo in
@@ -50,6 +51,25 @@ struct HomeHeroView: View {
                         .onTapGesture(perform: onTapPhoto)
                     vitalTiles
                         .frame(width: w, height: h, alignment: .bottom)
+                    // Avatar level (top-left), or a "leveled up" call-out.
+                    Group {
+                        if studio.levelUp != nil {
+                            Button(action: onTapMood) {
+                                Label("Leveled up!", systemImage: "arrow.up.circle.fill")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 7)
+                                    .background(Capsule().fill(LinearGradient(colors: [Neka.amber, Neka.orange],
+                                                                              startPoint: .leading, endPoint: .trailing)))
+                            }
+                            .buttonStyle(.dialedScale)
+                        } else if let evolution = studio.evolution {
+                            AvatarStageBadge(reading: evolution)
+                        }
+                    }
+                    .padding(.leading, 16)
+                    .padding(.top, 16)
                 } else {
                     backdrop(w: w, h: h)
                     photo(w: w, h: h)

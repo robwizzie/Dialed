@@ -159,7 +159,7 @@ final class HealthDetailModel: ObservableObject {
         let proteinDays = await hkProteinDays ?? [:]
         let waterEvents = events.filter { $0.kindRaw == ContextEvent.Kind.water.rawValue && calendar.isDate($0.logicalDate, inSameDayAs: day) }
         let deviceWater = max((await hkWaterHour ?? []).reduce(0, +), log?.waterOz ?? 0)
-        let calorieTarget = settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: currentWeight)
+        let calorieTarget = CalorieTarget.current(settings: settings, weight: currentWeight)
 
         func total(_ hours: [Double]?) -> Double? {
             let t = (hours ?? []).reduce(0, +)
