@@ -17,5 +17,6 @@ struct DialedWidgetsBundle: WidgetBundle {
         DialedScoreWidget()
         DialedBodyWidget()
         DialedChallengeWidget()
+        WorkoutLiveActivity()
     }
 }
