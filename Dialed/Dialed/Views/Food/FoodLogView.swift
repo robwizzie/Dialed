@@ -200,7 +200,7 @@ struct FoodLogView: View {
     private var summary: some View {
         let calories = foods.reduce(0) { $0 + $1.calories }
         let protein = foods.reduce(0) { $0 + $1.protein }
-        let calTarget = (settings.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: settings.currentWeight)) + earned.earned
+        let calTarget = CalorieTarget.current(settings: settings, weight: settings.currentWeight) + earned.earned
         let proteinTarget = settings.proteinTargetGrams
         return VStack(spacing: 10) {
             HStack(spacing: 12) {

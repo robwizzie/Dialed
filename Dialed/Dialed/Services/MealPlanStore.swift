@@ -22,7 +22,7 @@ enum MealPlanStore {
 
     static var targets: (calories: Double, protein: Double) {
         let s = UserSettings.load()
-        return (s.calorieTarget ?? HomeViewModel.estimatedCutCalories(weight: s.currentWeight), s.proteinTargetGrams)
+        return (CalorieTarget.current(settings: s, weight: s.currentWeight), s.proteinTargetGrams)
     }
 
     /// This week's plan; a new one when the old one has run out or your

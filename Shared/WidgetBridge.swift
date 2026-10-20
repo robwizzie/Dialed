@@ -148,6 +148,15 @@ struct WidgetInsights: Codable, Equatable {
         var lostLbs: Double
         var weighedInToday: Bool
         var weighInStreak: Int
+        /// The race (RacePace): lbs/week needed to finish ahead, your pace,
+        /// and "ahead" / "onTrack" / "behind" / "unknown". Optional so older
+        /// insights decode.
+        var neededPace: Double? = nil
+        var yourPace: Double? = nil
+        var raceStatus: String? = nil
+
+        /// The last 14 days: final push.
+        var isFinalPush: Bool { daysLeft <= 14 }
 
         var goalProgress: Double { goalLossLbs > 0 ? max(0, min(1, lostLbs / goalLossLbs)) : 0 }
         var timeProgress: Double { totalDays > 0 ? max(0, min(1, Double(dayNumber) / Double(totalDays))) : 0 }
@@ -227,7 +236,8 @@ struct WidgetInsights: Codable, Equatable {
         challenge: Challenge(
             friendName: "Sam", scoresPercent: true, youLost: 2.5, friendLost: 1.9,
             leader: "you", margin: 0.6, dayNumber: 18, totalDays: 30, daysLeft: 12,
-            goalLossLbs: 10, lostLbs: 4.8, weighedInToday: true, weighInStreak: 6
+            goalLossLbs: 10, lostLbs: 4.8, weighedInToday: true, weighInStreak: 6,
+            neededPace: 1.4, yourPace: 1.7, raceStatus: "onTrack"
         ),
         goal: Goal(name: "Wedding", date: Date().addingTimeInterval(41 * 86_400), projectedWeight: 181.0),
         updatedAt: Date()

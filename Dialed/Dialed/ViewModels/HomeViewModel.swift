@@ -67,6 +67,10 @@ final class HomeViewModel: ObservableObject {
     /// "You need 1.3 lb/week to beat Dave" — refreshed every 10 minutes at most.
     @Published var race: RacePace.Report?
     private var raceCheckedAt: Date?
+    /// Your usual calorie target while final push has tightened it (nil otherwise).
+    @Published var finalPushUsualTarget: Double?
+    /// The challenge end the final-push notifications were last built for.
+    private var finalPushScheduledFor: Date??
 
     // MARK: - Tiles
 
@@ -288,7 +292,25 @@ final class HomeViewModel: ObservableObject {
         proteinGrams = max(loggedProtein, hkProteinToday)
         caloriesIn = max(loggedCalories, hkEnergyToday)
         proteinTarget = settings.proteinTargetGrams
-        calorieTarget = settings.calorieTarget ?? Self.estimatedCutCalories(weight: latestWeight?.pounds ?? settings.currentWeight)
+        let usualTarget = CalorieTarget.base(settings: settings, weight: latestWeight?.pounds ?? settings.currentWeight)
+        calorieTarget = usualTarget
+        finalPushUsualTarget = nil
+        // Final push: the last 14 days run on the pace you need to win.
+        if let c = challenge, FinalPush.isActive(end: c.endDate, now: now) {
+            let strict = FinalPush.stricterTarget(normal: usualTarget, pace: race?.targetCalories)
+            FinalPushStore.setTarget(strict < usualTarget ? strict : nil, now: now)
+            if strict < usualTarget {
+                calorieTarget = strict
+                finalPushUsualTarget = usualTarget
+            }
+        } else {
+            FinalPushStore.setTarget(nil)
+        }
+        if finalPushScheduledFor != .some(challenge?.endDate) {
+            finalPushScheduledFor = .some(challenge?.endDate)
+            let c = challenge
+            Task { await FinalPushNotifications.reschedule(challenge: c) }
+        }
         earned = await EarnedCalories.day(now, context: context)
         currentWeightForPaths = latestWeight?.pounds ?? settings.currentWeight
 
