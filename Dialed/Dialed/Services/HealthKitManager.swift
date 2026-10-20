@@ -69,6 +69,10 @@ class HealthKitManager: ObservableObject {
         if let bodyFatType = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) {
             types.insert(bodyFatType)
         }
+        // Smart-scale body composition (Trend weight screen).
+        if let leanType = HKObjectType.quantityType(forIdentifier: .leanBodyMass) {
+            types.insert(leanType)
+        }
 
         // Home body callouts + fuel card
         let extra: [HKQuantityTypeIdentifier] = [
