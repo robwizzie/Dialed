@@ -41,6 +41,8 @@ enum WorkoutTextParser {
         "db row": "one-arm dumbbell row", "dumbbell row": "one-arm dumbbell row", "rows": "row",
         "seated row": "cable row",
         "face pull": "cable face pull", "face pulls": "cable face pull",
+        "pec deck": "pec deck fly", "pec deck fly": "pec deck fly", "pec fly": "pec deck fly", "butterfly": "pec deck fly",
+        "incline bench": "incline bench press", "decline bench": "decline bench press",
         "fly": "cable fly", "flys": "cable fly", "flies": "cable fly", "cable flies": "cable fly",
         "ohp": "dumbbell shoulder press", "shoulder press": "dumbbell shoulder press", "overhead press": "dumbbell shoulder press",
         "lunge": "dumbbell walking lunge", "lunges": "dumbbell walking lunge", "walking lunges": "dumbbell walking lunge",
@@ -183,14 +185,23 @@ enum WorkoutTextParser {
         } else {
             name = name.split(separator: " ").map { aliases[String($0)] ?? String($0) }.joined(separator: " ")
         }
+        // "bench press press" (alias + the word already typed) → once.
+        var words: [Substring] = []
+        for w in name.split(separator: " ") where w != words.last { words.append(w) }
+        name = words.joined(separator: " ")
         let tokens = Set(tokenize(name))
+        let marks = tokens.intersection(distinctions)
         // Equipment words alone ("dumbbell") don't make a match.
         let specific = tokens.subtracting(generic)
         var best: (String, Double)?
         for k in known {
             let kt = Set(tokenize(k))
-            let sharedSpecific = specific.intersection(kt).count
-            guard sharedSpecific > 0 else { continue }
+            // Incline isn't flat, sumo isn't conventional: those must agree.
+            guard kt.intersection(distinctions) == marks else { continue }
+            // Every specific word has to be in the known name: "leg press"
+            // is not "Bench press" just because both press.
+            guard !specific.isEmpty, specific.isSubset(of: kt) else { continue }
+            let sharedSpecific = specific.count
             let shared = Double(tokens.intersection(kt).count)
             let score = shared / Double(tokens.count) + Double(sharedSpecific) / Double(max(kt.count, 1)) * 0.25
             if score > (best?.1 ?? 0) { best = (k, score) }
@@ -199,7 +210,12 @@ enum WorkoutTextParser {
         return name.prefix(1).uppercased() + name.dropFirst()
     }
 
-    private static let generic: Set<String> = ["dumbbell", "barbell", "cable", "kettlebell", "machine", "one-arm", "arm", "incline", "decline", "seated", "standing"]
+    /// Words that make it a different exercise, not a variant spelling.
+    private static let distinctions: Set<String> = ["incline", "decline", "front", "sumo", "hack", "close", "wide",
+        "reverse", "overhead", "hammer", "preacher", "bulgarian", "split", "pec", "deck", "smith", "romanian", "goblet",
+        "single", "jump", "trap", "hex"]
+
+    private static let generic: Set<String> = ["dumbbell", "barbell", "cable", "kettlebell", "machine", "one-arm", "arm", "incline", "decline", "seated", "standing", "flat", "heavy", "light", "walking"]
 
     private static func tokenize(_ s: String) -> [String] {
         s.lowercased()

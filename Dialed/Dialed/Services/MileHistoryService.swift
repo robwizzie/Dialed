@@ -83,6 +83,21 @@ enum MileHistoryService {
             loggedSteps[d] = max(loggedSteps[d] ?? 0, Double(log.steps ?? 0))
         }
 
+        // Runs and walks you logged yourself (treadmill with no watch).
+        var logged: [Date: (miles: Double, ran: Bool)] = [:]
+        for log in (try? context.fetch(FetchDescriptor<PlanWorkoutLog>(predicate: #Predicate { $0.date >= start }))) ?? [] {
+            let d = calendar.startOfDay(for: log.date)
+            var miles = 0.0, ran = false
+            if let kind = log.cardioKind, kind == "Run" || kind == "Walk", let mi = log.cardioMiles {
+                miles += mi
+                ran = kind == "Run"
+            }
+            if log.kindRaw == WorkoutProgram.Session.Kind.walk.rawValue, let mi = log.distanceMiles { miles += mi }
+            guard miles > 0 else { continue }
+            let prior = logged[d] ?? (0, false)
+            logged[d] = (prior.miles + miles, prior.ran || ran)
+        }
+
         // Learn your stride from days Health has both.
         var settings = MileSettings.load()
         if let learned = MileADay.learnStride(distanceByDay.compactMap { day, miles in
@@ -95,11 +110,15 @@ enum MileHistoryService {
         return (0..<count).compactMap { offset -> MileDay? in
             guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { return nil }
             let w = workoutsByDay[day]
+            let mine = logged[day]
+            // The same run can be both logged and watch-recorded: take the larger, don't add.
+            let footMiles = max(w?.miles ?? 0, mine?.miles ?? 0)
             let daySteps = Int(max(stepsByDay[day] ?? 0, loggedSteps[day] ?? 0))
-            let r = MileADay.resolve(distance: distanceByDay[day], workoutMiles: w?.miles ?? 0,
+            let r = MileADay.resolve(distance: distanceByDay[day], workoutMiles: footMiles,
                                      steps: daySteps, stepsPerMile: settings.stepsPerMile)
-            return MileDay(date: day, miles: r.miles, workoutMiles: w?.miles ?? 0,
-                           workouts: w?.count ?? 0, ran: w?.ran ?? false, source: r.source)
+            return MileDay(date: day, miles: r.miles, workoutMiles: footMiles,
+                           workouts: max(w?.count ?? 0, mine == nil ? 0 : 1),
+                           ran: (w?.ran ?? false) || (mine?.ran ?? false), source: r.source)
         }
     }
 }
