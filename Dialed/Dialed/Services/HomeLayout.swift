@@ -10,7 +10,7 @@
 import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
-    case morning, finalPush, wrapped, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, tomorrow,
+    case morning, finalPush, wrapped, hero, today, quests, mile, challenge, race, sideBet, futureYou, workout, fun, suggestions, tomorrow,
          weeklyReview, patterns, badges, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
@@ -30,6 +30,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .futureYou:    return "Future you"
         case .workout:      return "Today's workout"
         case .fun:          return "Active moments"
+        case .suggestions:  return "From recent days"
         case .tomorrow:     return "Tomorrow's wake-up"
         case .weeklyReview: return "Week in review"
         case .patterns:     return "Patterns"
@@ -61,6 +62,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .futureYou:    return "sparkles"
         case .workout:      return "dumbbell.fill"
         case .fun:          return "figure.pickleball"
+        case .suggestions:  return "clock.arrow.circlepath"
         case .tomorrow:     return "alarm.fill"
         case .weeklyReview: return "calendar.badge.checkmark"
         case .patterns:     return "chart.bar.xaxis"
@@ -86,6 +88,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .tomorrow:     return "Evenings"
         case .weeklyReview: return "Sundays and Mondays"
         case .race:         return "During a challenge"
+        case .suggestions:  return "When something's waiting"
         case .patterns:     return "Once there's enough data"
         default:            return nil
         }
