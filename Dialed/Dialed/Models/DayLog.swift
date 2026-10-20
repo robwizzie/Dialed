@@ -80,7 +80,7 @@ final class DayLog {
         self.isFinalized = false
 
         // Create default checklist items
-        var items = Constants.ChecklistType.allCases.map { type in
+        var items = Constants.ChecklistType.active.map { type in
             ChecklistItem(type: type, dayDate: self.date)
         }
 

@@ -122,16 +122,12 @@ class OnboardingViewModel: ObservableObject {
 
     // Checklist setup
     @Published var selectedChecklistItems: Set<Constants.ChecklistType> = [
-        .amSkincare,
         .lunchVitamins,
-        .creatine,
-        .pmSkincare
+        .creatine
     ]
     @Published var customChecklistTimes: [Constants.ChecklistType: (hour: Int, minute: Int)] = [
-        .amSkincare: (7, 0),
         .lunchVitamins: (12, 0),
-        .creatine: (16, 0),
-        .pmSkincare: (21, 0)
+        .creatine: (16, 0)
     ]
 
     enum OnboardingStep: Int, CaseIterable {

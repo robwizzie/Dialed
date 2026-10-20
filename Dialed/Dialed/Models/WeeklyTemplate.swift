@@ -139,6 +139,8 @@ final class TemplateBlock {
 extension TemplateBlock {
     enum Kind: String, Codable, CaseIterable {
         case wake             // morning anchor — wake-up cue, hydration prompt
+        /// Retired: kept only so older saved blocks still decode
+        /// (SkincareCleanup removes them). Never offered or created.
         case skincare
         case supplement
         case hydration
@@ -229,12 +231,6 @@ extension WeeklyTemplate {
                 durationMinutes: 5, sortOrder: 0
             ),
             TemplateBlock(
-                kind: .skincare, title: "AM skincare",
-                blockDescription: "Rinse face + CeraVe AM",
-                weekdayMask: mask.everyDay, anchor: .afterWake, anchorOffsetMinutes: 30,
-                durationMinutes: 5, sortOrder: 1
-            ),
-            TemplateBlock(
                 kind: .caffeine, title: "First coffee",
                 blockDescription: "~90 min after waking (avoid adenosine rebound)",
                 weekdayMask: mask.everyDay, anchor: .afterWake, anchorOffsetMinutes: 90,
@@ -307,12 +303,6 @@ extension WeeklyTemplate {
                 blockDescription: "Dim lights, no scrolling",
                 weekdayMask: mask.everyDay, anchor: .beforeSleep, anchorOffsetMinutes: 60,
                 durationMinutes: 60, sortOrder: 7
-            ),
-            TemplateBlock(
-                kind: .skincare, title: "PM skincare",
-                blockDescription: "Wash + CeraVe PM",
-                weekdayMask: mask.everyDay, anchor: .beforeSleep, anchorOffsetMinutes: 30,
-                durationMinutes: 5, sortOrder: 8
             ),
             TemplateBlock(
                 kind: .sleep, title: "Sleep target",
