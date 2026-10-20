@@ -11,6 +11,8 @@ struct NotificationsSettingsView: View {
     @StateObject private var notificationManager = NotificationManager.shared
     @State private var settings = NotificationSettings.load()
     @State private var showPermissionAlert = false
+    @AppStorage(HeadToHeadSync.weighInAlertsKey) private var friendWeighInAlerts = true
+    @AppStorage(HeadToHeadSync.nudgesKey) private var trashTalkNudges = true
 
     var body: some View {
         List {
@@ -102,6 +104,50 @@ struct NotificationsSettingsView: View {
                     Text("Reminders")
                 } footer: {
                     Text("Receive notifications at the scheduled time for each routine task")
+                }
+                .listRowBackground(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Neka.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
+                        )
+                )
+
+                // Live challenge
+                Section {
+                    Toggle(isOn: $friendWeighInAlerts) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "scalemass.fill")
+                                .foregroundStyle(Neka.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Friend weigh-ins")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("When your friend weighs in, with who's ahead")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Toggle(isOn: $trashTalkNudges) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame.fill")
+                                .foregroundStyle(Neka.rose)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Trash-talk nudges")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("When the lead changes or a streak hits — twice a week at most")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Challenge")
+                } footer: {
+                    Text("For a live challenge. Never between 9 PM and 8 AM.")
                 }
                 .listRowBackground(
                     RoundedRectangle(cornerRadius: 10)
