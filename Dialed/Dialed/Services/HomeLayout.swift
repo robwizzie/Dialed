@@ -11,7 +11,7 @@ import Foundation
 
 enum HomeSection: String, CaseIterable, Identifiable {
     case morning, hero, today, mile, challenge, race, futureYou, workout, fun, tomorrow,
-         weeklyReview, patterns, paths, aiBrief, body, tiles, fuel, timeline, coach
+         weeklyReview, patterns, paths, aiBrief, body, tiles, fuel, proteinPace, mealPlan, timeline, coach
 
     var id: String { rawValue }
 
@@ -34,6 +34,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .body:         return "Body state"
         case .tiles:        return "Health tiles"
         case .fuel:         return "Fuel"
+        case .proteinPace:  return "Protein pace"
+        case .mealPlan:     return "Next planned meal"
         case .timeline:     return "Timeline"
         case .coach:        return "Coach"
         }
@@ -58,6 +60,8 @@ enum HomeSection: String, CaseIterable, Identifiable {
         case .body:         return "waveform.path.ecg"
         case .tiles:        return "square.grid.2x2.fill"
         case .fuel:         return "fork.knife"
+        case .proteinPace:  return "bolt.heart.fill"
+        case .mealPlan:     return "calendar.day.timeline.left"
         case .timeline:     return "clock.fill"
         case .coach:        return "bubble.left.and.text.bubble.right.fill"
         }
