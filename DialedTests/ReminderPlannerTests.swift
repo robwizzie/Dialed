@@ -140,7 +140,7 @@ final class ReminderPlannerTests: XCTestCase {
         XCTAssertNil(ReminderPlanner.plan(i, settings: settings, calendar: calendar).first { $0.fireDate == at(15, 30) })
     }
 
-    func testStepsNudgeMentionsPeaches() {
+    func testStepsNudgeSuggestsAWalk() {
         var settings = on
         settings.disabledKinds = [.water, .protein, .weighIn]
         var i = onTrack(at(16))
@@ -148,7 +148,7 @@ final class ReminderPlannerTests: XCTestCase {
         let plan = ReminderPlanner.plan(i, settings: settings, calendar: calendar)
         XCTAssertEqual(plan.count, 1)
         XCTAssertEqual(plan.first?.fireDate, at(18))
-        XCTAssertTrue(plan.first?.title.contains("Peaches") ?? false)
+        XCTAssertTrue(plan.first?.title.contains("walk") ?? false)
         XCTAssertTrue(plan.first?.body.contains("55-min") ?? false)   // 6,000 short ÷ 110 ≈ 55 min
     }
 

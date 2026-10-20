@@ -45,12 +45,15 @@ enum DialPalette {
     }
 }
 
-/// Today's "how dialed in am I" score, 0…100, from the three things you
-/// log every day. Shared so Home and the widget always agree.
+/// Today's "how dialed in am I" score, 0…100, from the things you do
+/// every day: water, protein, calories and the daily mile. Shared so Home
+/// and the widgets always agree. Without a mile reading (an older widget
+/// snapshot) it scores the other three alone.
 enum DialedScore {
     static func compute(waterOz: Double, waterTargetOz: Double,
                         protein: Double, proteinTarget: Double,
-                        calories: Double, calorieTarget: Double) -> Int {
+                        calories: Double, calorieTarget: Double,
+                        miles: Double? = nil) -> Int {
         let water = waterTargetOz > 0 ? min(1, waterOz / waterTargetOz) : 0
         let prot = proteinTarget > 0 ? min(1, protein / proteinTarget) : 0
         // Calories: full marks for logging and staying at or under target,
@@ -63,7 +66,11 @@ enum DialedScore {
         } else {
             cal = max(0, 1 - (calories - calorieTarget) / (calorieTarget * 0.25))
         }
-        return Int((100 * (0.35 * water + 0.40 * prot + 0.25 * cal)).rounded())
+        guard let miles else {
+            return Int((100 * (0.35 * water + 0.40 * prot + 0.25 * cal)).rounded())
+        }
+        let mile = min(1, max(0, miles) / MileADay.goal)
+        return Int((100 * (0.30 * water + 0.35 * prot + 0.20 * cal + 0.15 * mile)).rounded())
     }
 }
 

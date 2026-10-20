@@ -277,7 +277,7 @@ enum WeeklyReview {
             return Fix(area: .water, headline: "Drink earlier in the day",
                        detail: "Averaged \(i(s.avgWater)) of \(i(targets.waterOz)) oz and hit it \(s.waterDays) of 7 days. Finish the first bottle by 11 and the second by 2.")
         case .steps:
-            return Fix(area: .steps, headline: "Walk Peaches after dinner",
+            return Fix(area: .steps, headline: "Walk after dinner",
                        detail: "Averaged \(i(s.avgSteps)) steps and hit \(targets.steps.formatted()) on \(s.stepDays) of 7 days. A 30-minute walk after dinner closes most of that gap.")
         case .sleep:
             return Fix(area: .sleep, headline: "Protect your sleep",

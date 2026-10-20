@@ -134,8 +134,8 @@ extension TrackingPreferences {
         (
             \.trackMile,
             CategoryInfo(
-                name: "Mile Run",
-                description: "Track daily mile completion",
+                name: "Mile a day",
+                description: "Walk or run at least a mile every day",
                 basePoints: 15,
                 icon: "figure.run",
                 gradientColors: ["orange", "red"]

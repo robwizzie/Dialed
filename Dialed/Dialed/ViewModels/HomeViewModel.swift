@@ -82,6 +82,11 @@ final class HomeViewModel: ObservableObject {
 
     @Published var steps: Int = 0
     @Published var stepsSeries: [Int] = []
+    /// The daily mile (walked or run): today, the last 7 days, the streak.
+    @Published var milesToday: Double = 0
+    @Published var milesWeek: [Double] = []
+    @Published var mileStreak: Int = 0
+    @Published var ranToday = false
     let stepGoal = 10_000
 
     @Published var proteinGrams: Double = 0
@@ -176,7 +181,9 @@ final class HomeViewModel: ObservableObject {
         // 3. Apple Health, in parallel. try? = a missing permission is not an error.
         async let hkWater = try? health.fetchDailySums(.dietaryWater, unit: .fluidOunceUS(), days: 7)
         async let hkWaterSources = health.sourceNames(.dietaryWater, since: today)
-        async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 7)
+        async let hkSteps = try? health.fetchDailySums(.stepCount, unit: .count(), days: 60)
+        async let hkDistance = try? health.fetchDailySums(.distanceWalkingRunning, unit: .mile(), days: 60)
+        async let hkWorkoutsToday = try? health.fetchWorkouts(for: today)
         async let hkProtein = try? health.fetchDailySums(.dietaryProtein, unit: .gram(), days: 1)
         async let hkEnergy = try? health.fetchDailySums(.dietaryEnergyConsumed, unit: .kilocalorie(), days: 8)
         async let hkActive = try? health.fetchDailySums(.activeEnergyBurned, unit: .kilocalorie(), days: 8)
@@ -201,6 +208,8 @@ final class HomeViewModel: ObservableObject {
         let merged = await WeightDataSource.readings(context: context, since: weightWindowStart)
         let hkWaterByDay = await hkWater ?? [:]
         let hkStepsByDay = await hkSteps ?? [:]
+        let hkMilesByDay = await hkDistance ?? [:]
+        let workoutsToday = await hkWorkoutsToday ?? []
         let hkProteinToday = (await hkProtein ?? [:])[today] ?? 0
         let hkEnergyByDay = await hkEnergy ?? [:]
         let hkEnergyToday = hkEnergyByDay[today] ?? 0
@@ -248,6 +257,19 @@ final class HomeViewModel: ObservableObject {
             return Int(max(hkStepsByDay[day] ?? 0, watchSteps[day] ?? 0, Double(log?.steps ?? 0)))
         }
         steps = stepsSeries.last ?? 0
+
+        // ---- Mile a day (walked or run)
+        var milesByDay: [Date: Double] = [:]
+        for offset in 0..<60 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else { continue }
+            let log = dayLogs.first { calendar.isDate($0.date, inSameDayAs: day) }
+            let daySteps = Int(max(hkStepsByDay[day] ?? 0, watchSteps[day] ?? 0, Double(log?.steps ?? 0)))
+            milesByDay[day] = MileADay.miles(distance: hkMilesByDay[day], steps: daySteps)
+        }
+        milesToday = milesByDay[today] ?? 0
+        milesWeek = lastDays(7, today: today).map { milesByDay[$0] ?? 0 }
+        mileStreak = MileADay.streak(milesByDay: milesByDay, today: now, calendar: calendar)
+        ranToday = workoutsToday.contains { $0.workoutType == .running }
 
         // ---- Fuel
         let mealEvents = todayEvents.filter { $0.kindRaw == ContextEvent.Kind.meal.rawValue }
@@ -447,6 +469,7 @@ final class HomeViewModel: ObservableObject {
         s.waterTargetOz = waterTargetOz
         s.steps = steps
         s.stepGoal = stepGoal
+        s.miles = milesToday
         s.proteinGrams = proteinGrams
         s.proteinTarget = proteinTarget
         s.caloriesIn = caloriesIn

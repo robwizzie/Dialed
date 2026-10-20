@@ -44,6 +44,8 @@ struct HealthSnapshot: Equatable {
     var waterTargetOz: Double = 0
     var steps: Int = 0
     var stepGoal: Int = 10_000
+    /// Miles walked + run today (nil → estimated from steps).
+    var miles: Double?
     var proteinGrams: Double = 0
     var proteinTarget: Double = 0
     var caloriesIn: Double = 0
@@ -89,6 +91,7 @@ struct HealthSnapshot: Equatable {
         if let w = weight { lines.append("- Weight: \(Self.n(w)) lb\(weighedInToday ? " (weighed in today)" : " (not weighed in today)")") }
         if waterTargetOz > 0 { lines.append("- Water: \(Int(waterOz)) of \(Int(waterTargetOz)) oz") }
         lines.append("- Steps: \(steps) of \(stepGoal)")
+        if let miles { lines.append("- Daily mile (walk or run): \(String(format: "%.2f", miles)) of 1 mi") }
         if proteinTarget > 0 { lines.append("- Protein: \(Int(proteinGrams)) of \(Int(proteinTarget)) g") }
         if calorieTarget > 0 { lines.append("- Calories eaten: \(Int(caloriesIn)) of \(Int(calorieTarget)) budget") }
         if let s = sleepHours { lines.append("- Last night's sleep: \(Self.n(s)) h") }

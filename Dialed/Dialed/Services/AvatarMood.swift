@@ -64,7 +64,7 @@ enum AvatarMood: String, CaseIterable, Codable, Identifiable {
         case .lockedIn:
             return "focused and determined, gym clothes, holding a water bottle, bright clean gym background"
         case .gettingThere:
-            return "relaxed and steady, casual hoodie, walking a small happy dog on a sunny sidewalk"
+            return "relaxed and steady, casual hoodie, out for a walk on a sunny sidewalk"
         case .runningOnEmpty:
             return "sleepy and low energy, yawning, cozy hoodie, holding a coffee mug by a rainy window"
         }
@@ -119,9 +119,15 @@ enum AvatarMood: String, CaseIterable, Codable, Identifiable {
         parts.append(Component(name: "Water", points: water, maxPoints: 20,
                                action: "Drink up to \(waterGoalNow) oz"))
 
-        let steps = paced(Double(s.steps), Double(s.stepGoal)) * 20
-        parts.append(Component(name: "Steps", points: steps, maxPoints: 20,
-                               action: "Take a walk — Peaches is in"))
+        let steps = paced(Double(s.steps), Double(s.stepGoal)) * 10
+        parts.append(Component(name: "Steps", points: steps, maxPoints: 10,
+                               action: "Take a walk"))
+
+        // The daily mile, walked or run: full marks once it's done.
+        let miles = s.miles ?? MileADay.miles(distance: nil, steps: s.steps)
+        let mile = MileADay.isDone(miles) ? 10 : paced(miles, MileADay.goal) * 10
+        parts.append(Component(name: "Mile", points: mile, maxPoints: 10,
+                               action: "Get your mile in — about \(Int(((MileADay.goal - min(miles, MileADay.goal)) * 20).rounded())) min of walking"))
 
         let protein = paced(s.proteinGrams, s.proteinTarget) * 20
         parts.append(Component(name: "Protein", points: protein, maxPoints: 20,
