@@ -91,6 +91,29 @@ enum WorkoutDetector {
         return merge(await apple, google)
     }
 
+    /// Time already accounted for by a workout from any app, padded a few
+    /// minutes each side — nothing in here becomes a suggested activity.
+    /// Unlike `workouts(on:)` this keeps short workouts and ones that
+    /// started the evening before.
+    @MainActor
+    static func busyIntervals(on day: Date, context: ModelContext) async -> [DateInterval] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: day)
+        let end = calendar.date(byAdding: .day, value: 1, to: start) ?? day
+        var raw: [DateInterval] = []
+        #if canImport(HealthKit)
+        raw += (try? await HealthKitManager.shared.fetchWorkoutIntervals(from: start, to: end)) ?? []
+        #endif
+        if GoogleHealthSyncService.isConnected {
+            let google = GoogleHealthSyncService(modelContext: context)
+            let yesterday = calendar.date(byAdding: .day, value: -1, to: start) ?? start
+            for w in await google.exercises(on: day) + google.exercises(on: yesterday) where w.end > start && w.start < end {
+                raw.append(DateInterval(start: w.start, end: max(w.start, w.end)))
+            }
+        }
+        return ActivityAccounting.busyIntervals(raw)
+    }
+
     private static func appleHealth(on day: Date) async -> [DetectedWorkout] {
         #if canImport(HealthKit)
         guard let workouts = try? await HealthKitManager.shared.fetchWorkouts(for: day) else { return [] }

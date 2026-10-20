@@ -46,18 +46,49 @@ enum FunActivityService {
         let samples = await heartRate(from: start, to: end, context: context)
         let logged = loggedEvents(from: start, to: end, context: context)
 
-        // Anything already recorded or named isn't a mystery bout.
-        var busy = workouts.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) }
+        // Anything already recorded (by any app, padded a few minutes) or
+        // named isn't a mystery bout.
+        var busy = await WorkoutDetector.busyIntervals(on: date, context: context)
         busy += logged.map { DateInterval(start: $0.timestamp, end: $0.timestamp.addingTimeInterval(($0.value ?? 0) * 60)) }
 
         var settings = ActiveBouts.Settings()
         settings.weightLbs = await weight ?? 200
         let named = Set(logged.compactMap(\.sourceExternalID))
         let dismissed = dismissedIDs
-        let bouts = ActiveBouts.find(in: samples, excluding: busy, settings: settings)
+        let found = ActiveBouts.find(in: samples, excluding: busy, settings: settings)
             .filter { !named.contains($0.id) && !dismissed.contains($0.id) }
+        let bouts = await accountForWalking(found, from: start, to: end)
 
         return Day(unnamed: bouts, logged: logged, recorded: workouts.filter { $0.kind == .other })
+    }
+
+    /// Walking and running Health already logged (steps, distance — e.g.
+    /// Mile A Day without a workout) is already in your mile and steps:
+    /// stretches that are mostly that drop out, mixed ones keep only the
+    /// non-walking share of their calories.
+    private static func accountForWalking(_ bouts: [ActiveBouts.Bout], from start: Date, to end: Date) async -> [ActiveBouts.Bout] {
+        guard !bouts.isEmpty else { return bouts }
+        #if canImport(HealthKit)
+        let health = HealthKitManager.shared
+        async let stepSamples = try? health.fetchIntervalSamples(.stepCount, unit: .count(), from: start, to: end)
+        async let distanceSamples = try? health.fetchIntervalSamples(.distanceWalkingRunning, unit: .mile(), from: start, to: end)
+        let steps = await stepSamples ?? [], distance = await distanceSamples ?? []
+        guard !steps.isEmpty || !distance.isEmpty else { return bouts }
+        return bouts.compactMap { b in
+            switch ActivityAccounting.classify(start: b.start, end: b.end, steps: steps, distance: distance) {
+            case .alreadyCounted:
+                return nil
+            case .mixed(let share):
+                var kept = b
+                kept.calories = (b.calories * (1 - share)).rounded()
+                return kept
+            case .unexplained:
+                return b
+            }
+        }
+        #else
+        return bouts
+        #endif
     }
 
     // MARK: - Naming

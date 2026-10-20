@@ -53,16 +53,20 @@ enum EarnedCalories {
     }
 
     /// One entry per real session: by source (watch first), skip anything
-    /// that mostly overlaps one already counted.
+    /// that mostly overlaps one already counted, and trim the calories of
+    /// anything that partly does.
     static func combine(_ candidates: [Entry]) -> Day {
         var kept: [Entry] = []
         for c in candidates.sorted(by: { ($0.source, $0.start) < ($1.source, $1.start) }) where c.calories > 0 {
-            let length = max(60, c.end.timeIntervalSince(c.start))
-            let covered = kept.reduce(0.0) { total, k in
-                let overlap = min(k.end, c.end).timeIntervalSince(max(k.start, c.start))
-                return total + max(0, overlap)
-            }
-            if covered < length * 0.5 { kept.append(c) }
+            let span = DateInterval(start: c.start, end: max(c.start.addingTimeInterval(60), c.end))
+            let share = ActivityAccounting.coveredShare(of: span, by: kept.map { DateInterval(start: $0.start, end: max($0.start, $0.end)) })
+            // Mostly the same session: count it once.
+            guard share < 0.5 else { continue }
+            // Partly the same (a walk inside a longer game, or the other way
+            // round): keep only the part nothing else counted.
+            var entry = c
+            if share >= 0.1 { entry.calories = (c.calories * (1 - share)).rounded() }
+            kept.append(entry)
         }
         return Day(entries: kept.sorted { $0.start < $1.start })
     }
@@ -99,13 +103,22 @@ extension EarnedCalories {
         let weight = await latestWeight() ?? 200
         var candidates: [Entry] = []
 
-        // 1. Watch workouts (any kind).
+        // 1. Workouts any app recorded in Health (watch, Mile A Day…). Ones
+        // that didn't save calories are estimated, so they still count once.
         for w in await WorkoutDetector.workouts(on: date, context: context) {
-            guard let cal = w.calories, cal > 0 else { continue }
+            let cal: Double
+            if let measured = w.calories, measured > 0 {
+                cal = Double(measured)
+            } else if w.kind == .strength {
+                cal = strengthCalories(minutes: w.minutes, weightLbs: weight)
+            } else {
+                cal = cardioCalories(kind: WorkoutDetector.title(for: w.kind), minutes: w.minutes, miles: w.miles, weightLbs: weight)
+            }
+            guard cal > 0 else { continue }
             candidates.append(Entry(id: "watch-\(w.id)", name: w.title,
                                     symbol: w.isCardio ? WorkoutLoggerView.cardioSymbol(WorkoutDetector.title(for: w.kind))
                                         : w.kind == .strength ? "dumbbell.fill" : ActiveBouts.symbol(for: w.title),
-                                    start: w.start, end: w.end, calories: Double(cal), source: .watch))
+                                    start: w.start, end: w.end, calories: cal, source: .watch))
         }
 
         // 2. Fun activity you named.
