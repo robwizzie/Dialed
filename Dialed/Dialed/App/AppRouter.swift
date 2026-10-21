@@ -13,7 +13,7 @@ import SwiftUI
 /// Places Home can push to.
 enum HomeDestination: String, Hashable, CaseIterable {
     case foodLog, workout, weeklyReview, timeline, calendar, devices, strength, progressPhotos, mileHistory, weightTrend, mealPlan, schedule,
-         metabolism, wakeUp, calendars, badges, habits, notifications, activity
+         metabolism, wakeUp, calendars, badges, habits, notifications, activity, pulse
 
     var title: String {
         switch self {
@@ -36,6 +36,7 @@ enum HomeDestination: String, Hashable, CaseIterable {
         case .habits: return "Habit heatmap"
         case .notifications: return "Notifications"
         case .activity: return "Suggested activity"
+        case .pulse: return "Pulse Check"
         }
     }
 
@@ -60,6 +61,7 @@ enum HomeDestination: String, Hashable, CaseIterable {
         case .habits: return "square.grid.3x3.fill"
         case .notifications: return "bell.fill"
         case .activity: return "figure.mixed.cardio"
+        case .pulse: return "waveform.path.ecg"
         }
     }
 }

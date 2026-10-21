@@ -614,6 +614,51 @@ class HealthKitManager: ObservableObject {
         }
     }
 
+    /// Quantity samples overlapping a window, with their own start and end
+    /// (steps, walking distance) — for telling walking apart from other activity.
+    func fetchIntervalSamples(
+        _ identifier: HKQuantityTypeIdentifier,
+        unit: HKUnit,
+        from start: Date,
+        to end: Date
+    ) async throws -> [ActivityAccounting.Sample] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: identifier) else { return [] }
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        let sort = NSSortDescriptor(key: HKSampleSortIdentifierStartDate, ascending: true)
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: HKObjectQueryNoLimit,
+                                      sortDescriptors: [sort]) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: (samples as? [HKQuantitySample] ?? []).map {
+                    ActivityAccounting.Sample(start: $0.startDate, end: $0.endDate, value: $0.quantity.doubleValue(for: unit))
+                })
+            }
+            healthStore.execute(query)
+        }
+    }
+
+    /// Every workout from any app (Apple Watch, Mile A Day, Strava…) that
+    /// overlaps a window, including one that started the evening before.
+    func fetchWorkoutIntervals(from start: Date, to end: Date) async throws -> [DateInterval] {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end, options: [])
+        return try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(sampleType: HKObjectType.workoutType(), predicate: predicate,
+                                      limit: HKObjectQueryNoLimit, sortDescriptors: nil) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: (samples ?? []).map {
+                    DateInterval(start: $0.startDate, end: max($0.startDate, $0.endDate))
+                })
+            }
+            healthStore.execute(query)
+        }
+    }
+
     /// Most recent sample of a quantity type within the last `days` days.
     func fetchLatest(
         _ identifier: HKQuantityTypeIdentifier,
