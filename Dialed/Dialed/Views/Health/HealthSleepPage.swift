@@ -120,7 +120,7 @@ struct HealthSleepPage: View {
     }
 
     private func tonightCard(_ t: SleepVisuals.Tonight) -> some View {
-        TimelineView(.periodic(from: .now, by: 60)) { context in
+        SwiftUI.TimelineView(.periodic(from: .now, by: 60)) { context in
             let now = context.date
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .top) {
