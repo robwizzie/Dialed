@@ -25,6 +25,8 @@ struct ContentView: View {
         .onAppear { showWhatsNewIfNeeded() }
         // Widget taps → logs, fresh widget snapshot (Services/WidgetSync.swift).
         .widgetSync()
+        // Wake-up alarm: the mission that turns it off (Services/WakeAlarmScheduler.swift).
+        .wakeMissionHost()
         .onChange(of: appState.hasCompletedOnboarding) { _, _ in
             showWhatsNewIfNeeded()
         }

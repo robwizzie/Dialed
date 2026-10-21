@@ -2,10 +2,11 @@
 //  HomeFunCard.swift
 //  Dialed
 //
-//  "Fun stuff" on Home: the active stretches your heart rate gave away
-//  (tap to say what it was, with your usual picks first), the ones you've
-//  named, and anything your watch recorded that isn't the gym. Plus a
-//  quick way to add one by hand.
+//  "Suggested activity" on Home: the stretches your heart rate gave away
+//  (tap a "?" to say what it was, with your usual picks first), the ones
+//  you've named, and anything your watch recorded that isn't the gym —
+//  laid out on a strip of your day, 6 AM to midnight, with the minutes
+//  and calories they earned. Plus a quick way to add one by hand.
 //
 
 import SwiftUI
@@ -13,12 +14,17 @@ import SwiftData
 
 struct HomeFunCard: View {
     @Environment(\.modelContext) private var context
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var day = FunActivityService.Day()
     @State private var lookedAt: Date?
     @State private var naming: NamingTarget?
     @State private var earned = EarnedCalories.Day()
     /// "+280 calories added to today" for a moment after you name one.
     @State private var celebrate: Double?
+    @State private var pulse = false
+
+    /// Shown in the header, Customize Home and the naming sheet.
+    static let title = "Suggested activity"
 
     enum NamingTarget: Identifiable {
         case bout(ActiveBouts.Bout)
@@ -31,55 +37,61 @@ struct HomeFunCard: View {
         }
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("FUN STUFF")
-                        .font(.system(size: 10, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundColor(Neka.inkTertiary)
-                    Text(day.isEmpty ? "Played something today?" : "\(Int(day.minutes.rounded())) active min")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                    if earned.earned > 0 {
-                        Text("+\(Int(earned.earned)) calories back in today's budget")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(Neka.orangeText)
-                            .contentTransition(.numericText(value: earned.earned))
-                    }
-                }
-                Spacer()
-                Button { naming = .manual } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                        .frame(width: 32, height: 32)
-                        .background(Circle().fill(Neka.track))
-                }
-                .buttonStyle(.dialedScale)
-                .accessibilityLabel("Add a fun activity")
-            }
+    /// One thing that happened today, whatever its source.
+    private struct Moment: Identifiable {
+        let id: String
+        let kind: ActiveMomentsStrip.Kind
+        let name: String
+        let start: Date
+        let end: Date
+        let calories: Double?
+        let detail: String?
+        var bout: ActiveBouts.Bout?
+        var event: ContextEvent?
 
-            ForEach(day.unnamed) { bout in
-                Button { naming = .bout(bout) } label: { boutRow(bout) }
-                    .buttonStyle(.dialedScale)
+        var minutes: Double { max(1, end.timeIntervalSince(start) / 60) }
+    }
+
+    private var moments: [Moment] {
+        let unnamed = day.unnamed.map {
+            Moment(id: $0.id, kind: .unnamed, name: "What was it?", start: $0.start, end: $0.end,
+                   calories: $0.calories, detail: "avg \(Int($0.averageBPM)) bpm", bout: $0)
+        }
+        let named = day.logged.map { e in
+            Moment(id: "fun-\(e.id)", kind: .named, name: e.text ?? "Activity", start: e.timestamp,
+                   end: e.timestamp.addingTimeInterval((e.value ?? 0) * 60), calories: e.secondaryValue,
+                   detail: nil, event: e)
+        }
+        let recorded = day.recorded.map {
+            Moment(id: "watch-\($0.id)", kind: .recorded, name: $0.title, start: $0.start, end: $0.end,
+                   calories: $0.calories.map(Double.init), detail: $0.source)
+        }
+        return (unnamed + named + recorded).sorted { $0.start < $1.start }
+    }
+
+    /// Calories from the moments you've named or your watch recorded.
+    private var momentCalories: Double {
+        moments.filter { $0.kind != .unnamed }.reduce(0) { $0 + ($1.calories ?? 0) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            ActiveMomentsStrip(items: moments.map { .init(id: $0.id, kind: $0.kind, start: $0.start, end: $0.end) },
+                     pulse: pulse && !reduceMotion) { id in
+                if let b = moments.first(where: { $0.id == id })?.bout { naming = .bout(b) }
             }
-            ForEach(day.logged, id: \.id) { e in
-                loggedRow(name: e.text ?? "Activity", start: e.timestamp, minutes: e.value ?? 0,
-                          calories: e.secondaryValue, detail: nil)
-                    .contextMenu {
-                        Button(role: .destructive) { FunActivityService.delete(e, context: context) } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
+            if moments.isEmpty {
+                emptyState
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(moments) { m in
+                        row(m)
                     }
-            }
-            ForEach(day.recorded) { w in
-                loggedRow(name: w.title, start: w.start, minutes: w.minutes,
-                          calories: w.calories.map(Double.init), detail: w.source)
+                }
             }
         }
-        .padding(14)
+        .padding(16)
         .nekaCard()
         .overlay(alignment: .top) {
             if let celebrate {
@@ -89,16 +101,22 @@ struct HomeFunCard: View {
                 }
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
                 .background(Capsule().fill(LinearGradient(colors: [Neka.amber, Neka.orange],
                                                           startPoint: .leading, endPoint: .trailing)))
-                .shadow(color: Neka.orange.opacity(0.35), radius: 10, y: 4)
-                .offset(y: -14)
-                .transition(.move(edge: .top).combined(with: .scale(scale: 0.8)).combined(with: .opacity))
+                .overlay(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
+                .shadow(color: Neka.orange.opacity(0.35), radius: 12, y: 5)
+                .offset(y: -16)
+                .transition(reduceMotion ? .opacity
+                            : .move(edge: .top).combined(with: .scale(scale: 0.8)).combined(with: .opacity))
             }
         }
         .task { await refresh() }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { pulse = true }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
             if Date().timeIntervalSince(lookedAt ?? .distantPast) > 60 { Task { await refresh() } }
         }
@@ -108,53 +126,141 @@ struct HomeFunCard: View {
         }
     }
 
-    private func boutRow(_ b: ActiveBouts.Bout) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundColor(Neka.rose)
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "figure.mixed.cardio")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(.white)
                 .frame(width: 40, height: 40)
-                .background(Circle().fill(Neka.roseSoft))
+                .background(Circle().fill(LinearGradient(colors: [Neka.amber, Neka.rose],
+                                                         startPoint: .topLeading, endPoint: .bottomTrailing)))
             VStack(alignment: .leading, spacing: 2) {
-                Text("You were moving \(Self.timeRange(b.start, b.end))")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                    .lineLimit(1)
-                Text("\(Int(b.minutes.rounded())) min · avg \(Int(b.averageBPM)) bpm · "
-                     + "name it to earn ~\(Int(b.calories))")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                    .lineLimit(1)
+                Text(Self.title.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(0.8)
+                    .foregroundColor(Neka.inkTertiary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(moments.isEmpty ? "Nothing yet today" : "\(Int(day.minutes.rounded())) active min")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .contentTransition(.numericText(value: day.minutes))
+                    if momentCalories > 0 {
+                        Label("+\(Int(momentCalories)) cal", systemImage: "flame.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(Neka.orangeText)
+                            .labelStyle(.titleAndIcon)
+                            .contentTransition(.numericText(value: momentCalories))
+                    }
+                }
             }
-            Spacer(minLength: 0)
-            Text("What was it?")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Neka.onInk)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(Neka.ink))
+            Spacer(minLength: 8)
+            Button { naming = .manual } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Neka.ink)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Neka.track))
+            }
+            .buttonStyle(.dialedScale)
+            .accessibilityLabel("Add an activity")
         }
     }
 
-    private func loggedRow(name: String, start: Date, minutes: Double, calories: Double?, detail: String?) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: ActiveBouts.symbol(for: name))
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(Neka.orangeText)
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(Neka.orangeSoft))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                Text([start.formatted(.dateTime.hour().minute()), "\(Int(minutes.rounded())) min",
-                      calories.map { "~\(Int($0)) cal" }, detail].compactMap { $0 }.joined(separator: " · "))
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                    .lineLimit(1)
+    // MARK: - Rows
+
+    @ViewBuilder
+    private func row(_ m: Moment) -> some View {
+        if m.kind == .unnamed {
+            Button { if let b = m.bout { naming = .bout(b) } } label: {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle().fill(Neka.roseSoft)
+                        Circle().stroke(Neka.rose.opacity(0.5), lineWidth: 2)
+                            .scaleEffect(pulse && !reduceMotion ? 1.2 : 1)
+                            .opacity(pulse && !reduceMotion ? 0 : 1)
+                        Text("?")
+                            .font(.system(size: 18, weight: .heavy, design: .rounded))
+                            .foregroundColor(Neka.rose)
+                    }
+                    .frame(width: 40, height: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("You were moving \(Self.timeRange(m.start, m.end))")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                            .lineLimit(1)
+                        Text("\(Int(m.minutes.rounded())) min · \(m.detail ?? "") · earns ~\(Int(m.calories ?? 0))")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 6)
+                    Text("Name it")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.onInk)
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(Capsule().fill(Neka.ink))
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.roseSoft.opacity(0.45)))
             }
-            Spacer(minLength: 0)
+            .buttonStyle(.dialedScale)
+            .accessibilityLabel("Unnamed active stretch, \(Self.timeRange(m.start, m.end)). Name it.")
+        } else {
+            HStack(spacing: 12) {
+                Image(systemName: ActiveBouts.symbol(for: m.name))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(m.kind == .named ? Neka.orangeText : Neka.greenText)
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(m.kind == .named ? Neka.orangeSoft : Neka.greenSoft))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(m.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                    Text([Self.timeRange(m.start, m.end), "\(Int(m.minutes.rounded())) min", m.detail]
+                            .compactMap { $0 }.joined(separator: " · "))
+                        .font(.system(size: 12))
+                        .foregroundColor(Neka.inkSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 6)
+                if let cal = m.calories, cal > 0 {
+                    Text("+\(Int(cal))")
+                        .font(.system(size: 14, weight: .bold))
+                        .monospacedDigit()
+                        .foregroundColor(Neka.ink)
+                    + Text(" cal")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+            }
+            .contentShape(Rectangle())
+            .contextMenu {
+                if let e = m.event {
+                    Button(role: .destructive) { FunActivityService.delete(e, context: context) } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                }
+            }
         }
+    }
+
+    private var emptyState: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Neka.amber)
+            Text("Nothing yet — a game, a hike or a long walk will show up here.")
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.track))
     }
 
     static func timeRange(_ a: Date, _ b: Date) -> String {
@@ -173,12 +279,98 @@ struct HomeFunCard: View {
             earned = nowEarned
         }
         guard !firstLook, gained > 0 else { return }
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.7)) { celebrate = gained }
+        withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.45, dampingFraction: 0.7)) {
+            celebrate = gained
+        }
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
         try? await Task.sleep(for: .seconds(2.6))
         withAnimation(.easeIn(duration: 0.3)) { celebrate = nil }
+    }
+}
+
+// MARK: - Day strip
+
+/// 6 AM → midnight with a capsule per moment: a rose "?" for unnamed
+/// stretches (tap to name), orange for named, green for watch-recorded.
+struct ActiveMomentsStrip: View {
+    enum Kind { case unnamed, named, recorded }
+
+    struct Item: Identifiable {
+        let id: String
+        let kind: Kind
+        let start: Date
+        let end: Date
+    }
+
+    let items: [Item]
+    let pulse: Bool
+    var onTap: (String) -> Void
+
+    private let span: TimeInterval = 18 * 3600
+    private var dayStart: Date {
+        Calendar.current.date(bySettingHour: 6, minute: 0, second: 0, of: Date()) ?? Date()
+    }
+
+    private func x(_ date: Date, width: CGFloat) -> CGFloat {
+        CGFloat(max(0, min(1, date.timeIntervalSince(dayStart) / span))) * width
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            GeometryReader { geo in
+                let w = geo.size.width
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Neka.track).frame(height: 10)
+                    // How much of the day has gone by.
+                    Capsule().fill(Neka.inkTertiary.opacity(0.16))
+                        .frame(width: x(Date(), width: w), height: 10)
+                    ForEach(items) { item in
+                        let start = x(item.start, width: w)
+                        let width = max(item.kind == .unnamed ? 22 : 10, x(item.end, width: w) - start)
+                        capsule(item)
+                            .frame(width: width, height: item.kind == .unnamed ? 22 : 14)
+                            .offset(x: min(start, max(0, w - width)))
+                            .onTapGesture { if item.kind == .unnamed { onTap(item.id) } }
+                    }
+                }
+                .frame(height: 24)
+            }
+            .frame(height: 24)
+            HStack {
+                Text("6 AM")
+                Spacer()
+                Text("Noon")
+                Spacer()
+                Text("6 PM")
+                Spacer()
+                Text("Midnight")
+            }
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundColor(Neka.inkTertiary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(items.isEmpty ? "No suggested activity yet today" : "\(items.count) suggested activities today")
+    }
+
+    @ViewBuilder
+    private func capsule(_ item: Item) -> some View {
+        switch item.kind {
+        case .unnamed:
+            ZStack {
+                Capsule().fill(Neka.rose)
+                Text("?")
+                    .font(.system(size: 12, weight: .heavy, design: .rounded))
+                    .foregroundColor(.white)
+            }
+            .shadow(color: Neka.rose.opacity(pulse ? 0.55 : 0.15), radius: pulse ? 6 : 2)
+            .scaleEffect(pulse ? 1.06 : 1)
+        case .named:
+            Capsule().fill(LinearGradient(colors: [Neka.amber, Neka.orange], startPoint: .leading, endPoint: .trailing))
+        case .recorded:
+            Capsule().fill(Neka.green)
+        }
     }
 }
 
@@ -247,7 +439,7 @@ struct FunActivitySheet: View {
                 .padding(16)
             }
             .nekaPageBackground()
-            .navigationTitle(bout == nil ? "Add fun activity" : "What was it?")
+            .navigationTitle(bout == nil ? "Add an activity" : "What was it?")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
@@ -320,10 +512,12 @@ struct FunActivitySheet: View {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 8)], spacing: 8) {
             ForEach(names, id: \.self) { name in
                 Button { save(name) } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: 10) {
                         Image(systemName: ActiveBouts.symbol(for: name))
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 20)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.orangeText)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(Neka.orangeSoft))
                         Text(name)
                             .font(.system(size: 13, weight: .semibold))
                             .lineLimit(1)
@@ -331,10 +525,10 @@ struct FunActivitySheet: View {
                         Spacer(minLength: 0)
                     }
                     .foregroundColor(Neka.ink)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 11)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Neka.surface))
-                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Neka.hairline))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.surface))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Neka.hairline))
                 }
                 .buttonStyle(.dialedScale)
             }

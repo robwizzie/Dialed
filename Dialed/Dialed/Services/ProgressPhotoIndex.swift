@@ -10,19 +10,38 @@
 
 import Foundation
 
+/// Which way you faced, so each photo ghosts the last one of the same pose.
+enum ProgressPose: String, Codable, CaseIterable, Identifiable {
+    case front, side, back
+
+    var id: String { rawValue }
+    var title: String { rawValue.capitalized }
+    var symbol: String {
+        switch self {
+        case .front: return "figure.stand"
+        case .side:  return "figure.walk"
+        case .back:  return "figure.stand.line.dotted.figure.stand"
+        }
+    }
+}
+
 struct ProgressPhotoEntry: Codable, Equatable, Identifiable {
     var id: UUID
     var date: Date
     var fileName: String
     var weightLbs: Double?
     var note: String?
+    /// nil on photos from before poses existed (treated as front).
+    var pose: ProgressPose?
 
-    init(id: UUID = UUID(), date: Date, fileName: String? = nil, weightLbs: Double? = nil, note: String? = nil) {
+    init(id: UUID = UUID(), date: Date, fileName: String? = nil, weightLbs: Double? = nil, note: String? = nil,
+         pose: ProgressPose? = nil) {
         self.id = id
         self.date = date
         self.fileName = fileName ?? "\(id.uuidString).jpg"
         self.weightLbs = weightLbs
         self.note = note
+        self.pose = pose
     }
 
     var thumbnailName: String { "thumb-\(fileName)" }
@@ -72,6 +91,14 @@ struct ProgressPhotoIndex: Codable, Equatable {
     /// The most recent photo taken before `date` — the ghost to line up with.
     func latest(before date: Date) -> ProgressPhotoEntry? {
         entries.last { $0.date < date }
+    }
+
+    /// The most recent photo of `pose` (older photos count as front),
+    /// optionally before `date` — the ghost for that pose.
+    func latest(pose: ProgressPose, before date: Date? = nil) -> ProgressPhotoEntry? {
+        entries.last { entry in
+            (entry.pose ?? .front) == pose && (date.map { entry.date < $0 } ?? true)
+        }
     }
 
     /// Photos grouped into calendar weeks, newest week first.

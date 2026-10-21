@@ -14,6 +14,17 @@ struct ProfileSettingsView: View {
     @State private var currentWeight: Double
     @State private var height: Double
     @State private var goalWeight: Double
+    @AppStorage(MetabolismLoader.birthDateKey) private var birthDate: Double = 0
+    @AppStorage(MetabolismLoader.sexKey) private var sex: String = ""
+
+    /// 0 means unset; show 30 years ago until picked.
+    private var birthDateBinding: Binding<Date> {
+        Binding(
+            get: { birthDate > 0 ? Date(timeIntervalSince1970: birthDate)
+                : Calendar.current.date(byAdding: .year, value: -30, to: Date()) ?? Date() },
+            set: { birthDate = $0.timeIntervalSince1970 }
+        )
+    }
 
     @FocusState private var focusedField: Field?
 
@@ -117,6 +128,33 @@ struct ProfileSettingsView: View {
                             .frame(width: 50)
                     }
                 }
+
+                // Birth date & sex (for the metabolism estimate, when Apple Health doesn't share them)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("For your metabolism")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    DatePicker("Birth date", selection: birthDateBinding, in: ...Date(), displayedComponents: .date)
+                    Picker("Sex", selection: $sex) {
+                        Text("Not set").tag("")
+                        Text("Male").tag("male")
+                        Text("Female").tag("female")
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Used only to compare your measured burn with what's typical for your age. Apple Health's values win when it shares them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding()
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Neka.surface)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Neka.hairline, lineWidth: 0.5)
+                        )
+                )
 
                 // Info box
                 VStack(alignment: .leading, spacing: 8) {

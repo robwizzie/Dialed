@@ -25,6 +25,11 @@ struct HomeProteinPaceCard: View {
     }
 
     var body: some View {
+        // The big day (a wedding): no protein pressure.
+        if !EventModeStore.isEventDay() { card }
+    }
+
+    private var card: some View {
         let s = status
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {

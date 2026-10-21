@@ -118,19 +118,34 @@ async function loadBets(env, c) {
   }
 }
 
+/** Each side's latest weekly report. A database without the table just has none. */
+async function loadReports(env, c) {
+  try {
+    const r = await env.DB.prepare("SELECT role, week, json, updated_at AS updatedAt FROM reports WHERE challenge_id = ?").bind(c.id).all();
+    const out = {};
+    for (const row of r.results) {
+      try { out[row.role] = { ...JSON.parse(row.json), week: row.week, updatedAt: row.updatedAt }; } catch {}
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 async function get(env, c, role) {
-  const [w, m, st, bets] = await Promise.all([
+  const [w, m, st, bets, reports] = await Promise.all([
     env.DB.prepare("SELECT role, date, pounds, source, updated_at AS updatedAt FROM weighins WHERE challenge_id = ? ORDER BY date").bind(c.id).all(),
     env.DB.prepare("SELECT id, role, text, created_at AS createdAt FROM messages WHERE challenge_id = ? ORDER BY id DESC LIMIT 50")
       .bind(c.id).all(),
     env.DB.prepare("SELECT role, json, updated_at AS updatedAt FROM stats WHERE challenge_id = ?").bind(c.id).all(),
     loadBets(env, c),
+    loadReports(env, c),
   ]);
   const stats = {};
   for (const row of st.results) {
     try { stats[row.role] = { ...JSON.parse(row.json), updatedAt: row.updatedAt }; } catch {}
   }
-  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse(), stats, bets });
+  return json({ role, challenge: publicChallenge(c), weighins: w.results, messages: m.results.reverse(), stats, bets, reports });
 }
 
 /** Today's date where the request came from (Cloudflare knows the caller's timezone). */
@@ -281,6 +296,29 @@ async function patchBet(request, env, c, role, betId) {
   return get(env, c, role);
 }
 
+/** The Sunday summary: { week, report: { headline, subline, rows: [{ title, you, friend, winner }], betLine, standing, nudge } }. */
+async function postReport(request, env, c, role) {
+  const b = await readBody(request);
+  if (!b || !isDate(b.week) || !b.report || typeof b.report !== "object" || Array.isArray(b.report)) {
+    return fail(400, "expected { week, report }");
+  }
+  const str = v => (typeof v === "string" ? v.slice(0, 200) : undefined);
+  const r = b.report;
+  const clean = {
+    weekNumber: typeof r.weekNumber === "number" && isFinite(r.weekNumber) ? Math.round(r.weekNumber) : undefined,
+    headline: str(r.headline), subline: str(r.subline), betLine: str(r.betLine), standing: str(r.standing), nudge: str(r.nudge),
+    rows: Array.isArray(r.rows) ? r.rows.slice(0, 10).map(row => ({
+      title: str(row?.title), you: str(row?.you), friend: str(row?.friend),
+      winner: ["you", "friend", "tie"].includes(row?.winner) ? row.winner : undefined,
+    })) : [],
+  };
+  await env.DB.prepare(
+    `INSERT INTO reports (challenge_id, role, week, json, updated_at) VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT (challenge_id, role) DO UPDATE SET week = excluded.week, json = excluded.json, updated_at = excluded.updated_at`
+  ).bind(c.id, role, b.week, JSON.stringify(clean), new Date().toISOString()).run();
+  return get(env, c, role);
+}
+
 async function postMessage(request, env, c, role) {
   const b = await readBody(request);
   const text = String(b?.text ?? "").trim().slice(0, 280);
@@ -304,7 +342,7 @@ export default {
 
     if (url.pathname === "/api/challenges" && request.method === "POST") return create(request, env, url);
 
-    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale|\/bets(?:\/([a-f0-9]{12}))?)?\/?$/);
+    const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale|\/reports|\/bets(?:\/([a-f0-9]{12}))?)?\/?$/);
     if (!m) return url.pathname === "/" ? new Response("Dialed challenge server is running.") : fail(404, "not found");
 
     const c = await loadChallenge(env, m[1]);
@@ -321,6 +359,7 @@ export default {
     if (sub === "/stats" && request.method === "PUT") return putStats(request, env, c, role);
     if (sub === "/scale" && (request.method === "POST" || request.method === "GET")) return scale(request, env, c, role);
     if (sub === "/bets" && request.method === "POST") return proposeBet(request, env, c, role);
+    if (sub === "/reports" && request.method === "POST") return postReport(request, env, c, role);
     if (sub.startsWith("/bets/") && request.method === "PATCH") return patchBet(request, env, c, role, m[4]);
     return fail(405, "method not allowed");
   },

@@ -15,6 +15,7 @@ struct NotificationsSettingsView: View {
     @AppStorage(HeadToHeadSync.nudgesKey) private var trashTalkNudges = true
     @AppStorage(FinalPushStore.notifyKey) private var finalPushCountdown = true
     @AppStorage(SideBetsStore.alertsKey) private var sideBetAlerts = true
+    @AppStorage(WeeklyReportService.alertsKey) private var weeklyReport = true
 
     var body: some View {
         List {
@@ -176,6 +177,23 @@ struct NotificationsSettingsView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                    }
+                    Toggle(isOn: $weeklyReport) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "chart.bar.doc.horizontal.fill")
+                                .foregroundStyle(Neka.sky)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Weekly report")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text("Sundays at 7 PM: your week vs your friend")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .onChange(of: weeklyReport) { _, _ in
+                        Task { await WeeklyReportService.scheduleReminder(force: true) }
                     }
                 } header: {
                     Text("Challenge")

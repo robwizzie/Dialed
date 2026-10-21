@@ -73,6 +73,10 @@ class HealthKitManager: ObservableObject {
         if let leanType = HKObjectType.quantityType(forIdentifier: .leanBodyMass) {
             types.insert(leanType)
         }
+        // Age, sex and height for the metabolism estimate.
+        if let height = HKObjectType.quantityType(forIdentifier: .height) { types.insert(height) }
+        if let birth = HKObjectType.characteristicType(forIdentifier: .dateOfBirth) { types.insert(birth) }
+        if let sex = HKObjectType.characteristicType(forIdentifier: .biologicalSex) { types.insert(sex) }
 
         // Home body callouts + fuel card
         let extra: [HKQuantityTypeIdentifier] = [
@@ -770,6 +774,19 @@ class HealthKitManager: ObservableObject {
     /// Body-mass readings in lbs, oldest first.
     func fetchWeightReadings(since start: Date) async throws -> [QuantityReading] {
         try await fetchSamples(.bodyMass, unit: .pound(), from: start)
+    }
+
+    /// Birth date and biological sex from the Health profile (nil when not
+    /// set or not shared). Sex is "male" / "female".
+    func profileCharacteristics() -> (birthDate: Date?, sex: String?) {
+        let birth = (try? healthStore.dateOfBirthComponents()).flatMap { Calendar.current.date(from: $0) }
+        let sex: String?
+        switch (try? healthStore.biologicalSex())?.biologicalSex {
+        case .male?:   sex = "male"
+        case .female?: sex = "female"
+        default:       sex = nil
+        }
+        return (birth, sex)
     }
 
     // MARK: - Helper Methods

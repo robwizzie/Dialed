@@ -31,6 +31,7 @@ struct HealthBodyPage: View {
             HealthStressCard(stress: model.stress)
             HealthIllnessCard(check: model.illness, isToday: model.isToday)
             calorieBalance
+            MetabolismLink()
             metricsCard
             activityCard
         }
