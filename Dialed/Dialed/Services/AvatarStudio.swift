@@ -35,7 +35,7 @@ import ImagePlayground
 final class AvatarStudio: ObservableObject {
     static let shared = AvatarStudio()
 
-    static let futureKey = "future"
+    nonisolated static let futureKey = "future"
 
     @Published private(set) var images: [String: UIImage] = [:]
     @Published var inProgress: Set<String> = []
