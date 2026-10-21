@@ -40,21 +40,27 @@ enum ActivityWindowService {
         async let hkHeart = DayLoadKit.withTimeout(seconds: limit) {
             (try? await health.fetchSamples(.heartRate, unit: bpm, from: start, to: end)) ?? []
         }
-        async let google = DayLoadKit.withTimeout(seconds: limit) { () -> [ActiveBouts.Sample] in
-            guard GoogleHealthSyncService.isConnected else { return [] }
-            return await GoogleHealthSyncService(modelContext: context).heartRate(from: start, to: end)
+        // These two need the main actor (and its ModelContext), so they run as
+        // main-actor tasks rather than async lets; they still overlap the rest.
+        let google = Task {
+            await DayLoadKit.withTimeout(seconds: limit) { () -> [ActiveBouts.Sample] in
+                guard GoogleHealthSyncService.isConnected else { return [] }
+                return await GoogleHealthSyncService(modelContext: context).heartRate(from: start, to: end)
+            }
+        }
+        let workouts = Task {
+            await DayLoadKit.withTimeout(seconds: limit) {
+                await WorkoutDetector.workouts(on: bout.start, context: context)
+            }
         }
         async let steps = sum(.stepCount, .count(), bout, limit)
         async let energy = sum(.activeEnergyBurned, .kilocalorie(), bout, limit)
         async let distance = sum(.distanceWalkingRunning, .mile(), bout, limit)
         async let flights = sum(.flightsClimbed, .count(), bout, limit)
-        async let workouts = DayLoadKit.withTimeout(seconds: limit) {
-            await WorkoutDetector.workouts(on: bout.start, context: context)
-        }
 
         var e = Evidence(start: start, end: end)
         let apple = (await hkHeart ?? []).map { ActiveBouts.Sample(date: $0.date, bpm: $0.value) }
-        let fromGoogle = await google ?? []
+        let fromGoogle = await google.value ?? []
         if !apple.isEmpty { e.heartSources.append("Apple Health") }
         if !fromGoogle.isEmpty { e.heartSources.append("Google Health") }
         e.heartRate = (apple + fromGoogle).sorted { $0.date < $1.date }
@@ -62,7 +68,7 @@ enum ActivityWindowService {
         e.activeCalories = await energy
         e.miles = await distance
         e.flights = await flights
-        e.workouts = (await workouts ?? []).filter { $0.start < end && $0.end > start }
+        e.workouts = (await workouts.value ?? []).filter { $0.start < end && $0.end > start }
         return e
     }
 
