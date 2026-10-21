@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct WrappedView: View {
     @Environment(\.modelContext) private var context
