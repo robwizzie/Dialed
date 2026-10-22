@@ -612,12 +612,11 @@ private struct DayPhotoThumbnail: View {
                             }
                         )
                 } else {
+                    // Loading: a shimmering placeholder tile.
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.secondary.opacity(0.2))
+                        .fill(Neka.skeleton)
                         .frame(width: 80, height: 80)
-                        .overlay(
-                            ProgressView()
-                        )
+                        .nekaShimmer()
                 }
             }
             .overlay(

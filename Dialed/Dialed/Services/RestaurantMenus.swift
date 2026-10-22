@@ -221,6 +221,39 @@ enum RestaurantMenus {
     ]
 
     /// Best match for what you typed ("chickfila", "mcd", "panera bread").
+    /// Any bar, pub or brewery: typical bar food and drinks. Kept out of
+    /// `all` so a name merely containing "bar" never matches it; it's used
+    /// when you pick it, or for a bar nearby that isn't in the guide.
+    static let bar = Restaurant(name: "Bar & pub", emoji: "🍻", aliases: ["bar", "pub", "brewery", "tavern"], items: [
+        m("Grilled chicken sandwich, no mayo", 520, 40, 45, 18, tip: "Swap fries for a side salad or veg"),
+        m("6 buffalo wings, sauce on the side", 480, 40, 2, 34, tip: "Skip the blue cheese dip to save ~150"),
+        m("Grilled chicken Caesar, dressing on the side", 450, 38, 15, 26, tip: "Use half the dressing"),
+        m("Sirloin (6 oz) with vegetables", 450, 46, 10, 24),
+        m("Two grilled fish tacos", 450, 28, 40, 18),
+        m("Burger, no cheese", 650, 35, 45, 35, tip: "Lettuce wrap saves ~200 calories"),
+        m("Shrimp cocktail", 150, 24, 8, 2),
+        m("4 chicken tenders", 550, 32, 35, 30),
+        s("Side salad, dressing on the side", 80, 2, 8, 4),
+        s("Steamed vegetables", 80, 3, 12, 3),
+        s("Fries", 400, 5, 50, 20),
+        d("Water or soda water", 0, 0, 0, 0),
+        d("Light beer (12 oz)", 100, 1, 5, 0),
+        d("Vodka, tequila or gin & soda", 100, 0, 0, 0),
+        d("Rum & Diet Coke", 100, 0, 0, 0),
+        d("Hard seltzer", 100, 0, 2, 0),
+        d("Glass of wine (5 oz)", 125, 0, 4, 0),
+        d("Regular beer (12 oz)", 150, 2, 13, 0),
+        d("IPA (pint)", 250, 3, 20, 0),
+        d("Margarita", 300, 0, 36, 0)
+    ])
+
+    /// The guide for a place: a chain we know, the bar guide when you pick
+    /// it by name, or `nil` (Apple Intelligence suggests instead).
+    static func guide(for name: String) -> Restaurant? {
+        if let chain = find(name) { return chain }
+        return normalize(name) == normalize(bar.name) ? bar : nil
+    }
+
     static func find(_ text: String) -> Restaurant? {
         let q = normalize(text)
         guard !q.isEmpty else { return nil }

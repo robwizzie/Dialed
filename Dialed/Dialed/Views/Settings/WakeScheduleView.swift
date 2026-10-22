@@ -53,7 +53,8 @@ struct WakeScheduleView: View {
         .sheet(item: Binding(get: { editingDay.map { DayTarget(date: $0) } }, set: { editingDay = $0?.date })) { target in
             WakeDaySheet(date: target.date, schedule: $schedule,
                          suggestion: suggestions.first { calendar.isDate($0.date, inSameDayAs: target.date) })
-                .presentationDetents([.medium])
+                .presentationDetents(suggestions.contains { calendar.isDate($0.date, inSameDayAs: target.date) }
+                                     ? [.large] : [.medium, .large])
         }
     }
 
@@ -215,6 +216,8 @@ struct WakeScheduleView: View {
         .foregroundColor(s.kind == .earlier ? Neka.orangeText : Neka.lavenderText)
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
+        .lineLimit(1)
+        .fixedSize()
         .background(Capsule().fill(s.kind == .earlier ? Neka.orangeSoft : Neka.lavenderSoft))
         .accessibilityLabel("Suggested wake-up \(WakeSchedule.clock(s.suggested)). \(s.reason)")
     }
@@ -317,67 +320,49 @@ struct WakeDaySheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 18) {
-                if let suggestion {
-                    HStack(spacing: 10) {
-                        Image(systemName: suggestion.kind == .earlier ? "sunrise.fill" : "bed.double.fill")
-                            .foregroundColor(suggestion.kind == .earlier ? Neka.orangeText : Neka.lavenderText)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Suggested \(WakeSchedule.clock(suggestion.suggested))")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(Neka.ink)
-                            Text(suggestion.reason)
-                                .font(.system(size: 12))
-                                .foregroundColor(Neka.inkSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: 4)
-                        Button("Use") {
-                            schedule.setDay(suggestion.suggested, on: date)
+            ScrollView {
+                VStack(spacing: 16) {
+                    if let suggestion { suggestionCard(suggestion) }
+                    Toggle("Sleep in (no wake-up)", isOn: $sleepIn)
+                        .tint(Neka.green)
+                        .padding(16)
+                        .nekaCard()
+                        .animation(.easeOut(duration: 0.2), value: sleepIn)
+                    if !sleepIn {
+                        DatePicker("Wake up", selection: $time, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
+                            .labelsHidden()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 180)
+                            .clipped()
+                            .transition(.opacity)
+                    }
+                    Text(usual.map { "Usual \(date.formatted(.dateTime.weekday(.wide))): \(WakeSchedule.clock($0))" }
+                         ?? "No usual wake-up on \(date.formatted(.dateTime.weekday(.wide)))s")
+                        .font(.system(size: 12))
+                        .foregroundColor(Neka.inkSecondary)
+                    if schedule.isChanged(on: date) {
+                        Button("Back to usual") {
+                            schedule.resetDay(date)
                             dismiss()
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Neka.ink)
-                        .controlSize(.small)
+                        .font(.system(size: 14, weight: .semibold))
                     }
-                    .padding(14)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(suggestion.kind == .earlier ? Neka.orangeSoft : Neka.lavenderSoft))
-                }
-                Toggle("Sleep in (no wake-up)", isOn: $sleepIn)
-                    .tint(Neka.green)
-                    .padding(16)
-                    .nekaCard()
-                if !sleepIn {
-                    DatePicker("Wake up", selection: $time, displayedComponents: .hourAndMinute)
-                        .datePickerStyle(.wheel)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity)
-                }
-                Text(usual.map { "Usual \(date.formatted(.dateTime.weekday(.wide))): \(WakeSchedule.clock($0))" }
-                     ?? "No usual wake-up on \(date.formatted(.dateTime.weekday(.wide)))s")
-                    .font(.system(size: 12))
-                    .foregroundColor(Neka.inkSecondary)
-                if schedule.isChanged(on: date) {
-                    Button("Back to usual") {
-                        schedule.resetDay(date)
-                        dismiss()
-                    }
-                    .font(.system(size: 14, weight: .semibold))
-                }
-                if showsAllSettings {
-                    NavigationLink { WakeScheduleView() } label: {
-                        Label("All wake-up times & alarm settings", systemImage: "alarm")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(Neka.ink)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .background(Capsule().fill(Neka.track))
+                    if showsAllSettings {
+                        NavigationLink { WakeScheduleView() } label: {
+                            Label("All wake-up times & alarm settings", systemImage: "alarm")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Neka.ink)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Capsule().fill(Neka.track))
+                        }
                     }
                 }
-                Spacer(minLength: 0)
+                .padding(16)
+                .padding(.bottom, 8)
             }
-            .padding(16)
+            .scrollBounceBehavior(.basedOnSize)
             .nekaPageBackground()
             .navigationTitle(date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
             .navigationBarTitleDisplayMode(.inline)
@@ -397,6 +382,54 @@ struct WakeDaySheet: View {
                 time = WakeScheduleView.date(minutes: m ?? usual ?? 390)
             }
         }
+    }
+
+    /// "SUGGESTED 5:10 AM", why, and a full-width Use button, so a long
+    /// reason wraps instead of getting cut off.
+    private func suggestionCard(_ s: WakeSuggestionEngine.Suggestion) -> some View {
+        let earlier = s.kind == .earlier
+        let tint = earlier ? Neka.orangeText : Neka.lavenderText
+        let clock = WakeSchedule.clock(s.suggested)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(systemName: earlier ? "sunrise.fill" : "bed.double.fill")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(tint)
+                    .frame(width: 42, height: 42)
+                    .background(Circle().fill(Neka.surface.opacity(0.75)))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(earlier ? "SUGGESTED · EARLIER" : "SUGGESTED · SLEEP IN")
+                        .font(.system(size: 10, weight: .heavy))
+                        .tracking(0.8)
+                        .foregroundColor(tint)
+                    Text(clock)
+                        .font(Neka.display(24, weight: .bold))
+                        .foregroundColor(Neka.ink)
+                        .monospacedDigit()
+                }
+                Spacer(minLength: 0)
+            }
+            Text(s.reason)
+                .font(.system(size: 13))
+                .foregroundColor(Neka.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                schedule.setDay(s.suggested, on: date)
+                dismiss()
+            } label: {
+                Text("Use \(clock)")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.onInk)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Capsule().fill(Neka.ink))
+            }
+            .buttonStyle(.dialedScale)
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
+            .fill(earlier ? Neka.orangeSoft : Neka.lavenderSoft))
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -455,7 +488,7 @@ struct HomeTomorrowWakeCard: View {
         .buttonStyle(.dialedScale)
         .sheet(isPresented: $editing) {
             WakeDaySheet(date: tomorrow, schedule: $schedule)
-                .presentationDetents([.medium])
+                .presentationDetents([.medium, .large])
         }
         .onChange(of: schedule) { _, s in s.save() }
         .onReceive(NotificationCenter.default.publisher(for: .wakeScheduleDidChange)) { _ in

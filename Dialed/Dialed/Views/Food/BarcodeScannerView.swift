@@ -238,7 +238,10 @@ struct BarcodeScanView: View {
         var d = FoodDraft()
         let amount: String
         switch portion {
-        case .servings(let s): amount = s == 1 ? "" : " ×\(s.formatted(.number.precision(.fractionLength(0...2))))"
+        case .servings(let s):
+            // Kept as servings, so the review and the food log can rescale it.
+            amount = ""
+            d.servings = s
         case .grams(let g):    amount = " (\(Int(g)) g)"
         }
         d.name = product.displayName + amount

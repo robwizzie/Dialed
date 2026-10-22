@@ -17,7 +17,9 @@
 //  the prompt (see `AvatarPlaygroundSheet`).
 //
 //  Any look can be a real photo instead (AvatarStudio+PhotoLooks): when
-//  you've added one and "use my photos" is on, image(for:) returns it.
+//  you've added one and "use my photos" is on, image(for:) returns it —
+//  unless you've had an AI look drawn from that photo and chose to show
+//  the drawing.
 //
 //  Looks also carry your fitness stage (AvatarEvolution): when you reach
 //  a new one, the mood looks are redrawn at that stage and the old look is
@@ -47,8 +49,15 @@ final class AvatarStudio: ObservableObject {
     @Published private(set) var references: [String: UIImage] = [:]
     /// Real photos used as looks instead of the drawing, keyed like `images`.
     @Published var photoLooks: [String: UIImage] = [:]
-    /// Where the face sits in each photo look.
-    @Published var photoFocusPoints: [String: CGPoint] = [:]
+    /// Looks that have a photo but show the AI drawing (made from it).
+    @Published var prefersDrawing: Set<String> {
+        didSet { UserDefaults.standard.set(Array(prefersDrawing), forKey: "avatar.prefersDrawing") }
+    }
+    /// The image each photo look is cropped from (original or cutout),
+    /// keyed "<key>|cutout" / "<key>|photo", so re-cropping is instant.
+    var photoBases: [String: UIImage] = [:]
+    /// Latest crop request per look; older renders that finish late are dropped.
+    var photoRenderTokens: [String: Int] = [:]
     /// Use photo looks where you've added them.
     @Published var usePhotoLooks: Bool {
         didSet { UserDefaults.standard.set(usePhotoLooks, forKey: "avatar.usePhotoLooks") }
@@ -99,6 +108,7 @@ final class AvatarStudio: ObservableObject {
     private init() {
         isEnabled = UserDefaults.standard.bool(forKey: "avatar.enabled")
         usePhotoLooks = UserDefaults.standard.object(forKey: "avatar.usePhotoLooks") as? Bool ?? true
+        prefersDrawing = Set(UserDefaults.standard.stringArray(forKey: "avatar.prefersDrawing") ?? [])
         for key in Self.allKeys {
             if let data = try? Data(contentsOf: Self.url(for: key)), let image = UIImage(data: data) {
                 images[key] = image
@@ -165,18 +175,23 @@ final class AvatarStudio: ObservableObject {
             return
         }
         let keys = key.map { [$0] } ?? Self.allKeys
-        try? FileManager.default.createDirectory(at: Self.referenceDirectory, withIntermediateDirectories: true)
-        let jpeg = image.jpegData(compressionQuality: 0.9)
-        for k in keys {
-            references[k] = image
-            try? jpeg?.write(to: Self.referenceURL(for: k), options: .atomic)
-            removeImage(k)
-        }
+        useReference(image, for: keys)
+        for k in keys { removeImage(k) }
         if let key {
             await regenerate(key: key)
         } else if let mood = AvatarMood.allCases.first {
             // Redraw one now; the rest fill in as each mood comes up.
             await regenerate(key: mood.rawValue)
+        }
+    }
+
+    /// Saves `image` as the photo these looks are drawn from.
+    func useReference(_ image: UIImage, for keys: [String]) {
+        try? FileManager.default.createDirectory(at: Self.referenceDirectory, withIntermediateDirectories: true)
+        let jpeg = Self.downscaled(image).jpegData(compressionQuality: 0.9)
+        for k in keys {
+            references[k] = image
+            try? jpeg?.write(to: Self.referenceURL(for: k), options: .atomic)
         }
     }
 
@@ -203,7 +218,7 @@ final class AvatarStudio: ObservableObject {
         try? FileManager.default.removeItem(at: Self.url(for: key))
     }
 
-    private static func downscaled(_ image: UIImage) -> UIImage {
+    static func downscaled(_ image: UIImage) -> UIImage {
         let maxSide: CGFloat = 1536
         let longest = max(image.size.width, image.size.height)
         guard longest > maxSide else { return image }
@@ -257,7 +272,7 @@ final class AvatarStudio: ObservableObject {
 
     func source(for key: String) -> AvatarLookSource {
         AvatarLookResolver.source(hasPhoto: photoLooks[key] != nil, hasGenerated: images[key] != nil,
-                                  usePhotos: usePhotoLooks)
+                                  usePhotos: usePhotoLooks, prefersDrawing: prefersDrawing.contains(key))
     }
 
     func generate(mood: AvatarMood) async {
@@ -362,11 +377,14 @@ final class AvatarStudio: ObservableObject {
 
     // MARK: - Framing
 
-    /// Focus point for an image this studio made, or nil (frame centered).
+    /// Focus point for a drawing this studio made, or nil (frame centered).
     func focus(of image: UIImage) -> CGPoint? {
-        if let key = images.first(where: { $0.value === image })?.key { return focusPoints[key] }
-        if let key = photoLooks.first(where: { $0.value === image })?.key { return photoFocusPoints[key] }
-        return nil
+        images.first(where: { $0.value === image }).flatMap { focusPoints[$0.key] }
+    }
+
+    /// A real photo look: already cropped by you, so it's shown as is.
+    func isPhotoLook(_ image: UIImage) -> Bool {
+        photoLooks.values.contains { $0 === image }
     }
 
     private func locateFocus(of image: UIImage, key: String) {

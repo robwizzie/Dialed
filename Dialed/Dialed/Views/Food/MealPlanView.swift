@@ -39,7 +39,7 @@ struct MealPlanView: View {
                     case .groceries: groceryContent(plan)
                     }
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                    NekaLoadingPage(cards: [70, 140, 140, 140])
                 }
             }
             .padding(16)

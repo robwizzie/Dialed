@@ -31,6 +31,7 @@ struct HealthView: View {
                         case .nutrition: HealthNutritionPage(model: model)
                         }
                     }
+                    .nekaLoading(model.isShowingStaleDay)
                     .transition(.opacity)
 
                     Button { showClassicTrends = true } label: {

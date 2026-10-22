@@ -36,7 +36,7 @@ struct TrendWeightView: View {
                 } else if loaded {
                     empty
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                    NekaLoadingPage(cards: [190, 300, 150])
                 }
             }
             .padding(16)

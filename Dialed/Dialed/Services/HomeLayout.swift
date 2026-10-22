@@ -17,7 +17,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .morning:      return "Morning brief"
+        case .morning:      return "Day banner"
         case .wakeSuggestion: return "Wake-up suggestion"
         case .event:        return "Big day"
         case .finalPush:    return "Final push"
@@ -88,7 +88,7 @@ enum HomeSection: String, CaseIterable, Identifiable {
     /// When a card only appears some of the time.
     var note: String? {
         switch self {
-        case .morning:      return "Mornings until noon"
+        case .morning:      return "Changes through the day"
         case .wakeSuggestion: return "When your calendar changes a morning"
         case .event:        return "Last week before and on your event"
         case .finalPush:    return "Last 14 days of a challenge"

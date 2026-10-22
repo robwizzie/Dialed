@@ -32,9 +32,13 @@ struct HomeView: View {
     /// Overnight vitals for the Body Check card (stress + illness watch).
     @StateObject private var signals = HealthDetailModel()
     @ObservedObject private var studio = AvatarStudio.shared
+    @ObservedObject private var weather = WeatherService.shared
     @AppStorage("avatar.useOnHome") private var useAvatarOnHome = true
-    /// The morning card is hidden for the rest of this day once dismissed.
-    @AppStorage("morning.dismissedDay") private var morningDismissedDay = ""
+    /// When the overnight signals (sleep, readiness) last loaded; nil until
+    /// the first load, while the banner shows placeholders.
+    @State private var signalsLoadedAt: Date?
+    /// Lets the banner's sky hold still while Home scrolls.
+    @State private var skyMotion = SkyMotion()
     @State private var aiAvailability: AIAvailability = DialedAI.availability
     @State private var askedForHealthAccess = false
 
@@ -53,17 +57,6 @@ struct HomeView: View {
     private var showingToday: Bool { Calendar.current.isDateInToday(selectedDay) }
     @State private var path: [HomeDestination] = []
     @EnvironmentObject private var router: AppRouter
-
-    /// 4 AM – noon, until you dismiss it.
-    private var showsMorning: Bool {
-        let hour = Calendar.current.component(.hour, from: Date())
-        return (4..<12).contains(hour) && morningDismissedDay != Self.dayKey(Date())
-    }
-
-    private static func dayKey(_ date: Date) -> String {
-        let c = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return "\(c.year ?? 0)-\(c.month ?? 0)-\(c.day ?? 0)"
-    }
 
     enum HomeSheet: String, Identifiable {
         case water, meal, eatingOut, weighIn, voice, profile, challengeSetup, ask, avatar, logWorkout, customize, pickDay
@@ -92,17 +85,20 @@ struct HomeView: View {
                 .onChange(of: selectedDay) { _, _ in
                     withAnimation(.easeOut(duration: 0.25)) { proxy.scrollTo("home-top", anchor: .top) }
                 }
+                .tracksSkyMotion(skyMotion)
             }
             .scrollIndicators(.hidden)
             .nekaPageBackground()
             .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
             .task {
+                Task { await weather.refresh() }
                 await requestHealthAccessIfNeeded()
                 await refreshAll()
             }
             .refreshable {
                 if showingToday {
+                    Task { await weather.refresh(force: true) }
                     await refreshAll(force: true)
                 } else {
                     await DayRecapStore.shared.load(selectedDay, context: modelContext, force: true)
@@ -121,7 +117,8 @@ struct HomeView: View {
                 viewModel.refreshGoal()
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
-                Task { await refreshAll(force: true) }
+                // A quick log re-reads the phone; no need to pull the watch again.
+                Task { await refreshAll(force: true, syncWatch: false) }
             }
             // Coming back to the app (it stays alive in the background for
             // days) re-pulls the watch, so a night that reached Google Health
@@ -190,12 +187,32 @@ struct HomeView: View {
         }
     }
 
-    private func refreshAll(force: Bool = false) async {
+    private func refreshAll(force: Bool = false, syncWatch: Bool = true) async {
+        // First paint: show what's on the phone right away, then pull the
+        // watch and refresh again, instead of skeletons for the whole sync.
+        let syncAfter = syncWatch && !viewModel.hasLoaded && viewModel.watchSyncDue
+        // Overnight signals load alongside, so the banner fills in early.
+        let signalsLoad = Task { await loadSignals(force: force) }
+        let ran = await viewModel.refresh(context: modelContext, force: force, syncWatch: syncWatch && !syncAfter)
+        await signalsLoad.value
         // Skipped refreshes (tab re-appear within a minute) do nothing else.
-        guard await viewModel.refresh(context: modelContext, force: force) else { return }
-        await stateModel.refresh(context: modelContext)
+        guard ran else { return }
+        await finishRefresh()
+        if syncAfter, await viewModel.refresh(context: modelContext, force: true) {
+            await loadSignals(force: true)
+            await finishRefresh()
+        }
+    }
+
+    private func loadSignals(force: Bool) async {
+        if !force, let at = signalsLoadedAt, Date().timeIntervalSince(at) < 60 { return }
         signals.day = Calendar.current.startOfDay(for: Date())
         await signals.loadSignals(context: modelContext)
+        withAnimation(.easeOut(duration: 0.3)) { signalsLoadedAt = Date() }
+    }
+
+    private func finishRefresh() async {
+        await stateModel.refresh(context: modelContext)
         aiAvailability = DialedAI.availability
         await briefModel.refreshIfStale(viewModel.snapshot)
         // Once avatars are on, quietly fill in today's mood look.
@@ -363,12 +380,19 @@ struct HomeView: View {
                 if let illness = signals.illness {
                     HomeIllnessBanner(check: illness, onOpen: { router.openHealth(.body) })
                 }
-                ForEach(layout.visible) { section in
-                    sectionView(section)
+                if viewModel.hasLoaded {
+                    ForEach(layout.visible) { section in
+                        sectionView(section)
+                    }
+                    exploreRow
+                    customizeButton
+                } else {
+                    // First load: the banner fills in, the rest holds its shape.
+                    if !layout.hidden.contains(.morning) { banner }
+                    NekaLoadingPage(cards: [150, 300, 190, 150])
                 }
-                exploreRow
-                customizeButton
             }
+            .animation(.easeOut(duration: 0.3), value: viewModel.hasLoaded)
         } else {
             // Swipes only here and on the header: today's cards have their
             // own horizontal scrollers that shouldn't change the day.
@@ -444,6 +468,45 @@ struct HomeView: View {
             return "Day \(p.dayNumber) vs. \(c.friendDisplayName).\nEvery choice counts today."
         }
         return "Real-time insights\nfor a healthier you."
+    }
+
+    // MARK: - Day banner
+
+    /// Today's banner. Rechecked every few minutes so the sky, the sun and
+    /// the headline follow the clock (morning → afternoon → evening → night).
+    private var banner: some View {
+        SwiftUI.TimelineView(.periodic(from: .now, by: 300)) { context in
+            let model = DayBannerModel.today(bannerInputs, now: context.date,
+                                             isLoading: signalsLoadedAt == nil || !viewModel.hasLoaded)
+            HomeDayBanner(model: model, onOpen: {
+                router.openHealth(model.time == .morning ? .sleep : .body)
+            })
+        }
+    }
+
+    private var bannerInputs: DayBannerModel.TodayInputs {
+        DayBannerModel.TodayInputs(
+            night: signals.lastNight,
+            recentNights: signals.nights,
+            readiness: signals.readiness,
+            weightReadings: viewModel.weightReadings,
+            mileStreak: viewModel.mileStreak,
+            progress: viewModel.progress,
+            friendName: viewModel.challenge?.friendDisplayName,
+            goalEvent: viewModel.goalEvent,
+            waterOz: viewModel.waterOz,
+            waterTarget: viewModel.waterTargetOz,
+            protein: viewModel.proteinGrams,
+            proteinTarget: viewModel.proteinTarget,
+            calories: viewModel.caloriesIn,
+            calorieBudget: viewModel.calorieBudget,
+            miles: viewModel.milesToday,
+            mileGoal: viewModel.mileGoal,
+            forecast: weather.forecast,
+            weatherStatus: weather.status,
+            onEnableWeather: { Task { await weather.enable() } },
+            onWeighIn: { sheet = .weighIn }
+        )
     }
 
     // MARK: - Body state
@@ -632,27 +695,7 @@ struct HomeView: View {
     private func sectionView(_ section: HomeSection) -> some View {
         switch section {
         case .morning:
-            if showsMorning {
-                HomeMorningCard(
-                    firstName: viewModel.firstName,
-                    night: signals.lastNight,
-                    recentNights: signals.nights,
-                    readiness: signals.readiness,
-                    weightReadings: viewModel.weightReadings,
-                    mileStreak: viewModel.mileStreak,
-                    progress: viewModel.progress,
-                    friendName: viewModel.challenge?.friendDisplayName,
-                    goalEvent: viewModel.goalEvent,
-                    onWeighIn: { sheet = .weighIn },
-                    onOpenSleep: { router.openHealth(.sleep) },
-                    onDismiss: {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                            morningDismissedDay = Self.dayKey(Date())
-                        }
-                    }
-                )
-                .transition(.asymmetric(insertion: .opacity, removal: .move(edge: .top).combined(with: .opacity)))
-            }
+            banner
         case .wakeSuggestion:
             HomeWakeSuggestionCard()
         case .event:

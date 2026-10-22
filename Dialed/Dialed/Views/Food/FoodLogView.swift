@@ -126,11 +126,11 @@ struct FoodLogView: View {
                 case .new:               FoodLog.add(draft, context: modelContext)
                 case .existing(let food): FoodLog.update(food, with: draft, context: modelContext)
                 }
-                reload()
+                // FoodLog posts .dialedDataDidChange, which reloads the list.
             }, onDelete: {
                 if case .existing(let food) = target { delete(food) }
             })
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.large])
         }
         .sheet(item: $adding, onDismiss: reload) { request in
             AddFoodSheet(start: request.method, day: day) { draft in
@@ -155,8 +155,11 @@ struct FoodLogView: View {
 
     // MARK: - Data
 
+    /// Re-reads the day. FoodLog posts .dialedDataDidChange after every
+    /// add, edit and delete, so changes land here once (not twice).
     private func reload() {
-        foods = FoodLog.entries(on: day, context: modelContext)
+        let next = FoodLog.entries(on: day, context: modelContext)
+        withAnimation(.snappy) { foods = next }
         recents = FoodLog.recents(context: modelContext)
         favorites = SavedMealsManager.load()
         let shown = day
@@ -167,8 +170,8 @@ struct FoodLogView: View {
     }
 
     private func delete(_ food: LoggedFood) {
+        withAnimation(.snappy) { foods.removeAll { $0.id == food.id } }
         FoodLog.delete(food, context: modelContext)
-        reload()
     }
 
     /// One tap: log it now (or at noon on a past day).
@@ -176,7 +179,6 @@ struct FoodLogView: View {
         var d = draft
         d.time = calendar.isDateInToday(day) ? Date() : (calendar.date(byAdding: .hour, value: 12, to: day) ?? day)
         FoodLog.add(d, context: modelContext)
-        reload()
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
@@ -379,9 +381,13 @@ struct FoodEditSheet: View {
     var onSave: (FoodDraft) -> Void
     var onDelete: () -> Void
 
-    @State private var draft: FoodDraft
-    /// The numbers for one serving; servings × this is what's logged.
+    /// The numbers for one serving. Servings × this is what's logged, so
+    /// changing servings always scales from here (no drift from repeated
+    /// rounding); editing a number updates it.
     @State private var perServing: FoodDraft
+    @State private var servings: Double
+    @State private var name: String
+    @State private var time: Date
     @State private var saveFavorite = false
     @State private var confirmDelete = false
 
@@ -394,8 +400,11 @@ struct FoodEditSheet: View {
         case .new(let d):         start = d
         case .existing(let food): start = FoodDraft(food)
         }
-        _draft = State(initialValue: start)
-        _perServing = State(initialValue: Self.scaled(start, by: 1 / max(start.servings, 0.01)))
+        let s = max(start.servings, 0.01)
+        _perServing = State(initialValue: Self.scaled(start, by: 1 / s))
+        _servings = State(initialValue: start.servings)
+        _name = State(initialValue: start.name)
+        _time = State(initialValue: start.time)
     }
 
     private static func scaled(_ d: FoodDraft, by factor: Double) -> FoodDraft {
@@ -407,61 +416,82 @@ struct FoodEditSheet: View {
         return out
     }
 
+    /// What gets logged: per serving × servings.
+    private var draft: FoodDraft {
+        var d = Self.scaled(perServing, by: servings)
+        d.servings = servings
+        d.name = name
+        d.time = time
+        return d
+    }
+
     private var isNew: Bool { if case .new = target { return true } else { return false } }
 
     var body: some View {
         NavigationStack {
-            Form {
-                Section {
-                    TextField("What did you eat?", text: $draft.name)
-                        .font(.system(size: 17, weight: .semibold))
-                    DatePicker("Time", selection: $draft.time)
-                }
-                Section {
-                    servingsRow
-                } header: {
-                    Text("How much did you have?")
-                } footer: {
-                    Text(draft.servings == 1
-                         ? "Ate more or less than you logged? Change the servings and everything below scales with it."
-                         : "\(Int(perServing.calories.rounded())) calories per serving × \(Self.servingsText(draft.servings)).")
-                }
-                Section {
-                    numberRow("Calories", value: $draft.calories, unit: "calories", steps: [-100, -25, 25, 100])
-                    numberRow("Protein", value: $draft.protein, unit: "g", steps: [-10, -5, 5, 10])
-                    optionalRow("Carbs", value: $draft.carbs)
-                    optionalRow("Fat", value: $draft.fat)
-                } footer: {
-                    Text("Tap the numbers to type, or use the quick ± buttons.")
-                }
-                Section {
-                    Toggle("Save to favorites", isOn: $saveFavorite)
-                }
-                if !isNew {
-                    Section {
-                        Button("Delete", role: .destructive) { confirmDelete = true }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        TextField("What did you eat?", text: $name)
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        DatePicker("Time", selection: $time)
+                            .font(.system(size: 14))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    .padding(16)
+                    .nekaCard()
+
+                    howMuch
+                    numbers
+
+                    Toggle(isOn: $saveFavorite) {
+                        Label("Save to favorites", systemImage: "star")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                    }
+                    .tint(Neka.green)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .nekaCard()
+
+                    if !isNew {
+                        Button(role: .destructive) { confirmDelete = true } label: {
+                            Label("Delete", systemImage: "trash")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(Neka.rose)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Capsule().fill(Neka.roseSoft))
+                        }
+                        .buttonStyle(.dialedScale)
                     }
                 }
+                .padding(16)
             }
-            .onChange(of: draft.calories) { _, _ in syncPerServing() }
-            .onChange(of: draft.protein) { _, _ in syncPerServing() }
-            .onChange(of: draft.carbs) { _, _ in syncPerServing() }
-            .onChange(of: draft.fat) { _, _ in syncPerServing() }
+            .scrollDismissesKeyboard(.interactively)
+            .nekaPageBackground()
             .navigationTitle(isNew ? "Quick add" : "Edit food")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isNew ? "Log" : "Save") {
-                        if saveFavorite && !draft.name.isEmpty {
-                            SavedMealsManager.add(SavedMeal(name: draft.name, calories: perServing.calories, proteinGrams: perServing.protein,
+                        let d = draft
+                        if saveFavorite && !d.name.isEmpty {
+                            SavedMealsManager.add(SavedMeal(name: d.name, calories: perServing.calories, proteinGrams: perServing.protein,
                                                             carbsGrams: perServing.carbs, fatGrams: perServing.fat))
                         }
-                        onSave(draft)
+                        onSave(d)
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .disabled(draft.calories <= 0 && draft.protein <= 0)
+                    .disabled(perServing.calories <= 0 && perServing.protein <= 0)
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
+                        .fontWeight(.semibold)
                 }
             }
             .confirmationDialog("Delete this food?", isPresented: $confirmDelete, titleVisibility: .visible) {
@@ -473,119 +503,145 @@ struct FoodEditSheet: View {
         }
     }
 
-    // MARK: - Servings
+    // MARK: - How much
 
-    private static let quickServings: [Double] = [0.5, 0.75, 1, 1.25, 1.5, 2]
-
-    private var servingsRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Button { setServings(draft.servings - 0.25) } label: {
-                    Image(systemName: "minus").frame(width: 30, height: 30)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
-                .disabled(draft.servings <= 0.25)
-                Spacer()
-                VStack(spacing: 0) {
-                    Text(Self.servingsNumber(draft.servings))
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .contentTransition(.numericText(value: draft.servings))
-                    Text(draft.servings == 1 ? "serving" : "servings")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Button { setServings(draft.servings + 0.25) } label: {
-                    Image(systemName: "plus").frame(width: 30, height: 30)
-                }
-                .buttonStyle(.bordered)
-                .buttonBorderShape(.circle)
+    /// Servings, and the totals rolling to match as you change them.
+    private var howMuch: some View {
+        let d = draft
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("How much did you have?")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Neka.ink)
+            ServingsPicker(servings: servings) { setServings($0) }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(Int(d.calories.rounded()).formatted())
+                    .font(.system(size: 34, weight: .bold, design: .rounded))
+                    .foregroundColor(Neka.ink)
+                    .monospacedDigit()
+                    .contentTransition(.numericText(value: d.calories))
+                Text("calories")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+                Spacer(minLength: 0)
+                macroTotal(d.protein, "protein", Neka.greenText)
+                if let c = d.carbs { macroTotal(c, "carbs", Neka.sky) }
+                if let f = d.fat { macroTotal(f, "fat", Neka.lavenderText) }
             }
-            HStack(spacing: 6) {
-                ForEach(Self.quickServings, id: \.self) { s in
-                    Button { setServings(s) } label: {
-                        Text(Self.servingsNumber(s) + "×")
-                            .font(.system(size: 13, weight: .semibold))
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                            .background(Capsule().fill(draft.servings == s ? Neka.ink : Neka.track))
-                            .foregroundColor(draft.servings == s ? Neka.onInk : Neka.ink)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            Text(servings == 1
+                 ? "Had more or less? Change the servings and everything scales with it."
+                 : "\(Int(perServing.calories.rounded())) calories per serving × \(ServingsPicker.number(servings)).")
+                .font(.system(size: 12))
+                .foregroundColor(Neka.inkSecondary)
+                .contentTransition(.numericText())
         }
-        .padding(.vertical, 4)
+        .padding(16)
+        .nekaCard(wash: .mint)
+    }
+
+    private func macroTotal(_ grams: Double, _ label: String, _ tint: Color) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text("\(Int(grams.rounded()))g")
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundColor(Neka.ink)
+                .monospacedDigit()
+                .contentTransition(.numericText(value: grams))
+            Text(label)
+                .font(.system(size: 9.5, weight: .semibold))
+                .foregroundColor(tint)
+        }
     }
 
     private func setServings(_ value: Double) {
-        let s = min(20, max(0.25, (value * 4).rounded() / 4))
-        withAnimation(.snappy) {
-            let time = draft.time, name = draft.name
-            draft = Self.scaled(perServing, by: s)
-            draft.servings = s
-            draft.time = time
-            draft.name = name
-        }
+        let s = ServingsPicker.clamp(value)
+        guard s != servings else { return }
+        withAnimation(.snappy(duration: 0.3)) { servings = s }
         #if os(iOS)
         UISelectionFeedbackGenerator().selectionChanged()
         #endif
     }
 
-    /// Typing a number or tapping ± changes what one serving is.
-    private func syncPerServing() {
-        let next = Self.scaled(draft, by: 1 / max(draft.servings, 0.01))
-        if next.calories != perServing.calories || next.protein != perServing.protein
-            || next.carbs != perServing.carbs || next.fat != perServing.fat {
-            perServing = next
+    // MARK: - Numbers
+
+    private var numbers: some View {
+        VStack(spacing: 14) {
+            numberRow("Calories", unit: "cal", value: total(\.calories), steps: [-100, -25, 25, 100])
+            Divider().overlay(Neka.hairline)
+            numberRow("Protein", unit: "g", value: total(\.protein), steps: [-10, -5, 5, 10])
+            Divider().overlay(Neka.hairline)
+            optionalRow("Carbs", value: optionalTotal(\.carbs))
+            optionalRow("Fat", value: optionalTotal(\.fat))
+            Text(servings == 1 ? "Tap a number to type it." : "These are totals for \(ServingsPicker.number(servings)) servings. Tap a number to type it.")
+                .font(.system(size: 11))
+                .foregroundColor(Neka.inkTertiary)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .padding(16)
+        .nekaCard()
     }
 
-    static func servingsNumber(_ s: Double) -> String {
-        s.formatted(.number.precision(.fractionLength(0...2)))
+    /// A total you can edit; the edit becomes the new per-serving value.
+    private func total(_ key: WritableKeyPath<FoodDraft, Double>) -> Binding<Double> {
+        Binding(
+            get: { perServing[keyPath: key] * servings },
+            set: { new in withAnimation(.snappy(duration: 0.25)) { perServing[keyPath: key] = max(0, new) / max(servings, 0.01) } }
+        )
     }
 
-    static func servingsText(_ s: Double) -> String {
-        servingsNumber(s) + (s == 1 ? " serving" : " servings")
+    private func optionalTotal(_ key: WritableKeyPath<FoodDraft, Double?>) -> Binding<Double?> {
+        Binding(
+            get: { perServing[keyPath: key].map { $0 * servings } },
+            set: { new in perServing[keyPath: key] = new.map { max(0, $0) / max(servings, 0.01) } }
+        )
     }
 
-    private func numberRow(_ title: String, value: Binding<Double>, unit: String, steps: [Double]) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+    private func numberRow(_ title: String, unit: String, value: Binding<Double>, steps: [Double]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(Neka.ink)
                 Spacer()
-                TextField("0", value: value, format: .number.precision(.fractionLength(0)))
-                    .keyboardType(.numberPad)
-                    .multilineTextAlignment(.trailing)
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 90)
-                Text(unit).foregroundColor(.secondary)
+                LiveNumberField(value: value, font: .system(size: 22, weight: .bold, design: .rounded))
+                    .frame(width: 110, alignment: .trailing)
+                Text(unit)
+                    .font(.system(size: 13))
+                    .foregroundColor(Neka.inkSecondary)
+                    .frame(width: 26, alignment: .leading)
             }
             HStack(spacing: 8) {
                 ForEach(steps, id: \.self) { step in
-                    Button(step > 0 ? "+\(Int(step))" : "\(Int(step))") {
-                        value.wrappedValue = max(0, value.wrappedValue + step)
+                    Button { value.wrappedValue = max(0, value.wrappedValue + step) } label: {
+                        Text(step > 0 ? "+\(Int(step))" : "\(Int(step))")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(Capsule().fill(Neka.track))
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity)
+                    .buttonStyle(.dialedScale)
                 }
             }
         }
-        .padding(.vertical, 2)
     }
 
     private func optionalRow(_ title: String, value: Binding<Double?>) -> some View {
-        HStack {
+        HStack(alignment: .firstTextBaseline) {
             Text(title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(Neka.ink)
             Spacer()
-            TextField("—", value: value, format: .number.precision(.fractionLength(0)))
-                .keyboardType(.numberPad)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 90)
-            Text("g").foregroundColor(.secondary)
+            LiveNumberField(value: value)
+                .frame(width: 110, alignment: .trailing)
+            Text("g")
+                .font(.system(size: 13))
+                .foregroundColor(Neka.inkSecondary)
+                .frame(width: 26, alignment: .leading)
         }
+    }
+
+    static func servingsNumber(_ s: Double) -> String { ServingsPicker.number(s) }
+
+    static func servingsText(_ s: Double) -> String {
+        servingsNumber(s) + (s == 1 ? " serving" : " servings")
     }
 }

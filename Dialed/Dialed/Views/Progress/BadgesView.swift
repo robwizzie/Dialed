@@ -32,7 +32,7 @@ struct BadgesView: View {
                     if !unlocked.isEmpty { section("Earned", unlocked) }
                     if !locked.isEmpty { section("Up next", locked) }
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                    NekaLoadingPage(cards: [84, 220, 220])
                 }
             }
             .padding(16)

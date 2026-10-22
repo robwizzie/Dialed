@@ -41,6 +41,8 @@ struct StrengthProgressView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 4)
             }
+            // First load: the real cards as placeholders, not "—" and "no data".
+            .nekaLoading(loading)
             .padding(16)
             .padding(.bottom, 24)
         }

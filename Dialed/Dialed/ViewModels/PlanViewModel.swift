@@ -28,6 +28,15 @@ final class PlanViewModel: ObservableObject {
     /// button's loading state.
     @Published var isGenerating: Bool = false
 
+    /// False until the first plan load finishes — the view shows skeletons
+    /// instead of "—" anchors and the "No plan" empty state until then.
+    @Published private(set) var hasLoaded: Bool = false
+
+    init() {
+        // Build the strip up front so it doesn't pop in after the first load.
+        rebuildWeekStrip(around: selectedDate)
+    }
+
     /// Tokens for the NotificationCenter observers installed by
     /// `observeNotificationActions`. Stored so we can (a) skip re-registering
     /// when the view's .task fires more than once, and (b) clean up in deinit.
@@ -264,6 +273,7 @@ final class PlanViewModel: ObservableObject {
     }
 
     private func loadOrGenerate(for date: Date, context: ModelContext) async {
+        defer { hasLoaded = true }
         let dayStart = Calendar.current.startOfDay(for: date)
         let desc = FetchDescriptor<DailyPlan>(
             predicate: #Predicate { $0.date == dayStart }

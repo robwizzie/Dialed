@@ -20,6 +20,9 @@ final class HealthDetailModel: ObservableObject {
 
     @Published var day: Date = Calendar.current.startOfDay(for: Date())
     @Published private(set) var isLoading = false
+    /// The day whose numbers are on screen; nil until the first load lands.
+    /// Differs from `day` while a new day loads.
+    @Published private(set) var loadedDay: Date?
 
     // MARK: Body
     @Published private(set) var restingHR: [DayValue] = []
@@ -63,6 +66,10 @@ final class HealthDetailModel: ObservableObject {
     private let calendar = Calendar.current
 
     // MARK: - Derived
+
+    /// First load, or stepping to a day that hasn't loaded yet — the pages
+    /// redact rather than flash zeros and "no data" (refreshes don't).
+    var isShowingStaleDay: Bool { loadedDay != day }
 
     var isToday: Bool { calendar.isDateInToday(day) }
     var canGoForward: Bool { !isToday }
@@ -205,6 +212,7 @@ final class HealthDetailModel: ObservableObject {
         meals = (dayMeals.map { Meal(time: $0.timestamp, name: Self.mealName($0), calories: $0.value ?? 0) }
                  + foods.map { Meal(time: $0.timestamp, name: $0.name, calories: $0.calories) })
             .sorted { $0.time < $1.time }
+        loadedDay = day
     }
 
     /// Overnight vitals, sleep, and the scores built from them (readiness,

@@ -40,6 +40,14 @@ struct ScheduleView: View {
                 .padding(.bottom, 24)
             }
         }
+        .overlay(alignment: .bottom) {
+            // First calendar fetch: a floating pill, so events landing don't shove the agenda around.
+            if service.isConnected && service.loadedAt == nil {
+                NekaUpdatingPill(text: "Loading calendar")
+                    .padding(.bottom, 16)
+            }
+        }
+        .animation(.easeOut(duration: 0.3), value: service.loadedAt == nil)
         .nekaPageBackground()
         .navigationTitle("Schedule")
         .navigationBarTitleDisplayMode(.inline)

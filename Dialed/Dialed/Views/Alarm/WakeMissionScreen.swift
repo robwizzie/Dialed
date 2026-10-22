@@ -6,6 +6,8 @@
 //  Opening it silenced the alarm; any progress here keeps it quiet, and
 //  stalling or leaving rings it again (WakeAlarmCoordinator). Every
 //  mission reports progress so the re-ring keeps getting pushed back.
+//  A test run (from settings) rings nothing, records nothing and can be
+//  left at any time.
 //
 
 import SwiftUI
@@ -16,28 +18,42 @@ import Vision
 
 struct WakeMissionScreen: View {
     let run: WakeAlarmCoordinator.Run
+    /// Closes a test run (real runs end through the coordinator).
+    var onLeaveTest: () -> Void
     @ObservedObject private var coordinator = WakeAlarmCoordinator.shared
+    @State private var testPassed = false
+
+    init(run: WakeAlarmCoordinator.Run, onLeaveTest: @escaping () -> Void = {}) {
+        self.run = run
+        self.onLeaveTest = onLeaveTest
+    }
+
+    private var awake: Bool { run.isTest ? testPassed : coordinator.phase == .awake }
 
     var body: some View {
         ZStack {
-            LinearGradient(colors: coordinator.phase == .awake
+            LinearGradient(colors: awake
                            ? [Color(hex: "FFB347"), Color(hex: "FF7A59"), Color(hex: "7B5CFF")]
                            : [Color(hex: "0F1226"), Color(hex: "1E2350"), Color(hex: "3A2C6B")],
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
-                .animation(.easeInOut(duration: 0.8), value: coordinator.phase)
+                .animation(.easeInOut(duration: 0.8), value: awake)
 
-            if coordinator.phase == .awake {
-                YoureUpView { coordinator.finish() }
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            if awake {
+                YoureUpView(isTest: run.isTest, wakeCheck: run.wakeCheck) {
+                    if run.isTest { onLeaveTest() } else { coordinator.finish() }
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             } else {
                 VStack(spacing: 20) {
                     header
                     mission
                         .frame(maxHeight: .infinity)
                     if run.canSnooze {
-                        Button { coordinator.snooze() } label: {
-                            Text("Snooze \(WakeAlarmSettings.load().snoozeMinutes) min (once)")
+                        Button {
+                            if run.isTest { onLeaveTest() } else { coordinator.snooze() }
+                        } label: {
+                            Text(run.snoozeLabel + (run.isTest ? " (ends the test)" : ""))
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.white.opacity(0.6))
                         }
@@ -45,6 +61,21 @@ struct WakeMissionScreen: View {
                 }
                 .padding(20)
                 .transition(.opacity)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if run.isTest && !awake {
+                Button(action: onLeaveTest) {
+                    Label("Leave test", systemImage: "xmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(.white.opacity(0.18)))
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 16)
+                .padding(.top, 8)
             }
         }
         .preferredColorScheme(.dark)
@@ -58,40 +89,63 @@ struct WakeMissionScreen: View {
                     .monospacedDigit()
                     .foregroundColor(.white)
             }
-            Label("\(run.mission.title) mission · \(run.difficulty.title)", systemImage: run.mission.symbol)
+            if run.isTest {
+                Text("TEST")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.2)
+                    .foregroundColor(Color(hex: "0F1226"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(Color(hex: "FFB347")))
+            }
+            Label("\(run.mission.title) mission · \(run.tuning.summary(for: run.mission))", systemImage: run.mission.symbol)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white.opacity(0.75))
-            Text("The alarm stays quiet while you're at it. Stop or leave and it rings again.")
+                .multilineTextAlignment(.center)
+            Text(run.isTest
+                 ? "Just a try-out: no alarm rings and nothing is saved. Leave whenever you like."
+                 : "The alarm stays quiet while you're at it. Stop or leave and it rings again.")
                 .font(.system(size: 11))
                 .foregroundColor(.white.opacity(0.5))
                 .multilineTextAlignment(.center)
         }
-        .padding(.top, 12)
+        .padding(.top, run.isTest ? 36 : 12)
     }
 
     @ViewBuilder
     private var mission: some View {
-        let progress = { coordinator.progress() }
-        let done = { coordinator.complete() }
+        let isTest = run.isTest
+        let progress: () -> Void = { if !isTest { coordinator.progress() } }
+        let done: () -> Void = {
+            if isTest {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) { testPassed = true }
+            } else {
+                coordinator.complete()
+            }
+        }
+        let t = run.tuning
         switch run.mission {
         case .math:
-            MathMissionView(difficulty: run.difficulty, seed: run.seed, onProgress: progress, onDone: done)
+            MathMissionView(difficulty: t.mathDifficulty, count: t.mathProblems, seed: run.seed, onProgress: progress, onDone: done)
         case .shake:
-            ShakeMissionView(target: MissionContent.shakes(run.difficulty), onProgress: progress, onDone: done)
+            ShakeMissionView(target: t.shakes, onProgress: progress, onDone: done)
         case .steps:
             if CMPedometer.isStepCountingAvailable() {
-                StepsMissionView(target: MissionContent.steps(run.difficulty), onProgress: progress, onDone: done)
+                StepsMissionView(target: t.steps, onProgress: progress, onDone: done)
             } else {
-                ShakeMissionView(target: MissionContent.shakes(run.difficulty), onProgress: progress, onDone: done)
+                ShakeMissionView(target: t.shakes, onProgress: progress, onDone: done)
             }
         case .memory:
-            MemoryMissionView(difficulty: run.difficulty, seed: run.seed, onProgress: progress, onDone: done)
+            MemoryMissionView(difficulty: t.memoryDifficulty, side: t.memoryGrid, tiles: t.memoryTiles,
+                              rounds: t.memoryRounds, seed: run.seed, onProgress: progress, onDone: done)
         case .typing:
             TypingMissionView(phrase: MissionContent.phrase(friend: WeightChallenge.load()?.friendDisplayName,
-                                                            difficulty: run.difficulty, seed: run.seed),
+                                                            difficulty: t.typingDifficulty, lines: t.typingLines,
+                                                            seed: run.seed),
                               onProgress: progress, onDone: done)
         case .photo:
-            PhotoMissionView(difficulty: run.difficulty, onProgress: progress, onDone: done)
+            PhotoMissionView(difficulty: t.photoDifficulty, onProgress: progress, onDone: done)
         case .barcode:
             BarcodeMissionView(expected: WakeAlarmSettings.load().barcode ?? "", onProgress: progress, onDone: done)
         }
@@ -142,6 +196,7 @@ private func errorHaptic() {
 
 private struct MathMissionView: View {
     let difficulty: MissionDifficulty
+    let count: Int
     let seed: UInt64
     var onProgress: () -> Void
     var onDone: () -> Void
@@ -160,7 +215,7 @@ private struct MathMissionView: View {
                         .frame(height: 6)
                 }
             }
-            .frame(maxWidth: 220)
+            .frame(maxWidth: min(220, CGFloat(max(problems.count, 1)) * 40))
             Spacer(minLength: 0)
             if index < problems.count {
                 Text(problems[index].text + " =")
@@ -178,7 +233,7 @@ private struct MathMissionView: View {
             Spacer(minLength: 0)
             keypad
         }
-        .onAppear { if problems.isEmpty { problems = MissionContent.mathProblems(difficulty, seed: seed) } }
+        .onAppear { if problems.isEmpty { problems = MissionContent.mathProblems(difficulty, count: count, seed: seed) } }
     }
 
     private var keypad: some View {
@@ -224,7 +279,7 @@ private struct MathMissionView: View {
             input = ""
             attempt += 1
             var fresh = problems
-            fresh[index] = MissionContent.mathProblems(difficulty, seed: seed &+ attempt &* 7919)[0]
+            fresh[index] = MissionContent.mathProblems(difficulty, count: 1, seed: seed &+ attempt &* 7919)[0]
             problems = fresh
         }
     }
@@ -325,6 +380,9 @@ private struct StepsMissionView: View {
 
 private struct MemoryMissionView: View {
     let difficulty: MissionDifficulty
+    let side: Int
+    let tiles: Int
+    let rounds: Int
     let seed: UInt64
     var onProgress: () -> Void
     var onDone: () -> Void
@@ -336,7 +394,10 @@ private struct MemoryMissionView: View {
     @State private var showing = true
     @State private var miss: Int?
 
-    private var setup: (side: Int, tiles: Int, rounds: Int) { MissionContent.memory(difficulty) }
+    private var setup: (side: Int, tiles: Int, rounds: Int) {
+        let s = max(2, side)
+        return (s, min(max(1, tiles), s * s - 1), max(1, rounds))
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -375,7 +436,7 @@ private struct MemoryMissionView: View {
         picked = []
         miss = nil
         showing = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) { showing = false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + MissionContent.memoryFlash(difficulty)) { showing = false }
     }
 
     private func tap(_ i: Int) {
@@ -564,11 +625,11 @@ private struct BarcodeMissionView: View {
                 .frame(height: 340)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
             } else {
-                Text("This iPhone can't scan barcodes. Change the mission in Settings → Wake-up times.")
+                Text("This iPhone can't scan barcodes. Change the mission in Wake-up times › Alarm.")
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.7))
                     .multilineTextAlignment(.center)
-                MathMissionView(difficulty: .easy, seed: 1, onProgress: onProgress, onDone: onDone)
+                MathMissionView(difficulty: .easy, count: 2, seed: 1, onProgress: onProgress, onDone: onDone)
             }
             if let message {
                 Text(message)
@@ -583,6 +644,8 @@ private struct BarcodeMissionView: View {
 
 /// After the mission: last night's sleep, today's first quest, and water.
 private struct YoureUpView: View {
+    var isTest = false
+    var wakeCheck = false
     var onClose: () -> Void
     @Environment(\.modelContext) private var context
     @State private var score: Int?
@@ -598,37 +661,23 @@ private struct YoureUpView: View {
                 .font(.system(size: 64, weight: .bold))
                 .foregroundStyle(.white)
                 .symbolEffect(.bounce, value: appeared)
-            Text("You're up.")
+            Text(isTest ? "Test passed." : "You're up.")
                 .font(.system(size: 44, weight: .heavy, design: .rounded))
                 .foregroundColor(.white)
-            if WakeAlarmSettings.load().wakeCheck {
+            if isTest {
+                Text("That's what your alarm will ask for. Nothing was saved.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+            } else if wakeCheck {
                 Text("Quick check-in in 5 minutes. Open Dialed when it asks.")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white.opacity(0.8))
             }
-            VStack(spacing: 12) {
-                if let score {
-                    row(icon: "moon.zzz.fill", title: "Sleep score \(score)",
-                        detail: hours.map { String(format: "%.1f h last night", $0) } ?? "Last night")
-                }
-                if let quest {
-                    row(icon: "checklist.checked", title: "First quest", detail: quest)
-                }
-                Button {
-                    QuickLogService.logWater(8, context: context)
-                    withAnimation { drank = true }
-                    haptic(.medium)
-                } label: {
-                    row(icon: drank ? "checkmark.circle.fill" : "drop.fill",
-                        title: drank ? "8 oz logged" : "Drink a glass of water",
-                        detail: drank ? "Nice start." : "Tap when it's done")
-                }
-                .buttonStyle(.plain)
-                .disabled(drank)
-            }
+            if !isTest { morningRows }
             Spacer(minLength: 0)
             Button(action: onClose) {
-                Text("Let's go")
+                Text(isTest ? "Done" : "Let's go")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundColor(Color(hex: "3A2C6B"))
                     .frame(maxWidth: .infinity)
@@ -637,8 +686,31 @@ private struct YoureUpView: View {
             }
         }
         .padding(24)
-        .task { await load() }
+        .task { if !isTest { await load() } }
         .onAppear { appeared = true }
+    }
+
+    private var morningRows: some View {
+        VStack(spacing: 12) {
+            if let score {
+                row(icon: "moon.zzz.fill", title: "Sleep score \(score)",
+                    detail: hours.map { String(format: "%.1f h last night", $0) } ?? "Last night")
+            }
+            if let quest {
+                row(icon: "checklist.checked", title: "First quest", detail: quest)
+            }
+            Button {
+                QuickLogService.logWater(8, context: context)
+                withAnimation { drank = true }
+                haptic(.medium)
+            } label: {
+                row(icon: drank ? "checkmark.circle.fill" : "drop.fill",
+                    title: drank ? "8 oz logged" : "Drink a glass of water",
+                    detail: drank ? "Nice start." : "Tap when it's done")
+            }
+            .buttonStyle(.plain)
+            .disabled(drank)
+        }
     }
 
     private func row(icon: String, title: String, detail: String) -> some View {

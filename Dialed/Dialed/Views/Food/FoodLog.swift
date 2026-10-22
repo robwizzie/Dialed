@@ -105,7 +105,11 @@ struct FoodDraft: Equatable {
 enum FoodLog {
     static func entries(on day: Date, context: ModelContext) -> [LoggedFood] {
         let start = Calendar.current.startOfDay(for: day)
-        let end = Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start
+        return entries(from: start, to: Calendar.current.date(byAdding: .day, value: 1, to: start) ?? start, context: context)
+    }
+
+    /// Everything logged in [start, end), oldest first: one fetch per kind.
+    static func entries(from start: Date, to end: Date, context: ModelContext) -> [LoggedFood] {
         let meal = ContextEvent.Kind.meal.rawValue
         let events = (try? context.fetch(FetchDescriptor<ContextEvent>(
             predicate: #Predicate { $0.logicalDate >= start && $0.logicalDate < end && $0.kindRaw == meal }))) ?? []
@@ -117,20 +121,19 @@ enum FoodLog {
 
     /// Distinct foods from the last two weeks, most recent first — for one-tap re-logging.
     static func recents(context: ModelContext, limit: Int = 8) -> [FoodDraft] {
-        let since = Calendar.current.date(byAdding: .day, value: -14, to: Date()) ?? Date()
+        let calendar = Calendar.current
+        let start = calendar.date(byAdding: .day, value: -14, to: calendar.startOfDay(for: Date())) ?? Date()
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
         var seen = Set<String>()
         var out: [FoodDraft] = []
-        for day in stride(from: 0, through: 14, by: 1) {
-            guard let d = Calendar.current.date(byAdding: .day, value: -day, to: Date()), d >= since else { continue }
-            for food in entries(on: d, context: context).reversed() {
-                let key = food.name.lowercased()
-                guard food.name != "Meal", !seen.contains(key) else { continue }
-                seen.insert(key)
-                var draft = FoodDraft(food)
-                draft.time = Date()
-                out.append(draft)
-                if out.count >= limit { return out }
-            }
+        for food in entries(from: start, to: end, context: context).reversed() {
+            let key = food.name.lowercased()
+            guard food.name != "Meal", !seen.contains(key) else { continue }
+            seen.insert(key)
+            var draft = FoodDraft(food)
+            draft.time = Date()
+            out.append(draft)
+            if out.count >= limit { break }
         }
         return out
     }

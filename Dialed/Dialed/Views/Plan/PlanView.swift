@@ -29,8 +29,10 @@ struct PlanView: View {
                     header
                     weekStrip
                     anchorRow
+                        .nekaLoading(!viewModel.hasLoaded)
                     timeline
                 }
+                .animation(.easeOut(duration: 0.3), value: viewModel.hasLoaded)
                 .padding(.horizontal, 16)
                 .padding(.bottom, 48)
             }
@@ -210,7 +212,25 @@ struct PlanView: View {
 
     private var timeline: some View {
         VStack(spacing: 20) {
-            if viewModel.groupedBlocks.isEmpty {
+            if !viewModel.hasLoaded {
+                // First load (may generate the day's plan): placeholder blocks.
+                VStack(spacing: 10) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        HStack(spacing: 12) {
+                            Circle().fill(Neka.skeleton).frame(width: 36, height: 36)
+                            VStack(alignment: .leading, spacing: 8) {
+                                NekaSkeleton(width: 150, height: 12)
+                                NekaSkeleton(width: 90, height: 10)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(14)
+                        .nekaShimmer()
+                        .nekaCard()
+                    }
+                }
+                .transition(.opacity)
+            } else if viewModel.groupedBlocks.isEmpty {
                 emptyState
             } else {
                 ForEach(viewModel.groupedBlocks, id: \.title) { group in

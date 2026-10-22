@@ -32,7 +32,7 @@ struct HabitHeatmapView: View {
                     if let selected { dayCard(selected) }
                     streaks
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                    NekaLoadingPage(cards: [220, 110, 180])
                 }
             }
             .padding(16)

@@ -23,7 +23,15 @@ struct MealPart: Equatable, Identifiable {
     /// From the table (true) or an estimate for something it doesn't know.
     var fromTable: Bool
 
-    var id: String { name + amount }
+    /// Stable across portion changes (the amount text changes), so a row
+    /// updates in place instead of being swapped out.
+    var uid = UUID()
+    var id: UUID { uid }
+
+    static func == (a: MealPart, b: MealPart) -> Bool {
+        a.name == b.name && a.amount == b.amount && a.grams == b.grams && a.calories == b.calories
+            && a.protein == b.protein && a.carbs == b.carbs && a.fat == b.fat && a.fromTable == b.fromTable
+    }
 
     /// The same food at `factor` times the amount.
     func scaled(_ factor: Double) -> MealPart {

@@ -2,9 +2,10 @@
 //  SkyScenes.swift
 //  Dialed
 //
-//  Living skies drawn in SwiftUI, no image assets. MorningSky reacts to
-//  last night's score: a radiant sunrise with turning rays (85+), a mellow
-//  dawn (70–84), a hazy morning behind cloud (50–69), or a grey drizzle.
+//  Living skies drawn in SwiftUI, no image assets. DaySky reacts to a
+//  score — a radiant sky with turning rays (85+), a mellow one (70–84), a
+//  hazy one behind cloud (50–69), or a grey drizzle — in the light of the
+//  time of day: sunrise, midday, golden hour or night.
 //  NightSky is tonight: a quiet gradient, a few faint stars and a small
 //  crescent, warmer and moodier the more sleep you owe. Clouds drift and stars twinkle unless
 //  Reduce Motion is on.
@@ -12,54 +13,319 @@
 
 import SwiftUI
 
-// MARK: - Morning
+// MARK: - Day
 
-struct MorningSky: View {
-    let tier: SleepVisuals.MorningTier
-    /// When set, the sun climbs an arc from the horizon and sits as high as
-    /// the score (0…1, 1 = the top), with the day's path drawn faintly.
-    let sunProgress: Double?
+/// Set by a scrolling page so animated skies hold still mid-scroll (one
+/// less layer redrawing every frame while you fling). Only the skies read
+/// it, so flipping it doesn't rebuild the page.
+@Observable
+final class SkyMotion {
+    var isScrolling = false
+}
 
-    init(score: Int?, sunOnArc: Bool = false) {
-        tier = SleepVisuals.MorningTier(score: score ?? 72)
-        sunProgress = sunOnArc ? score.map { SleepVisuals.arcProgress(score: $0) } : nil
+extension View {
+    /// Tells skies below when this scroll view is moving (iOS 18+).
+    func tracksSkyMotion(_ motion: SkyMotion) -> some View {
+        Group {
+            if #available(iOS 18.0, *) {
+                onScrollPhaseChange { _, phase in motion.isScrolling = phase.isScrolling }
+            } else {
+                self
+            }
+        }
+        .environment(motion)
     }
+}
+
+/// The sky behind the day banner, drawn in one Canvas pass. `tier` is the
+/// weather the score earned (radiant → drizzle); `time` sets the light
+/// (sunrise, midday blue, golden hour, night). Up top on the right, the
+/// score is a dial: a track with ticks, filled to `score` (0…1), with the
+/// sun (or tonight's moon) as the knob. Clouds drift behind it (and rain
+/// falls) at a modest frame rate, pausing while the page scrolls, while
+/// the sky is off screen, and with Reduce Motion.
+struct DaySky: View {
+    enum Time: Equatable { case morning, midday, evening, night }
+
+    let tier: SleepVisuals.MorningTier
+    let time: Time
+    /// The banner's score as 0…1; nil hides the dial.
+    let score: Double?
 
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(SkyMotion.self) private var motion: SkyMotion?
+    @State private var onScreen = true
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { context in
+        let paused = reduceMotion || !onScreen || (motion?.isScrolling ?? false)
+        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 20, paused: paused)) { context in
             let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                ZStack {
-                    LinearGradient(colors: Self.skyColors(tier, dark: scheme == .dark),
-                                   startPoint: .top, endPoint: .bottom)
-                    if let p = sunProgress { arcTrack(progress: p, w: w, h: h) }
-                    sun(t: t, w: w, h: h)
-                    clouds(t: t, w: w, h: h)
-                    if tier == .drizzly { rain(t: t, w: w, h: h) }
-                    hills(w: w, h: h)
-                }
+            Canvas { ctx, size in draw(in: &ctx, size: size, t: t) }
+        }
+        .modifier(OnScreenTracker(onScreen: $onScreen))
+        .accessibilityHidden(true)
+    }
+
+    /// Pauses the sky once it scrolls out of view (iOS 18+).
+    private struct OnScreenTracker: ViewModifier {
+        @Binding var onScreen: Bool
+
+        func body(content: Content) -> some View {
+            if #available(iOS 18.0, *) {
+                content.onScrollVisibilityChange(threshold: 0.05) { onScreen = $0 }
+            } else {
+                content
             }
         }
-        .accessibilityHidden(true)
+    }
+
+    // MARK: Drawing
+
+    private var dark: Bool { scheme == .dark }
+    private var night: Bool { time == .night }
+
+    private func draw(in ctx: inout GraphicsContext, size: CGSize, t: Double) {
+        let w = size.width, h = size.height
+        ctx.fill(Path(CGRect(origin: .zero, size: size)),
+                 with: .linearGradient(Gradient(colors: Self.skyColors(tier, time: time, dark: dark)),
+                                       startPoint: .zero, endPoint: CGPoint(x: 0, y: h)))
+        if night { stars(&ctx, w: w, h: h, t: t) }
+        clouds(&ctx, w: w, t: t)
+        if tier == .drizzly && !night { rain(&ctx, w: w, h: h, t: t) }
+        if let score { dial(&ctx, score: min(1, max(0, score)), w: w, t: t) }
+        hills(&ctx, w: w, h: h)
+    }
+
+    // MARK: Score dial
+
+    /// The dial sits top right, clear of the score and text on the left.
+    private func dialCenter(_ w: CGFloat) -> CGPoint { CGPoint(x: w - 86, y: 94) }
+    private let radius: CGFloat = 58
+
+    /// A point on the dial, 0 on the left end → 1 on the right.
+    private func point(_ p: Double, _ w: CGFloat, inset: CGFloat = 0) -> CGPoint {
+        let c = dialCenter(w), r = radius - inset
+        let angle = Double.pi * (1 - p)
+        return CGPoint(x: c.x + CGFloat(cos(angle)) * r, y: c.y - CGFloat(sin(angle)) * r)
+    }
+
+    private func arc(to p: Double, _ w: CGFloat) -> Path {
+        Path { path in
+            let steps = max(2, Int(48 * p))
+            for i in 0...steps {
+                let pt = point(p * Double(i) / Double(steps), w)
+                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
+            }
+        }
+    }
+
+    private var fillColors: [Color] {
+        if night { return [Color(hex: "B9A8FF"), Color(hex: "F5DFA8")] }
+        switch tier {
+        case .radiant: return [Color(hex: "FFE9A8"), Color(hex: "FFB347")]
+        case .mellow:  return [Color(hex: "FFF1CC"), Color(hex: "FFC27A")]
+        case .hazy:    return [.white.opacity(0.7), Color(hex: "FFF1D6")]
+        case .drizzly: return [.white.opacity(0.6), .white.opacity(0.95)]
+        }
+    }
+
+    private func dial(_ ctx: inout GraphicsContext, score p: Double, w: CGFloat, t: Double) {
+        // Track.
+        ctx.stroke(arc(to: 1, w), with: .color(.white.opacity(night ? 0.16 : 0.32)),
+                   style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        // Ticks every 10 points, inside the track; 0, 50 and 100 longer.
+        var ticks = Path()
+        for k in 0...10 {
+            let major = k % 5 == 0
+            ticks.move(to: point(Double(k) / 10, w, inset: 8))
+            ticks.addLine(to: point(Double(k) / 10, w, inset: major ? 15 : 12))
+        }
+        ctx.stroke(ticks, with: .color(.white.opacity(night ? 0.35 : 0.6)),
+                   style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
+        // Fill up to the score.
+        let left = point(0, w), right = point(1, w)
+        ctx.stroke(arc(to: p, w), with: .linearGradient(Gradient(colors: fillColors), startPoint: left, endPoint: right),
+                   style: StrokeStyle(lineWidth: 6, lineCap: .round))
+        knob(&ctx, at: point(p, w), t: t)
+    }
+
+    private func knob(_ ctx: inout GraphicsContext, at p: CGPoint, t: Double) {
+        if night {
+            moon(&ctx, at: p, d: 27)
+            return
+        }
+        switch tier {
+        case .radiant, .mellow:
+            let radiant = tier == .radiant
+            let size: CGFloat = radiant ? 34 : 31
+            let glow = size * 1.15 * (1 + 0.04 * sin(t * 1.3))
+            let evening = time == .evening
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - glow, y: p.y - glow, width: glow * 2, height: glow * 2)),
+                     with: .radialGradient(Gradient(colors: [Color(hex: evening ? "FFD6A0" : "FFF3C4").opacity(radiant ? 0.85 : 0.65), .clear]),
+                                           center: p, startRadius: size * 0.3, endRadius: glow))
+            if radiant {
+                // Short turning rays.
+                let rw: CGFloat = 2.4, rh: CGFloat = 6
+                for i in 0..<12 {
+                    var r = ctx
+                    r.translateBy(x: p.x, y: p.y)
+                    r.rotate(by: .degrees(Double(i) * 30 + t * 6))
+                    r.fill(Path(roundedRect: CGRect(x: -rw / 2, y: -size * 0.5 - 4 - rh, width: rw, height: rh), cornerRadius: rw / 2),
+                           with: .color(Color(hex: "FFE6A6").opacity(0.7)))
+                }
+            }
+            let disc = CGRect(x: p.x - size / 2, y: p.y - size / 2, width: size, height: size)
+            let fill = evening ? ["FFD27A", "FF8F52"] : radiant ? ["FFE58A", "FFB347"] : ["FFE3A0", "FFC27A"]
+            ctx.fill(Path(ellipseIn: disc),
+                     with: .linearGradient(Gradient(colors: fill.map { Color(hex: $0) }),
+                                           startPoint: CGPoint(x: p.x, y: disc.minY), endPoint: CGPoint(x: p.x, y: disc.maxY)))
+            ctx.stroke(Path(ellipseIn: disc.insetBy(dx: 0.75, dy: 0.75)), with: .color(.white.opacity(0.55)), lineWidth: 1.5)
+        case .hazy:
+            let size: CGFloat = 28
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - size, y: p.y - size, width: size * 2, height: size * 2)),
+                     with: .radialGradient(Gradient(colors: [Color(hex: "FFF1D6").opacity(0.75), .clear]),
+                                           center: p, startRadius: size * 0.35, endRadius: size))
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - size / 2, y: p.y - size / 2, width: size, height: size)),
+                     with: .color(Color(hex: "FFF4E0").opacity(0.9)))
+        case .drizzly:
+            let d: CGFloat = 16
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - d / 2, y: p.y - d / 2, width: d, height: d)), with: .color(.white))
+            ctx.stroke(Path(ellipseIn: CGRect(x: p.x - d / 2 - 3, y: p.y - d / 2 - 3, width: d + 6, height: d + 6)),
+                       with: .color(.white.opacity(0.4)), lineWidth: 2)
+        }
+    }
+
+    // MARK: Weather and land
+
+    private func clouds(_ ctx: inout GraphicsContext, w: CGFloat, t: Double) {
+        let style: (count: Int, opacity: Double, tint: Color) = {
+            if night { return (2, 0.14, .white) }
+            switch tier {
+            case .radiant: return (2, 0.9, .white)
+            case .mellow:  return (3, 0.85, .white)
+            case .hazy:    return (4, 0.8, Color(hex: "F4F4F6"))
+            case .drizzly: return (4, 0.95, Color(hex: "939DAB"))
+            }
+        }()
+        // Clouds drift across the right side only, behind the dial, so they
+        // never sit on the score.
+        let start = Double(w * 0.42), span = Double(w * 0.58 + 120)
+        let shape = CloudShape()
+        for i in 0..<style.count {
+            let speed = 4 + Double(i % 3) * 2.5
+            let base = Double(i) / Double(style.count)
+            let x = start + (base * span + t * speed).truncatingRemainder(dividingBy: span) - 50
+            let cw = 64 + CGFloat(i % 3) * 16, ch = 24 + CGFloat(i % 2) * 7
+            let y = 30 + CGFloat(i % 3) * 20
+            let rect = CGRect(x: CGFloat(x) - cw / 2, y: y - ch / 2, width: cw, height: ch)
+            let o = style.opacity - Double(i % 2) * 0.15
+            ctx.fill(shape.path(in: rect),
+                     with: .linearGradient(Gradient(colors: [style.tint.opacity(o), style.tint.opacity(o * 0.75)]),
+                                           startPoint: CGPoint(x: rect.midX, y: rect.minY), endPoint: CGPoint(x: rect.midX, y: rect.maxY)))
+        }
+    }
+
+    private func rain(_ ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, t: Double) {
+        var drops = Path()
+        let left = Double(w * 0.42), width = Double(w * 0.58)
+        for i in 0..<18 {
+            let seed = Double(i) * 37.13
+            let x = left + (seed * 13).truncatingRemainder(dividingBy: width)
+            let fall = 40 + (t * 90 + seed * 7).truncatingRemainder(dividingBy: Double(h * 0.5))
+            drops.move(to: CGPoint(x: x, y: fall))
+            drops.addLine(to: CGPoint(x: x - 2.5, y: fall + 8))
+        }
+        ctx.stroke(drops, with: .color(Color(hex: "D3DEEB").opacity(0.75)), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
+    }
+
+    private func stars(_ ctx: inout GraphicsContext, w: CGFloat, h: CGFloat, t: Double) {
+        for i in 0..<24 {
+            let seed = Double(i) * 57.31
+            let x = w * (0.08 + 0.9 * (seed * 0.137).truncatingRemainder(dividingBy: 1))
+            let y = h * 0.55 * (seed * 0.071).truncatingRemainder(dividingBy: 1)
+            let twinkle = 0.35 + 0.35 * abs(sin(t * (0.4 + Double(i % 4) * 0.15) + seed))
+            let r = 0.6 + Double(i % 3) * 0.4
+            ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r * 2, height: r * 2)),
+                     with: .color(.white.opacity(twinkle * 0.6)))
+        }
+    }
+
+    /// A crescent: a full disc with an offset disc cut out of it.
+    private func moon(_ ctx: inout GraphicsContext, at c: CGPoint, d: CGFloat) {
+        let disc = CGRect(x: c.x - d / 2, y: c.y - d / 2, width: d, height: d)
+        ctx.fill(Path(ellipseIn: disc.insetBy(dx: -d * 0.6, dy: -d * 0.6)),
+                 with: .radialGradient(Gradient(colors: [Color(hex: "FFF4D2").opacity(0.3), .clear]),
+                                       center: c, startRadius: d * 0.3, endRadius: d * 1.1))
+        ctx.drawLayer { layer in
+            layer.fill(Path(ellipseIn: disc),
+                       with: .linearGradient(Gradient(colors: [Color(hex: "FFF6DC"), Color(hex: "F5DFA8")]),
+                                             startPoint: CGPoint(x: c.x, y: disc.minY), endPoint: CGPoint(x: c.x, y: disc.maxY)))
+            layer.blendMode = .destinationOut
+            layer.fill(Path(ellipseIn: disc.offsetBy(dx: d * 0.34, dy: -d * 0.2)), with: .color(.black))
+        }
+    }
+
+    private func hills(_ ctx: inout GraphicsContext, w: CGFloat, h: CGFloat) {
+        let bright = tier == .radiant || tier == .mellow
+        let colors: (back: String, front: String) = {
+            switch (time, bright, dark) {
+            case (.night, _, _):          return ("1A2740", "121C30")
+            case (.evening, _, false):    return (bright ? "A6CBA6" : "A3ABA6", bright ? "7FB38D" : "88938C")
+            case (.evening, _, true):     return ("2A3B36", "1E2B27")
+            case (_, true, false):        return ("B2DDB8", "86C796")
+            case (_, true, true):         return ("2F4A3E", "23392F")
+            case (_, false, false):       return ("B4BEB7", "98A49D")
+            case (_, false, true):        return ("262E2C", "1C2321")
+            }
+        }()
+        let rect = CGRect(x: 0, y: 0, width: w, height: h)
+        func fill(_ shape: HillShape, _ hex: String) {
+            let path = shape.path(in: rect)
+            let top = path.boundingRect.minY
+            ctx.fill(path, with: .linearGradient(Gradient(colors: [Color(hex: hex), Color(hex: hex).opacity(0.85)]),
+                                                 startPoint: CGPoint(x: 0, y: top), endPoint: CGPoint(x: 0, y: h)))
+        }
+        fill(HillShape(peak: 0.28, height: 0.17), colors.back)
+        fill(HillShape(peak: 0.74, height: 0.11), colors.front)
     }
 
     // MARK: Palette
 
-    static func skyColors(_ tier: SleepVisuals.MorningTier, dark: Bool) -> [Color] {
-        switch (tier, dark) {
-        case (.radiant, false): return [Color(hex: "7EC8FF"), Color(hex: "FFD7A0"), Color(hex: "FFB38A")]
-        case (.radiant, true):  return [Color(hex: "1E3A6E"), Color(hex: "C2664A"), Color(hex: "F2A35E")]
-        case (.mellow, false):  return [Color(hex: "A9CFF5"), Color(hex: "F6E2C8"), Color(hex: "F3CDB8")]
-        case (.mellow, true):   return [Color(hex: "23365C"), Color(hex: "7D5A6E"), Color(hex: "C08463")]
-        case (.hazy, false):    return [Color(hex: "C6D3E2"), Color(hex: "E7E4E0"), Color(hex: "E3D9CF")]
-        case (.hazy, true):     return [Color(hex: "2B3442"), Color(hex: "4E5563"), Color(hex: "6B6670")]
-        case (.drizzly, false): return [Color(hex: "9AA6B6"), Color(hex: "BCC4CF"), Color(hex: "CDD2D9")]
-        case (.drizzly, true):  return [Color(hex: "1C222B"), Color(hex: "2F3742"), Color(hex: "3D4550")]
+    static func skyColors(_ tier: SleepVisuals.MorningTier, time: Time, dark: Bool) -> [Color] {
+        let hex: [String]
+        switch (time, tier, dark) {
+        // Sunrise.
+        case (.morning, .radiant, false): hex = ["7EC8FF", "FFD7A0", "FFB38A"]
+        case (.morning, .radiant, true):  hex = ["1E3A6E", "C2664A", "F2A35E"]
+        case (.morning, .mellow, false):  hex = ["A9CFF5", "F6E2C8", "F3CDB8"]
+        case (.morning, .mellow, true):   hex = ["23365C", "7D5A6E", "C08463"]
+        case (.morning, .hazy, false):    hex = ["C6D3E2", "E7E4E0", "E3D9CF"]
+        case (.morning, .hazy, true):     hex = ["2B3442", "4E5563", "6B6670"]
+        // Midday blue.
+        case (.midday, .radiant, false):  hex = ["4FA8F5", "8FCBFA", "D6ECFB"]
+        case (.midday, .radiant, true):   hex = ["123A6B", "1F5A8F", "3A78A8"]
+        case (.midday, .mellow, false):   hex = ["7DB7EA", "B4D6F1", "E4EFF6"]
+        case (.midday, .mellow, true):    hex = ["1B3557", "2C4D72", "4B6A86"]
+        case (.midday, .hazy, false):     hex = ["B3C2D3", "D2DAE2", "E4E6E8"]
+        case (.midday, .hazy, true):      hex = ["283240", "3A4452", "4D5562"]
+        // Golden hour.
+        case (.evening, .radiant, false): hex = ["6A7FD3", "F0A07E", "FFC68C"]
+        case (.evening, .radiant, true):  hex = ["1E2558", "8A4A6A", "D9855A"]
+        case (.evening, .mellow, false):  hex = ["8390C8", "D9A3A3", "F1C7A4"]
+        case (.evening, .mellow, true):   hex = ["252B52", "6B4A68", "A86F5C"]
+        case (.evening, .hazy, false):    hex = ["9198AB", "C2B0B2", "DCC9BC"]
+        case (.evening, .hazy, true):     hex = ["2A2E3E", "4C4652", "6E5F60"]
+        case (.evening, .drizzly, false): hex = ["7D8594", "A0A3AC", "BBB8B8"]
+        case (.evening, .drizzly, true):  hex = ["1C2129", "2E3239", "403F44"]
+        // Grey all day.
+        case (_, .drizzly, false):        hex = ["9AA6B6", "BCC4CF", "CDD2D9"]
+        case (_, .drizzly, true):         hex = ["1C222B", "2F3742", "3D4550"]
+        // Night: deeper and moodier the rougher the day.
+        case (.night, .radiant, _), (.night, .mellow, _): hex = ["0B1433", "1C2A63", "36478F"]
+        case (.night, .hazy, _):          hex = ["120F33", "2B1E62", "51408F"]
         }
+        return hex.map { Color(hex: $0) }
     }
 
     /// The score ring's colors match the sky.
@@ -70,159 +336,6 @@ struct MorningSky: View {
         case .hazy:    return [Color(hex: "9FB4CC"), Color(hex: "B49CFF"), Color(hex: "9FB4CC")]
         case .drizzly: return [Color(hex: "7D8897"), Color(hex: "9FB4CC"), Color(hex: "7D8897")]
         }
-    }
-
-    // MARK: Pieces
-
-    @ViewBuilder
-    private func sun(t: Double, w: CGFloat, h: CGFloat) -> some View {
-        switch tier {
-        case .radiant:
-            let size = h * (sunProgress == nil ? 0.42 : 0.2)
-            ZStack {
-                // Turning rays.
-                ForEach(0..<12, id: \.self) { i in
-                    Capsule()
-                        .fill(Color(hex: "FFE6A6").opacity(0.55))
-                        .frame(width: size * 0.07, height: size * 0.34)
-                        .offset(y: -size * 0.78)
-                        .rotationEffect(.degrees(Double(i) * 30 + t * 6))
-                }
-                Circle()
-                    .fill(RadialGradient(colors: [Color(hex: "FFF3C4").opacity(0.9), .clear],
-                                         center: .center, startRadius: 0, endRadius: size * 1.3))
-                    .frame(width: size * 2.6, height: size * 2.6)
-                    .scaleEffect(1 + 0.04 * sin(t * 1.4))
-                Circle()
-                    .fill(LinearGradient(colors: [Color(hex: "FFE58A"), Color(hex: "FFB347")], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size, height: size)
-                    .shadow(color: Color(hex: "FFB347").opacity(0.6), radius: 18)
-            }
-            .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.78, y: h * 0.42)))
-        case .mellow:
-            let size = h * (sunProgress == nil ? 0.36 : 0.18)
-            ZStack {
-                Circle()
-                    .fill(RadialGradient(colors: [Color(hex: "FFE7B0").opacity(0.75), .clear],
-                                         center: .center, startRadius: 0, endRadius: size * 1.1))
-                    .frame(width: size * 2.2, height: size * 2.2)
-                    .scaleEffect(1 + 0.03 * sin(t * 1.1))
-                Circle()
-                    .fill(LinearGradient(colors: [Color(hex: "FFE3A0"), Color(hex: "FFC27A")], startPoint: .top, endPoint: .bottom))
-                    .frame(width: size, height: size)
-            }
-            .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.76, y: h * 0.62)))
-        case .hazy:
-            Circle()
-                .fill(Color(hex: "FFF1D6").opacity(0.55))
-                .frame(width: h * (sunProgress == nil ? 0.32 : 0.18), height: h * (sunProgress == nil ? 0.32 : 0.18))
-                .blur(radius: 6)
-                .position(sunPosition(w: w, h: h, fallback: CGPoint(x: w * 0.74, y: h * 0.4)))
-        case .drizzly:
-            EmptyView()
-        }
-    }
-
-    // MARK: Score arc
-
-    /// A point on the sun's half-circle path, `t` 0 (left horizon) → 1
-    /// (right horizon). Kept to the right side, clear of the greeting.
-    private func pathPoint(_ t: Double, w: CGFloat, h: CGFloat) -> CGPoint {
-        let angle = Double.pi * (1 - t)
-        let center = CGPoint(x: w * 0.72, y: h * 0.46)
-        let rx = w * 0.22, ry = h * 0.34
-        return CGPoint(x: center.x + CGFloat(cos(angle)) * rx, y: center.y - CGFloat(sin(angle)) * ry)
-    }
-
-    /// The score climbs the left half: 0 on the horizon, 100 at the top.
-    private func arcPoint(_ p: Double, w: CGFloat, h: CGFloat) -> CGPoint {
-        pathPoint(p / 2, w: w, h: h)
-    }
-
-    private func sunPosition(w: CGFloat, h: CGFloat, fallback: CGPoint) -> CGPoint {
-        sunProgress.map { arcPoint($0, w: w, h: h) } ?? fallback
-    }
-
-    private func arcPath(to t: Double, w: CGFloat, h: CGFloat) -> Path {
-        Path { path in
-            let steps = 40
-            for i in 0...steps {
-                let pt = pathPoint(t * Double(i) / Double(steps), w: w, h: h)
-                if i == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
-            }
-        }
-    }
-
-    private func arcTrack(progress: Double, w: CGFloat, h: CGFloat) -> some View {
-        let lit: Color = tier == .drizzly || tier == .hazy ? .white.opacity(0.75) : Color(hex: "FFF3C4")
-        return ZStack {
-            arcPath(to: 1, w: w, h: h)
-                .stroke(.white.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, dash: [2, 5]))
-            arcPath(to: progress / 2, w: w, h: h)
-                .stroke(lit, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-            if tier == .drizzly {
-                // No sun on a grey morning; a small marker still shows the score.
-                Circle().fill(.white.opacity(0.85))
-                    .frame(width: 9, height: 9)
-                    .position(arcPoint(progress, w: w, h: h))
-            }
-        }
-    }
-
-    private func clouds(t: Double, w: CGFloat, h: CGFloat) -> some View {
-        let style: (count: Int, opacity: Double, tint: Color) = {
-            switch tier {
-            case .radiant: return (2, 0.85, .white)
-            case .mellow:  return (3, 0.8, .white)
-            case .hazy:    return (5, 0.75, Color(hex: "F2F2F4"))
-            case .drizzly: return (6, 0.9, Color(hex: "8E98A6"))
-            }
-        }()
-        let count = style.count, opacity = style.opacity, tint = style.tint
-        return ZStack {
-            ForEach(0..<count, id: \.self) { i in
-                let speed = 6 + Double(i % 3) * 3
-                let base = Double(i) / Double(count)
-                let x = (base * Double(w + 160) + t * speed).truncatingRemainder(dividingBy: Double(w + 160)) - 80
-                CloudShape()
-                    .fill(tint.opacity(opacity - Double(i % 2) * 0.15))
-                    .frame(width: 90 + CGFloat(i % 3) * 26, height: 34 + CGFloat(i % 2) * 10)
-                    .position(x: CGFloat(x), y: h * (0.18 + 0.12 * CGFloat(i % 3)))
-                    .blur(radius: tier == .hazy ? 2 : 0)
-            }
-        }
-    }
-
-    private func rain(t: Double, w: CGFloat, h: CGFloat) -> some View {
-        Canvas { ctx, size in
-            for i in 0..<28 {
-                let seed = Double(i) * 37.13
-                let x = (seed * 13).truncatingRemainder(dividingBy: Double(size.width))
-                let fall = (t * 120 + seed * 7).truncatingRemainder(dividingBy: Double(size.height))
-                var p = Path()
-                p.move(to: CGPoint(x: x, y: fall))
-                p.addLine(to: CGPoint(x: x - 3, y: fall + 10))
-                ctx.stroke(p, with: .color(Color(hex: "C9D6E6").opacity(0.7)), lineWidth: 1.2)
-            }
-        }
-    }
-
-    private func hills(w: CGFloat, h: CGFloat) -> some View {
-        let bright = tier == .radiant || tier == .mellow
-        let colors: (back: Color, front: Color) = {
-            switch (bright, scheme == .dark) {
-            case (true, false):  return (Color(hex: "A8D8B0"), Color(hex: "7CC28E"))
-            case (true, true):   return (Color(hex: "2F4A3E"), Color(hex: "23392F"))
-            case (false, false): return (Color(hex: "AEB9B2"), Color(hex: "93A098"))
-            case (false, true):  return (Color(hex: "262E2C"), Color(hex: "1C2321"))
-            }
-        }()
-        let back = colors.back, front = colors.front
-        return ZStack {
-            HillShape(peak: 0.3, height: 0.26).fill(back)
-            HillShape(peak: 0.72, height: 0.18).fill(front)
-        }
-        .frame(width: w, height: h)
     }
 }
 

@@ -22,20 +22,26 @@ struct DayRecapContent: View {
     @State private var naming: HomeFunCard.NamingTarget?
     @State private var reviewing: ActiveBouts.Bout?
     @State private var logging: DetectedWorkout?
+    /// That day's weather, when weather is on.
+    @State private var weather: Weather.Forecast?
 
     private var day: DayRecapStore.Day? { store.day(date) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            scoreCard
+            HomeDayBanner(model: .past(day, date: date, weather: weather))
             if let items = day?.suggestions, !items.isEmpty { suggestionsCard(items) }
-            sleepCard
+            if day != nil && day?.night == nil { sleepCard }
             fuelCard
             moveCard
             extrasCard
         }
         .task(id: "\(DayLoadKit.key(date))-\(store.version)") {
             await store.load(date, context: context)
+        }
+        .task(id: DayLoadKit.key(date)) {
+            let f = await WeatherService.shared.forecast(for: date)
+            withAnimation(.easeOut(duration: 0.3)) { weather = f }
         }
         .sheet(item: $naming) { target in
             FunActivitySheet(target: target) { RecentSuggestions.invalidate() }
@@ -53,56 +59,6 @@ struct DayRecapContent: View {
 
     // MARK: - Score
 
-    private var dialedScore: Int? {
-        guard let d = day else { return nil }
-        let budget = d.calorieTarget + (d.earned?.earned ?? 0)
-        return DialedScore.compute(waterOz: d.waterOz, waterTargetOz: d.waterTarget, protein: d.protein,
-                                   proteinTarget: d.proteinTarget, calories: d.calories,
-                                   calorieTarget: budget, miles: d.miles)
-    }
-
-    private var scoreCard: some View {
-        let score = dialedScore ?? 0
-        let color = score >= 80 ? Neka.green : score >= 55 ? Neka.amber : Neka.rose
-        return HStack(spacing: 18) {
-            ZStack {
-                Circle().stroke(Neka.track, lineWidth: 10)
-                Circle()
-                    .trim(from: 0, to: Double(score) / 100)
-                    .stroke(color, style: StrokeStyle(lineWidth: 10, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                VStack(spacing: 0) {
-                    Text(dialedScore.map(String.init) ?? "–")
-                        .font(Neka.display(30, weight: .bold))
-                        .foregroundColor(Neka.ink)
-                        .contentTransition(.numericText(value: Double(score)))
-                    Text("DIALED")
-                        .font(.system(size: 9, weight: .bold))
-                        .tracking(0.8)
-                        .foregroundColor(Neka.inkTertiary)
-                }
-            }
-            .frame(width: 96, height: 96)
-            VStack(alignment: .leading, spacing: 8) {
-                Text(dialedScore == nil ? "Pulling that day together…" : Self.verdict(score))
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(Neka.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let p = day?.pillars {
-                    HStack(spacing: 6) {
-                        pillar("Recovery", p.recovery)
-                        pillar("Readiness", p.readiness)
-                        pillar("Strain", p.strain)
-                    }
-                }
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(16)
-        .nekaCard(wash: .mint)
-        .animation(.easeOut(duration: 0.25), value: dialedScore)
-    }
-
     static func verdict(_ score: Int) -> String {
         switch score {
         case 85...: return "Dialed in. That's the blueprint."
@@ -110,21 +66,6 @@ struct DayRecapContent: View {
         case 50..<70: return "Half there. Water, protein and the mile add up."
         default: return "An off day. They happen. The next one counts more."
         }
-    }
-
-    private func pillar(_ name: String, _ value: Int?) -> some View {
-        VStack(spacing: 1) {
-            Text(value.map(String.init) ?? "–")
-                .font(.system(size: 14, weight: .bold))
-                .monospacedDigit()
-                .foregroundColor(Neka.ink)
-            Text(name)
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(Neka.inkTertiary)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Neka.surface.opacity(0.8)))
     }
 
     // MARK: - Suggestions
@@ -182,8 +123,8 @@ struct DayRecapContent: View {
                 Text("Fuel")
                     .font(Neka.title)
                     .foregroundColor(Neka.ink)
-                if day?.loaded.contains(.health) == false {
-                    ProgressView().controlSize(.mini)
+                if day?.loaded.contains(.health) == false && day?.failed.contains(.health) == false {
+                    NekaUpdatingPill(text: "Syncing")
                 }
                 Spacer()
                 NavigationLink {
@@ -207,8 +148,8 @@ struct DayRecapContent: View {
             }
         }
         .padding(16)
+        .nekaLoading(day == nil)
         .nekaCard()
-        .redacted(reason: day == nil ? .placeholder : [])
     }
 
     private func bar(_ title: String, _ value: Double, _ target: Double, unit: String, tint: Color) -> some View {
@@ -237,8 +178,8 @@ struct DayRecapContent: View {
                 Text("Move")
                     .font(Neka.title)
                     .foregroundColor(Neka.ink)
-                if let d = day, !d.loaded.isSuperset(of: [.watch, .earned, .activity]) {
-                    ProgressView().controlSize(.mini)
+                if let d = day, !d.loaded.union(d.failed).isSuperset(of: [.watch, .earned, .activity]) {
+                    NekaUpdatingPill(text: "Syncing")
                 }
             }
             row(icon: "figure.walk", tint: Neka.lavenderText, fill: Neka.lavenderSoft,
@@ -271,8 +212,8 @@ struct DayRecapContent: View {
             }
         }
         .padding(16)
+        .nekaLoading(day == nil)
         .nekaCard()
-        .redacted(reason: day == nil ? .placeholder : [])
     }
 
     // MARK: - Extras

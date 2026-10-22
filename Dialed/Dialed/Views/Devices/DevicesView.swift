@@ -19,8 +19,12 @@ final class DevicesViewModel: ObservableObject {
     @Published var waterApps: [String] = []
     @Published var isSyncing = false
     @Published var message: String?
+    /// False until the first refresh lands — the bottle and scale cards
+    /// redact instead of saying "nothing synced" while still reading Health.
+    @Published private(set) var hasLoaded = false
 
     func refresh(context: ModelContext) async {
+        defer { hasLoaded = true }
         let since = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
         lastWeight = await WeightDataSource.readings(context: context, since: since).last
 
@@ -98,7 +102,9 @@ struct DevicesView: View {
 
                 watchCard
                 bottleCard
+                    .nekaLoading(!viewModel.hasLoaded)
                 scaleCard
+                    .nekaLoading(!viewModel.hasLoaded)
                 healthCard
                 intelligenceCard
                 dataCheckCard

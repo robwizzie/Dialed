@@ -234,7 +234,8 @@ enum DialedAI {
 
     /// Up to three orders at `restaurant` that fit the calories and
     /// protein this meal has to work with.
-    static func restaurantPicks(_ restaurant: String, calories: Int, protein: Int) async -> [AIRestaurantPick]? {
+    /// `kind` says what sort of place it is ("bar", "café") when known.
+    static func restaurantPicks(_ restaurant: String, calories: Int, protein: Int, kind: String? = nil) async -> [AIRestaurantPick]? {
         let place = restaurant.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !place.isEmpty else { return nil }
         #if canImport(FoundationModels)
@@ -245,10 +246,13 @@ enum DialedAI {
             with realistic calorie and macro estimates — be honest, not optimistic. \
             Favor lean protein, vegetables and sauces on the side. Never suggest skipping meals.
             """)
+            let barNote = kind == "bar"
+                ? " It's a bar: suggest bar food, and in the tips name a lower-calorie drink with its calories."
+                : ""
             let prompt = """
-            Restaurant: \(place). This meal should be about \(calories) calories or less \
+            Restaurant: \(place)\(kind.map { " (a \($0))" } ?? ""). This meal should be about \(calories) calories or less \
             with about \(protein) g of protein. Give three different orders: the best fit for \
-            those numbers, a lighter one, and a more filling one.
+            those numbers, a lighter one, and a more filling one.\(barNote)
             """
             do {
                 let response = try await session.respond(to: prompt, generating: GeneratedRestaurantPicks.self)

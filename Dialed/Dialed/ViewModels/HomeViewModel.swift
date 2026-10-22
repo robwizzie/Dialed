@@ -118,6 +118,8 @@ final class HomeViewModel: ObservableObject {
     @Published var lastWatchSync: Date?
     @Published var lastWaterReading: Date?
     @Published var isRefreshing = false
+    /// False until the first refresh lands; Home shows skeletons until then.
+    @Published private(set) var hasLoaded = false
 
     /// Today in one value — fed to Apple Intelligence and the fallbacks.
     @Published var snapshot = HealthSnapshot()
@@ -145,18 +147,28 @@ final class HomeViewModel: ObservableObject {
     private static let refreshInterval: TimeInterval = 60
     private var lastRefreshAt: Date?
 
+    /// The watch hasn't been pulled recently (an automatic refresh would sync).
+    var watchSyncDue: Bool {
+        guard watchConnected else { return false }
+        let last = UserDefaults.standard.object(forKey: Self.lastWatchSyncKey) as? Date
+        return last.map { Date().timeIntervalSince($0) > Self.watchSyncInterval } ?? true
+    }
+
     // MARK: - Refresh
 
     /// `force` = the user pulled to refresh or just logged something.
     /// Returns false when skipped (already running, or refreshed < 60s ago).
+    /// `syncWatch` false = read what's already on the phone, skipping the
+    /// (slow, networked) watch pull; Home's first paint and quick logs use it.
     @discardableResult
-    func refresh(context: ModelContext, force: Bool = false) async -> Bool {
+    func refresh(context: ModelContext, force: Bool = false, syncWatch: Bool = true) async -> Bool {
         guard !isRefreshing else { return false }
         if !force, let last = lastRefreshAt, Date().timeIntervalSince(last) < Self.refreshInterval { return false }
         isRefreshing = true
         defer {
             isRefreshing = false
             lastRefreshAt = Date()
+            hasLoaded = true
         }
 
         let now = Date()
@@ -170,7 +182,7 @@ final class HomeViewModel: ObservableObject {
         let watch = watchConnected ? GoogleHealthSyncService(modelContext: context) : nil
         let lastSync = UserDefaults.standard.object(forKey: Self.lastWatchSyncKey) as? Date
         let syncDue = force || lastSync.map { now.timeIntervalSince($0) > Self.watchSyncInterval } ?? true
-        if let watch, syncDue {
+        if let watch, syncDue, syncWatch {
             let firstSync = !UserDefaults.standard.bool(forKey: Self.backfillKey)
             await watch.sync(days: firstSync ? 14 : 2)
             DataDiagnostics.shared.watchError = watch.lastError

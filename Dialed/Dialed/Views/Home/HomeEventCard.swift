@@ -288,10 +288,12 @@ private struct Triangle: Shape {
 /// Reduce Motion).
 private struct Celebration: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(SkyMotion.self) private var motion: SkyMotion?
     private let colors: [Color] = [Neka.rose, Neka.amber, Neka.lavender, Neka.sky, Neka.green]
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(paused: reduceMotion)) { context in
+        // Capped frame rate, and still while Home scrolls.
+        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion || (motion?.isScrolling ?? false))) { context in
             Canvas { ctx, size in
                 let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                 for i in 0..<28 {

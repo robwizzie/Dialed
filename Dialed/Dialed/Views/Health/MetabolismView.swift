@@ -25,7 +25,7 @@ struct MetabolismView: View {
                     howCard
                     tipsCard
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(.top, 80)
+                    NekaLoadingPage(cards: [300, 200, 160])
                 }
             }
             .padding(16)

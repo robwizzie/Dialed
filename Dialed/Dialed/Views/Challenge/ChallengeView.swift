@@ -17,8 +17,12 @@ final class ChallengeViewModel: ObservableObject {
     @Published var readings: [WeightReading] = []
     @Published var progress: WeightChallengeEngine.Progress?
     @Published var race: RacePace.Report?
+    /// False until the first refresh finishes — the tab shows skeletons, not
+    /// the "set up a challenge" empty state, until then.
+    @Published private(set) var hasLoaded = false
 
     func refresh(context: ModelContext) async {
+        defer { hasLoaded = true }
         let challenge = WeightChallenge.load()
         self.challenge = challenge
         let calendar = Calendar.current
@@ -68,10 +72,13 @@ struct ChallengeView: View {
                         chartCard(c, p)
                         paceCard(c, p)
                         weighInsCard(p)
+                    } else if !viewModel.hasLoaded {
+                        NekaLoadingPage(cards: [200, 160, 130, 220])
                     } else {
                         emptyState
                     }
                 }
+                .animation(.easeOut(duration: 0.3), value: viewModel.hasLoaded)
                 .padding(.horizontal, 16)
                 .padding(.top, 8)
                 .padding(.bottom, 24)

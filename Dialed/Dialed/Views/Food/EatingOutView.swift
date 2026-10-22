@@ -2,12 +2,15 @@
 //  EatingOutView.swift
 //  Dialed
 //
-//  "Where are you eating?" Pick or type a restaurant and get up to three
+//  "Where are you eating?" Find it from where you are (Apple Maps' places
+//  nearby), or pick or type a restaurant or bar, and get up to three
 //  orders that fit what's left of today — the best fit for your protein,
 //  a lighter one and a more filling one — each with the macros, what
 //  your day looks like after it, and how to order it. Popular chains use
 //  Dialed's built-in menu guide; anywhere else, Apple Intelligence
-//  suggests an order. One tap logs it.
+//  suggests an order (bars fall back to a built-in bar guide). At a bar,
+//  a drinks card shows what each drink costs and how many still fit.
+//  One tap logs it.
 //
 
 import SwiftUI
@@ -25,6 +28,11 @@ struct EatingOutView: View {
     @State private var logged: Set<String> = []
     @State private var eaten = (calories: 0.0, protein: 0.0)
     @FocusState private var searching: Bool
+    @StateObject private var nearby = NearbyPlaces()
+    /// The place picked from nearby, when it came from there.
+    @State private var place: NearbyPlaces.Place?
+    /// The menu guide the picks came from (nil = Apple Intelligence).
+    @State private var guide: Restaurant?
 
     private var settings: UserSettings { UserSettings.load() }
     /// Calories exercise earned back today.
@@ -47,6 +55,7 @@ struct EatingOutView: View {
         VStack(alignment: .leading, spacing: 18) {
             hero
             budgetCard
+            if restaurant == nil { nearbySection }
             searchField
             if let restaurant {
                 results(for: restaurant)
@@ -55,6 +64,10 @@ struct EatingOutView: View {
             }
         }
         .onAppear(perform: loadToday)
+        .task {
+            // Already allowed? Look around right away.
+            if nearby.canLookQuietly && nearby.status == .idle { await nearby.find() }
+        }
         .task { earnedCalories = await EarnedCalories.day(context: modelContext).earned }
         .onChange(of: lastMeal) { _, _ in if let restaurant { Task { await plan(restaurant) } } }
     }
@@ -68,7 +81,7 @@ struct EatingOutView: View {
             Text("Eating out?")
                 .font(Neka.display(28, weight: .bold))
                 .foregroundColor(Neka.ink)
-            Text("Tell me where — I'll pick what fits the rest of your day.")
+            Text("Tell me where, or let me look around. I'll pick what fits the rest of your day.")
                 .font(.system(size: 14))
                 .foregroundColor(Neka.inkSecondary)
         }
@@ -131,6 +144,152 @@ struct EatingOutView: View {
         }
     }
 
+    // MARK: - Nearby
+
+    @ViewBuilder
+    private var nearbySection: some View {
+        switch nearby.status {
+        case .idle:
+            Button { Task { await nearby.find() } } label: {
+                HStack(spacing: 12) {
+                    NekaIconBadge(systemName: "location.fill", tint: Neka.sky, fill: Neka.skySoft, size: 40)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Find where I am")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(Neka.ink)
+                        Text("Looks up restaurants and bars around you, once")
+                            .font(.system(size: 12))
+                            .foregroundColor(Neka.inkSecondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Neka.inkTertiary)
+                }
+                .padding(14)
+                .nekaCard()
+            }
+            .buttonStyle(.dialedScale)
+        case .locating:
+            VStack(alignment: .leading, spacing: 12) {
+                NekaSkeleton(width: 90, height: 10)
+                HStack(spacing: 12) {
+                    Circle().fill(Neka.skeleton).frame(width: 48, height: 48)
+                    VStack(alignment: .leading, spacing: 6) {
+                        NekaSkeleton(width: 160, height: 14)
+                        NekaSkeleton(width: 100, height: 10)
+                    }
+                }
+                Label("Looking around…", systemImage: "location.magnifyingglass")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .nekaShimmer()
+            .nekaCard()
+            .transition(.opacity)
+        case .ready:
+            if let here = nearby.places.first {
+                nearbyCard(here)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
+            }
+        case .denied, .none, .failed:
+            HStack(spacing: 10) {
+                Image(systemName: nearby.status == .denied ? "location.slash" : "mappin.slash")
+                    .foregroundColor(Neka.inkTertiary)
+                Text(nearby.status == .denied
+                     ? "Location is off for Dialed. Turn it on in Settings to find where you are, or type the name below."
+                     : nearby.status == .none
+                        ? "Nothing to eat or drink close by. Type the name below."
+                        : "Couldn't get your location just now.")
+                    .font(.system(size: 12.5))
+                    .foregroundColor(Neka.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                if nearby.status == .denied {
+                    Button("Settings") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .font(.system(size: 12, weight: .semibold))
+                } else {
+                    Button("Retry") { Task { await nearby.find() } }
+                        .font(.system(size: 12, weight: .semibold))
+                }
+            }
+            .padding(14)
+            .nekaCard()
+        }
+    }
+
+    /// "Are you at Joe's Tavern?" with one tap to plan, and the other
+    /// places around as chips.
+    private func nearbyCard(_ here: NearbyPlaces.Place) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("ARE YOU AT")
+                .font(.system(size: 10, weight: .heavy))
+                .tracking(0.8)
+                .foregroundColor(Neka.inkTertiary)
+            HStack(spacing: 12) {
+                Text(here.emoji)
+                    .font(.system(size: 26))
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(Neka.surface))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(here.name)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .lineLimit(2)
+                    Text("\(here.kindText) · \(here.distanceText) away")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            Button { choose(here.name, at: here) } label: {
+                Label("Yes, plan my order", systemImage: "checkmark")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.nekaPrimary)
+            if nearby.places.count > 1 {
+                Text("Somewhere else nearby")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.inkSecondary)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(nearby.places.dropFirst()) { p in
+                            Button { choose(p.name, at: p) } label: {
+                                HStack(spacing: 6) {
+                                    Text(p.emoji)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(p.name)
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(Neka.ink)
+                                            .lineLimit(1)
+                                        Text(p.distanceText)
+                                            .font(.system(size: 10.5, weight: .medium))
+                                            .foregroundColor(Neka.inkTertiary)
+                                    }
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Capsule().fill(Neka.surface))
+                                .overlay(Capsule().stroke(Neka.hairline, lineWidth: 0.5))
+                            }
+                            .buttonStyle(.dialedScale)
+                        }
+                    }
+                }
+                .scrollClipDisabled()
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous)
+                .fill(LinearGradient(colors: [Neka.skySoft, Neka.surface], startPoint: .topLeading, endPoint: .bottomTrailing))
+        )
+    }
+
     // MARK: - Search
 
     private var searchField: some View {
@@ -163,8 +322,9 @@ struct EatingOutView: View {
 
     private var filtered: [Restaurant] {
         let q = RestaurantMenus.normalize(query)
-        guard !q.isEmpty else { return RestaurantMenus.all }
-        return RestaurantMenus.all.filter { r in
+        let guides = RestaurantMenus.all + [RestaurantMenus.bar]
+        guard !q.isEmpty else { return guides }
+        return guides.filter { r in
             ([r.name] + r.aliases).map(RestaurantMenus.normalize).contains { $0.contains(q) }
         }
     }
@@ -206,21 +366,22 @@ struct EatingOutView: View {
 
     @ViewBuilder
     private func results(for name: String) -> some View {
-        let guide = RestaurantMenus.find(name)
         VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 12) {
-                Text(guide?.emoji ?? "🍴")
+                Text(guide?.emoji ?? place?.emoji ?? "🍴")
                     .font(.system(size: 30))
                     .frame(width: 54, height: 54)
                     .background(Circle().fill(Neka.surface))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(guide?.name ?? name.capitalized)
+                    Text(place?.name ?? guide?.name ?? name.capitalized)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(Neka.ink)
-                    Label(guide != nil ? "From Dialed's menu guide" : "Suggested by Apple Intelligence",
+                        .lineLimit(2)
+                    Label((place.map { "\($0.distanceText) away · " } ?? "") + sourceText,
                           systemImage: guide != nil ? "book.closed.fill" : "sparkles")
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundColor(Neka.inkSecondary)
+                        .lineLimit(1)
                 }
                 Spacer()
                 Button("Change") {
@@ -228,6 +389,8 @@ struct EatingOutView: View {
                         restaurant = nil
                         options = []
                         query = ""
+                        place = nil
+                        guide = nil
                     }
                 }
                 .font(.system(size: 13, weight: .semibold))
@@ -256,17 +419,73 @@ struct EatingOutView: View {
                     OrderCard(option: option, featured: index == 0,
                               eaten: eaten, calorieTarget: calorieTarget, proteinTarget: proteinTarget,
                               isLogged: logged.contains(option.id)) {
-                        log(option, at: guide?.name ?? name.capitalized)
+                        log(option, at: place?.name ?? guide?.name ?? name.capitalized)
                     }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                Text(guide != nil
+                if let drinks = drinkMenu { drinksCard(drinks, after: options.first) }
+                Text(guide == RestaurantMenus.bar
+                     ? "Typical bar portions and pours — real ones vary a lot, so round up."
+                     : guide != nil
                      ? "Nutrition is approximate, from each chain's published numbers — recipes and portions vary."
                      : "Estimates from Apple Intelligence — check the menu, and adjust after logging if you need to.")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkTertiary)
             }
         }
+    }
+
+    // MARK: - Drinks
+
+    /// At a bar: its drinks with calories, lightest first.
+    private var drinkMenu: [MenuItem]? {
+        guard place?.kind == .bar || guide == RestaurantMenus.bar else { return nil }
+        let menu = guide?.items ?? RestaurantMenus.bar.items
+        let drinks = menu.filter { $0.role == .drink && $0.calories > 10 }.sorted { $0.calories < $1.calories }
+        return drinks.isEmpty ? nil : drinks
+    }
+
+    /// What each drink costs, and how many fit in what's left after the
+    /// top pick.
+    private func drinksCard(_ drinks: [MenuItem], after pick: OrderOption?) -> some View {
+        let left = calorieTarget - eaten.calories - (pick?.calories ?? 0)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Drinks", systemImage: "wineglass.fill")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Text(left > 0 ? "\(Int(left)) cal left\(pick == nil ? "" : " after the top pick")" : "No room after the top pick")
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundColor(left > 0 ? Neka.inkSecondary : Neka.rose)
+            }
+            ForEach(drinks, id: \.name) { drink in
+                let fits = left > 0 ? Int(left / drink.calories) : 0
+                HStack(spacing: 10) {
+                    Text(drink.name)
+                        .font(.system(size: 13.5, weight: .medium))
+                        .foregroundColor(Neka.ink)
+                    Spacer(minLength: 6)
+                    Text("\(Int(drink.calories)) cal")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundColor(Neka.inkSecondary)
+                        .monospacedDigit()
+                    Text(fits == 0 ? "over" : fits >= 5 ? "5+ fit" : "\(fits) fit")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(fits >= 2 ? Neka.greenText : fits == 1 ? Neka.orangeText : Neka.rose)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Capsule().fill(fits >= 2 ? Neka.greenSoft : fits == 1 ? Neka.orangeSoft : Neka.roseSoft))
+                        .frame(width: 58, alignment: .trailing)
+                }
+            }
+            Text("Spirits with soda water or diet mixers are the lightest. Tonic, juice and regular soda add 100–150 calories a drink.")
+                .font(.system(size: 11))
+                .foregroundColor(Neka.inkTertiary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .nekaCard()
     }
 
     private func emptyState(guide: Restaurant?) -> some View {
@@ -293,28 +512,52 @@ struct EatingOutView: View {
         eaten = (foods.reduce(0) { $0 + $1.calories }, foods.reduce(0) { $0 + $1.protein })
     }
 
-    private func choose(_ name: String) {
+    /// `at`: the nearby place it came from, if any (its kind steers the picks).
+    private func choose(_ name: String, at nearbyPlace: NearbyPlaces.Place? = nil) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         searching = false
-        query = RestaurantMenus.find(trimmed)?.name ?? trimmed
+        place = nearbyPlace
+        query = RestaurantMenus.guide(for: trimmed)?.name ?? trimmed
         withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) { restaurant = trimmed }
         Task { await plan(trimmed) }
     }
 
     private func plan(_ name: String) async {
         let b = budget
-        if let guide = RestaurantMenus.find(name) {
-            let picks = MealPlanner.picks(menu: guide.items, budget: b).map(OrderOption.init)
-            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) { options = picks }
+        let isBar = place?.kind == .bar
+        // A chain we know, or the bar guide (picked by name, or a bar nearby
+        // when Apple Intelligence isn't there to read its menu).
+        if let known = RestaurantMenus.guide(for: name) ?? (isBar && !DialedAI.isAvailable ? RestaurantMenus.bar : nil) {
+            let picks = MealPlanner.picks(menu: known.items, budget: b).map(OrderOption.init)
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                guide = known
+                options = picks
+            }
             return
         }
+        guide = nil
         loading = true
-        let ai = await DialedAI.restaurantPicks(name, calories: Int(b.calories), protein: Int(b.protein)) ?? []
+        let kind: String? = switch place?.kind {
+        case .bar?:  "bar"
+        case .cafe?: "café"
+        default:     nil
+        }
+        let ai = await DialedAI.restaurantPicks(name, calories: Int(b.calories), protein: Int(b.protein), kind: kind) ?? []
         withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
-            options = ai.map(OrderOption.init)
+            if ai.isEmpty && isBar {
+                guide = RestaurantMenus.bar
+                options = MealPlanner.picks(menu: RestaurantMenus.bar.items, budget: b).map(OrderOption.init)
+            } else {
+                options = ai.map(OrderOption.init)
+            }
             loading = false
         }
+    }
+
+    private var sourceText: String {
+        guard let guide else { return "Suggested by Apple Intelligence" }
+        return guide == RestaurantMenus.bar && place != nil ? "Typical bar menu" : "From Dialed's menu guide"
     }
 
     private func log(_ option: OrderOption, at place: String) {

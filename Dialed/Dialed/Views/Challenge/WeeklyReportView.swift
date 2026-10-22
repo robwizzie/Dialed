@@ -32,10 +32,13 @@ struct WeeklyReportView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     weekPicker
                     if let report {
+                        // Stepping weeks: the last report stands in, redacted, until the new one lands.
                         WeeklyReportCard(report: report)
+                            .nekaLoading(loading)
                         actions(report)
+                            .disabled(loading)
                     } else if loading {
-                        ProgressView().frame(maxWidth: .infinity).padding(.top, 60)
+                        NekaLoadingPage(cards: [420, 90])
                     } else {
                         Text("No challenge yet. Set one up and your weekly report lands here every Sunday.")
                             .font(.system(size: 14))

@@ -33,6 +33,10 @@ struct HealthSleepPage: View {
                 timelineCard(night)
                 HealthInsightsCard(title: "Sleep Insights",
                                    insights: HealthInsights.sleepInsights(last: night, history: model.nights))
+            } else if model.isShowingStaleDay {
+                // Still loading this night: placeholders, not "no sleep".
+                NekaSkeletonCard(height: 260, lines: 3)
+                NekaSkeletonCard(height: 180)
             } else {
                 emptyCard
                 if !model.nights.isEmpty { totalCard(nil) }

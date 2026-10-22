@@ -123,6 +123,11 @@ struct AvatarSheet: View {
         showPicker = true
     }
 
+    private func drawFromPhoto(_ key: String) {
+        if key == AvatarStudio.futureKey { saveGoal() }
+        Task { await studio.drawFromPhotoLook(key) }
+    }
+
     private func redo(_ key: String) {
         if key == AvatarStudio.futureKey { saveGoal() }
         Task { await studio.regenerate(key: key) }
@@ -141,7 +146,23 @@ struct AvatarSheet: View {
             Label("Draw it from a different photo…", systemImage: "photo.on.rectangle")
         }
         Button { photoSlot = AvatarLookSlot.allCases.first { $0.key == key } } label: {
-            Label(studio.hasPhotoLook(key) ? "Edit my real photo…" : "Use a real photo instead…", systemImage: "camera")
+            Label(studio.hasPhotoLook(key) ? "Crop or change my photo…" : "Use a real photo instead…", systemImage: "camera")
+        }
+        if studio.hasPhotoLook(key) {
+            if studio.canGenerate {
+                Button { drawFromPhoto(key) } label: {
+                    Label(studio.images[key] == nil ? "Draw an AI look from my photo" : "Redraw AI look from my photo",
+                          systemImage: "wand.and.sparkles")
+                }
+                .disabled(studio.inProgress.contains(key))
+            }
+            if studio.images[key] != nil && studio.usePhotoLooks {
+                let showsDrawing = studio.source(for: key) == .generated
+                Button { withAnimation { studio.showDrawing(!showsDrawing, for: key) } } label: {
+                    Label(showsDrawing ? "Show my photo" : "Show the AI look",
+                          systemImage: showsDrawing ? "camera.fill" : "sparkles")
+                }
+            }
         }
         if studio.hasCustomReference(key) {
             Button { Task { await studio.clearReference(for: key) } } label: {
@@ -169,6 +190,21 @@ struct AvatarSheet: View {
                 .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
                 .accessibilityLabel("Uses its own photo")
         }
+    }
+
+    /// "Drawing…" over a look that's being redrawn.
+    private func drawingChip(_ tint: Color) -> some View {
+        HStack(spacing: 6) {
+            ProgressView().controlSize(.mini).tint(tint)
+            Text("Drawing…")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(Neka.ink)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(Neka.surface.opacity(0.92)))
+        .frame(maxHeight: .infinity, alignment: .bottom)
+        .padding(.bottom, 10)
     }
 
     private var menuDot: some View {
@@ -353,8 +389,21 @@ struct AvatarSheet: View {
                     moodTile(m)
                 }
             }
+            if studio.canGenerate && !moodsWithPhotos.isEmpty {
+                Button {
+                    Task { await studio.drawMoodsFromPhotoLooks() }
+                } label: {
+                    Label(moodsWithPhotos.count == 1 ? "Draw an AI look from my photo" : "Draw AI looks from my \(moodsWithPhotos.count) photos",
+                          systemImage: "wand.and.sparkles")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AvatarChipButtonStyle())
+                .disabled(moodsWithPhotos.contains { studio.inProgress.contains($0.rawValue) })
+            }
             HStack(alignment: .firstTextBaseline) {
-                Text("Tap a look to redo it or draw it from a different photo.")
+                Text(moodsWithPhotos.isEmpty
+                     ? "Tap a look to redo it or draw it from a different photo."
+                     : "Tap a look to crop your photo, draw an AI look from it, or pick which one shows.")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkTertiary)
                 Spacer(minLength: 8)
@@ -369,6 +418,10 @@ struct AvatarSheet: View {
         .nekaCard()
     }
 
+    private var moodsWithPhotos: [AvatarMood] {
+        AvatarMood.allCases.filter { studio.hasPhotoLook($0.rawValue) }
+    }
+
     private func moodTile(_ m: AvatarMood) -> some View {
         let tint = Color(hex: m.accentHex)
         return VStack(spacing: 8) {
@@ -380,6 +433,10 @@ struct AvatarSheet: View {
                         .fill(tint.opacity(0.12))
                     if let image = studio.image(for: m) {
                         FocusedImage(image: image)
+                            .transition(.opacity)
+                        if studio.inProgress.contains(m.rawValue) {
+                            drawingChip(tint)
+                        }
                     } else if studio.inProgress.contains(m.rawValue) {
                         ProgressView().tint(tint)
                     } else if studio.canGenerate && studio.referencePhoto(for: m.rawValue) != nil {
@@ -391,10 +448,12 @@ struct AvatarSheet: View {
                     }
                 }
                 .frame(height: 140)
+                .animation(.easeOut(duration: 0.3), value: studio.source(for: m.rawValue))
                 .overlay(alignment: .topTrailing) { menuDot.padding(8) }
                 .overlay(alignment: .topLeading) {
-                    if studio.source(for: m.rawValue) == .photo {
-                        AvatarSourceBadge(text: "Photo", isPhoto: true).padding(8)
+                    // Which one shows, once a look has a photo.
+                    if studio.hasPhotoLook(m.rawValue), let badge = studio.source(for: m.rawValue).badge {
+                        AvatarSourceBadge(text: badge, isPhoto: studio.source(for: m.rawValue) == .photo).padding(8)
                     }
                 }
                 .overlay(alignment: .bottomLeading) { referenceBadge(m.rawValue).padding(8) }

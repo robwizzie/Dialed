@@ -652,15 +652,32 @@ private struct FoodReviewStep: View {
     @State private var saveFavorite = false
     /// What's in it, when the estimate was itemized.
     @State private var parts: [MealPart]
+    /// How many of what was estimated / scanned you had; the numbers above
+    /// are always `base` × this.
+    @State private var servings: Double
+    @State private var base: FoodDraft
+    @State private var baseParts: [MealPart]
 
     init(draft: FoodDraft, source: AddFoodSheet.Source, onLog: @escaping (FoodDraft) -> Void) {
         _draft = State(initialValue: draft)
+        // Opened on 2 servings (a recent you had twice)? Keep it at 2, scaling from one.
+        let s = ServingsPicker.clamp(draft.servings)
+        var one = draft
+        one.calories /= s
+        one.protein /= s
+        one.carbs = draft.carbs.map { $0 / s }
+        one.fat = draft.fat.map { $0 / s }
+        _base = State(initialValue: one)
+        _servings = State(initialValue: s)
         self.source = source
         self.onLog = onLog
+        let start: [MealPart]
         switch source {
-        case .photo(_, _, let parts), .described(_, let parts): _parts = State(initialValue: parts)
-        default: _parts = State(initialValue: [])
+        case .photo(_, _, let parts), .described(_, let parts): start = parts
+        default: start = []
         }
+        _parts = State(initialValue: start)
+        _baseParts = State(initialValue: start)
     }
 
     var body: some View {
@@ -677,14 +694,21 @@ private struct FoodReviewStep: View {
             .padding(16)
             .nekaCard()
 
+            VStack(alignment: .leading, spacing: 10) {
+                Text("How much did you have?")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                ServingsPicker(servings: servings) { setServings($0) }
+            }
+            .padding(16)
+            .nekaCard()
+
             if !parts.isEmpty { breakdown }
 
             VStack(spacing: 12) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    TextField("0", value: $draft.calories, format: .number.precision(.fractionLength(0)))
-                        .keyboardType(.numberPad)
-                        .font(.system(size: 44, weight: .bold, design: .rounded))
-                        .foregroundColor(Neka.ink)
+                    LiveNumberField(value: edited(\.calories), font: .system(size: 44, weight: .bold, design: .rounded),
+                                    alignment: .leading)
                         .fixedSize()
                     Text("calories")
                         .font(.system(size: 16, weight: .medium))
@@ -694,7 +718,7 @@ private struct FoodReviewStep: View {
                 HStack(spacing: 8) {
                     ForEach([-100.0, -25, 25, 100], id: \.self) { step in
                         Button(step > 0 ? "+\(Int(step))" : "\(Int(step))") {
-                            draft.calories = max(0, draft.calories + step)
+                            edited(\.calories).wrappedValue = max(0, draft.calories + step)
                         }
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Neka.ink)
@@ -705,9 +729,9 @@ private struct FoodReviewStep: View {
                     }
                 }
                 HStack(spacing: 10) {
-                    macro("Protein", value: $draft.protein, tint: Neka.green, fill: Neka.greenSoft)
-                    macro("Carbs", value: optional($draft.carbs), tint: Neka.sky, fill: Neka.skySoft)
-                    macro("Fat", value: optional($draft.fat), tint: Neka.lavender, fill: Neka.lavenderSoft)
+                    macro("Protein", value: edited(\.protein), tint: Neka.green, fill: Neka.greenSoft)
+                    macro("Carbs", value: optional(editedOptional(\.carbs)), tint: Neka.sky, fill: Neka.skySoft)
+                    macro("Fat", value: optional(editedOptional(\.fat)), tint: Neka.lavender, fill: Neka.lavenderSoft)
                 }
             }
             .padding(16)
@@ -725,12 +749,16 @@ private struct FoodReviewStep: View {
 
             Button {
                 if saveFavorite && !draft.name.isEmpty {
-                    SavedMealsManager.add(SavedMeal(name: draft.name, calories: draft.calories, proteinGrams: draft.protein,
-                                                    carbsGrams: draft.carbs, fatGrams: draft.fat))
+                    // A favorite is one serving.
+                    SavedMealsManager.add(SavedMeal(name: draft.name, calories: base.calories, proteinGrams: base.protein,
+                                                    carbsGrams: base.carbs, fatGrams: base.fat))
                 }
-                onLog(draft)
+                var logged = draft
+                logged.servings = servings
+                onLog(logged)
             } label: {
-                Label("Log \(Int(draft.calories)) calories", systemImage: "checkmark")
+                Label("Log \(Int(draft.calories.rounded())) calories", systemImage: "checkmark")
+                    .contentTransition(.numericText(value: draft.calories))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.nekaPrimary)
@@ -752,6 +780,7 @@ private struct FoodReviewStep: View {
                 Text("\(Int(parts.reduce(0) { $0 + $1.calories })) calories")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Neka.inkSecondary)
+                    .contentTransition(.numericText(value: parts.reduce(0) { $0 + $1.calories }))
             }
             ForEach(parts) { part in
                 HStack(spacing: 10) {
@@ -768,6 +797,7 @@ private struct FoodReviewStep: View {
                         .font(.system(size: 15, weight: .semibold, design: .rounded))
                         .foregroundColor(Neka.ink)
                         .monospacedDigit()
+                        .contentTransition(.numericText(value: part.calories))
                     if part.calories > 0 {
                         portionButton("minus") { adjust(part, by: -1) }
                         portionButton("plus") { adjust(part, by: 1) }
@@ -808,20 +838,79 @@ private struct FoodReviewStep: View {
         let step = current > 2 || (current == 2 && direction > 0) ? 1.0 : 0.5
         let next = max(step == 1 ? 1 : 0.5, current + direction * step)
         guard next != current, current > 0 else { return }
-        withAnimation(.snappy) { parts[i] = part.scaled(next / current) }
-        recalc()
+        let factor = next / current
+        withAnimation(.snappy(duration: 0.3)) {
+            parts[i] = part.scaled(factor)
+            if let b = baseParts.firstIndex(where: { $0.id == part.id }) { baseParts[b] = baseParts[b].scaled(factor) }
+            recalc()
+        }
+        #if os(iOS)
+        UISelectionFeedbackGenerator().selectionChanged()
+        #endif
     }
 
     private func remove(_ part: MealPart) {
-        withAnimation(.snappy) { parts.removeAll { $0.id == part.id } }
-        recalc()
+        withAnimation(.snappy(duration: 0.3)) {
+            parts.removeAll { $0.id == part.id }
+            baseParts.removeAll { $0.id == part.id }
+            recalc()
+        }
     }
 
+    /// Totals from the items (when itemized), for one serving and for all.
     private func recalc() {
-        draft.calories = parts.reduce(0) { $0 + $1.calories }.rounded()
-        draft.protein = parts.reduce(0) { $0 + $1.protein }.rounded()
-        draft.carbs = parts.reduce(0) { $0 + $1.carbs }.rounded()
-        draft.fat = parts.reduce(0) { $0 + $1.fat }.rounded()
+        func sum(_ list: [MealPart], _ key: KeyPath<MealPart, Double>) -> Double { list.reduce(0) { $0 + $1[keyPath: key] } }
+        base.calories = sum(baseParts, \.calories)
+        base.protein = sum(baseParts, \.protein)
+        base.carbs = sum(baseParts, \.carbs)
+        base.fat = sum(baseParts, \.fat)
+        applyServings()
+    }
+
+    // MARK: Servings
+
+    private func setServings(_ value: Double) {
+        let s = ServingsPicker.clamp(value)
+        guard s != servings else { return }
+        withAnimation(.snappy(duration: 0.3)) {
+            servings = s
+            parts = baseParts.map { $0.scaled(s) }
+            applyServings()
+        }
+        #if os(iOS)
+        UISelectionFeedbackGenerator().selectionChanged()
+        #endif
+    }
+
+    /// The shown numbers are always one serving × servings.
+    private func applyServings() {
+        draft.calories = (base.calories * servings).rounded()
+        draft.protein = (base.protein * servings).rounded()
+        draft.carbs = base.carbs.map { ($0 * servings).rounded() }
+        draft.fat = base.fat.map { ($0 * servings).rounded() }
+    }
+
+    /// A total you can type or nudge; it becomes the new per-serving value.
+    private func edited(_ key: WritableKeyPath<FoodDraft, Double>) -> Binding<Double> {
+        Binding(
+            get: { draft[keyPath: key] },
+            set: { new in
+                withAnimation(.snappy(duration: 0.25)) {
+                    draft[keyPath: key] = max(0, new)
+                    base[keyPath: key] = max(0, new) / servings
+                }
+            }
+        )
+    }
+
+    private func editedOptional(_ key: WritableKeyPath<FoodDraft, Double?>) -> Binding<Double?> {
+        Binding(
+            get: { draft[keyPath: key] },
+            set: { new in
+                draft[keyPath: key] = new.map { max(0, $0) }
+                base[keyPath: key] = new.map { max(0, $0) / servings }
+            }
+        )
     }
 
     @ViewBuilder
@@ -857,10 +946,8 @@ private struct FoodReviewStep: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(tint)
             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                TextField("0", value: value, format: .number.precision(.fractionLength(0)))
-                    .keyboardType(.numberPad)
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
-                    .foregroundColor(Neka.ink)
+                LiveNumberField(value: value, font: .system(size: 22, weight: .semibold, design: .rounded), alignment: .leading)
+                    .fixedSize()
                 Text("g")
                     .font(.system(size: 12))
                     .foregroundColor(Neka.inkSecondary)

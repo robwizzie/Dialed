@@ -36,12 +36,23 @@ final class AlarmEngineTests: XCTestCase {
     }
 
     func testDueUntilTheMissionIsDone() {
-        XCTAssertEqual(WakeAlarmPlan.due(schedule: schedule, completed: [], now: at(21, 6, 40), calendar: calendar).map(key),
+        let armed = [at(21, 6, 30)]
+        XCTAssertEqual(WakeAlarmPlan.due(armed: armed, completed: [], now: at(21, 6, 40), calendar: calendar).map(key),
                        "2026-10-21T06:30")
-        XCTAssertNil(WakeAlarmPlan.due(schedule: schedule, completed: ["2026-10-21T06:30"], now: at(21, 6, 40), calendar: calendar))
-        XCTAssertNil(WakeAlarmPlan.due(schedule: schedule, completed: [], now: at(21, 11), calendar: calendar))
-        XCTAssertNil(WakeAlarmPlan.due(schedule: schedule, completed: [], snoozedUntil: at(21, 6, 45),
+        XCTAssertNil(WakeAlarmPlan.due(armed: armed, completed: ["2026-10-21T06:30"], now: at(21, 6, 40), calendar: calendar))
+        XCTAssertNil(WakeAlarmPlan.due(armed: armed, completed: [], now: at(21, 8), calendar: calendar))
+        XCTAssertNil(WakeAlarmPlan.due(armed: armed, completed: [], snoozedUntil: at(21, 6, 45),
                                        now: at(21, 6, 40), calendar: calendar))
+        // A long run of snoozes keeps it due an hour past the last one.
+        XCTAssertEqual(WakeAlarmPlan.due(armed: armed, completed: [], snoozedUntil: at(21, 7, 50),
+                                         now: at(21, 8, 10), calendar: calendar).map(key), "2026-10-21T06:30")
+    }
+
+    /// Turning alarms on (or moving today's wake-up earlier) never asks for a
+    /// mission for a time that passed without an alarm armed for it.
+    func testNoMissionForATimeThatNeverRang() {
+        XCTAssertNil(WakeAlarmPlan.due(armed: [], completed: [], now: at(21, 6, 40), calendar: calendar))
+        XCTAssertNil(WakeAlarmPlan.due(armed: [at(22, 6, 30)], completed: [], now: at(21, 6, 40), calendar: calendar))
     }
 
     func testReRingRules() {
@@ -74,8 +85,52 @@ final class AlarmEngineTests: XCTestCase {
         XCTAssertFalse(PhotoMatch.isMatch(distance: .nan, difficulty: .easy))
         var s = WakeAlarmSettings()
         s.mission = .photo
-        XCTAssertEqual(s.effectiveMission, .math)   // nothing registered yet
+        XCTAssertEqual(s.effectiveMission.single, .math)   // nothing registered yet
         s.hasPhotoReference = true
-        XCTAssertEqual(s.effectiveMission, .photo)
+        XCTAssertEqual(s.effectiveMission.single, .photo)
+    }
+
+    func testRandomPickIsStableAndRunnable() {
+        var s = WakeAlarmSettings()
+        s.pickMode = .randomFrom
+        s.randomPool = [.memory, .barcode]          // barcode isn't registered
+        for seed in 0..<20 { XCTAssertEqual(s.mission(seed: UInt64(seed)), .memory) }
+        s.pickMode = .randomAny
+        XCTAssertNil(s.effectiveMission.single)
+        XCTAssertEqual(s.mission(seed: 99), s.mission(seed: 99))
+        XCTAssertFalse(s.missionPool.contains(.photo))
+    }
+
+    func testOlderSettingsStillLoad() throws {
+        let old = #"{"enabled":true,"mission":"memory","difficulty":"hard","snoozes":1,"snoozeMinutes":9,"wakeCheck":false,"hasPhotoReference":false,"extra":[]}"#
+        let s = try JSONDecoder().decode(WakeAlarmSettings.self, from: Data(old.utf8))
+        XCTAssertTrue(s.enabled)
+        XCTAssertEqual(s.mission, .memory)
+        XCTAssertEqual(s.tuning.memoryDifficulty, .hard)
+        XCTAssertEqual(s.tuning.memoryGrid, 4)
+        XCTAssertTrue(s.snoozeEnabled)
+        XCTAssertEqual(s.snoozes, 1)
+        XCTAssertEqual(s.snoozeMinutes, 9)
+        XCTAssertEqual(s.sound, .system)
+        XCTAssertEqual(s.pickMode, .single)
+        let noSnooze = try JSONDecoder().decode(WakeAlarmSettings.self, from: Data(#"{"snoozes":0}"#.utf8))
+        XCTAssertFalse(noSnooze.snoozeEnabled)
+        let roundTrip = try JSONDecoder().decode(WakeAlarmSettings.self, from: JSONEncoder().encode(s))
+        XCTAssertEqual(roundTrip, s)
+    }
+
+    func testSnoozeAndHarder() {
+        var s = WakeAlarmSettings()
+        XCTAssertFalse(s.canSnooze(used: 0))
+        s.snoozeEnabled = true
+        s.snoozes = 2
+        XCTAssertTrue(s.canSnooze(used: 1))
+        XCTAssertFalse(s.canSnooze(used: 2))
+        s.snoozeUnlimited = true
+        XCTAssertTrue(s.canSnooze(used: 50))
+        let t = MissionTuning(preset: .easy).harder(by: 2, for: .math)
+        XCTAssertEqual(t.mathDifficulty, .hard)
+        XCTAssertEqual(t.mathProblems, 4)
+        XCTAssertEqual(MissionContent.mathProblems(.normal, count: 7, seed: 1).count, 7)
     }
 }

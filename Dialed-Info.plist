@@ -19,6 +19,8 @@
 	</array>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>Dialed rings your wake-up alarm at the times you set, even on Silent, until you finish your wake-up mission.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Dialed uses your location to show today's weather and what to wear, and to find where you're eating so it can suggest an order that fits your day.</string>
 	<key>NSMotionUsageDescription</key>
 	<string>Dialed counts shakes and steps for your wake-up alarm missions.</string>
 	<key>UIBackgroundModes</key>

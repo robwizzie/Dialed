@@ -27,23 +27,24 @@ struct WeeklyReviewView: View {
             VStack(alignment: .leading, spacing: 16) {
                 header
                 if let s = model.summary {
-                    if s.scores.isEmpty {
-                        emptyCard
-                    } else {
-                        fixCard
-                        weightCard(s)
-                        HealthTileGrid { tiles(s) }
-                        dayByDayCard(s)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if s.scores.isEmpty {
+                            emptyCard
+                        } else {
+                            fixCard
+                            weightCard(s)
+                            HealthTileGrid { tiles(s) }
+                            dayByDayCard(s)
+                        }
+                        if !model.patterns.isEmpty {
+                            patternsSection
+                        }
+                        goalCard(s)
+                        trophyLinks
                     }
-                    if !model.patterns.isEmpty {
-                        patternsSection
-                    }
-                    goalCard(s)
-                    trophyLinks
+                    .nekaLoading(showsOtherWeek)
                 } else {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 40)
+                    NekaLoadingPage(cards: [150, 200, 190, 220])
                 }
                 if !sundayReminderOn {
                     reminderPrompt
@@ -62,6 +63,13 @@ struct WeeklyReviewView: View {
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
             Task { await model.load(context: modelContext) }
         }
+    }
+
+    /// Mid-flip to another week: the old week's cards stay up, redacted,
+    /// until the new one lands (rather than showing the wrong week's numbers).
+    private var showsOtherWeek: Bool {
+        guard let s = model.summary else { return false }
+        return s.start != model.range.start
     }
 
     /// Badges and the habit heatmap.

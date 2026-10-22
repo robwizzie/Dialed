@@ -148,7 +148,8 @@ enum WakeSuggestionEngine {
             if scheduled.map({ needed <= $0 - minimumChange }) ?? true {
                 let time = WakeSchedule.clock(startMinute)
                 let ready = lead >= 60 && lead % 60 == 0 ? "\(lead / 60) h" : "\(lead) min"
-                let reason = "\(first.title) at \(time), \(ready) to get ready" + (prefs.commuteMinutes > 0 ? " and get there." : ".")
+                let title = first.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let reason = "\(title) at \(time), \(ready) to get ready" + (prefs.commuteMinutes > 0 ? " and get there." : ".")
                 return Suggestion(date: dayStart, current: scheduled, suggested: needed, kind: .earlier,
                                   reason: reason, eventTitle: first.title, eventStart: first.start)
             }
