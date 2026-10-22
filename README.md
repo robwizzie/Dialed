@@ -1,6 +1,15 @@
-# Dialed - Personal Fitness OS
+# 📈 Dialed — Personal Fitness OS
+
 
 An automated daily fitness dashboard that pulls health data from Apple Health (RingConn, Apple Watch, smart water bottles) and outputs a single daily score with streaks and trends.
+
+Open the app and it tells you, in one number, how dialed in you are today, what's left to hit (water, protein, calories, your mile), what to wear for the weather, and how ready your body is to train.
+
+<p align="center">
+  <img src=".github/readme/today.png" alt="Dialed home: daily score, macros, weather, readiness and a 534-day mile streak" width="280" />
+  &nbsp;&nbsp;
+  <img src=".github/readme/plan.png" alt="Daily plan: wake, coffee, vitamins, creatine, legs and dinner on a timeline" width="280" />
+</p>
 
 ## Dialed 3.0 — Home + Weight-Loss Challenge
 
