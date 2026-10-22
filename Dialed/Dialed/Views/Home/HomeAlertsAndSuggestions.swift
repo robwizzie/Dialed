@@ -32,38 +32,26 @@ struct HomeIllnessBanner: View {
     private var flagged: [HealthInsights.IllnessCheck.Signal] { check.signals.filter(\.flagged) }
     private var normal: [HealthInsights.IllnessCheck.Signal] { check.signals.filter { !$0.flagged } }
     private var isAlert: Bool { check.level == .alert }
+    /// Only the short-night signals moved: calmer colors, sleep-first copy.
+    private var shortNight: Bool { check.likelyShortSleep }
+
+    private var gradient: [Color] {
+        if isAlert { return [Neka.rose, Color(hex: "E86F8A")] }
+        if shortNight { return [Color(hex: "7B6BD6"), Color(hex: "5A72D8")] }
+        return [Neka.amber, Neka.orange]
+    }
+    private var accentText: Color { isAlert ? Neka.rose : (shortNight ? Color(hex: "5A5FC8") : Neka.orangeText) }
 
     var body: some View {
         if Self.shows(check, dismissedDay: dismissedDay) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: isAlert ? "cross.case.fill" : "waveform.path.ecg.rectangle.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(.white.opacity(0.22)))
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(isAlert ? "ILLNESS WATCH · ALERT" : "ILLNESS WATCH")
-                            .font(.system(size: 10, weight: .bold))
-                            .tracking(0.8)
-                            .foregroundColor(.white.opacity(0.8))
-                        Text(isAlert ? "Your body might be fighting something" : "A few vitals are off your normal")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundColor(.white)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(why)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.92))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 0)
-                }
+            VStack(alignment: .leading, spacing: 14) {
+                header
 
                 // The signals that tripped it, always visible.
-                VStack(spacing: 6) {
-                    ForEach(flagged) { signalRow($0, flagged: true) }
+                VStack(spacing: 8) {
+                    ForEach(flagged) { IllnessSignalRow(signal: $0) }
                     if expanded {
-                        ForEach(normal) { signalRow($0, flagged: false) }
+                        ForEach(normal) { IllnessSignalRow(signal: $0) }
                     }
                 }
 
@@ -81,13 +69,18 @@ struct HomeIllnessBanner: View {
                     .transition(.opacity)
                 }
 
+                Text(footnote)
+                    .font(.system(size: 11))
+                    .foregroundColor(.white.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack(spacing: 10) {
                     Button {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85)) { expanded.toggle() }
                     } label: {
-                        Label(expanded ? "Less" : "Why & what to do", systemImage: expanded ? "chevron.up" : "chevron.down")
+                        Label(expanded ? "Less" : "All vitals & tips", systemImage: expanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(isAlert ? Neka.rose : Neka.orangeText)
+                            .foregroundColor(accentText)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 7)
                             .background(Capsule().fill(.white))
@@ -113,53 +106,179 @@ struct HomeIllnessBanner: View {
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous)
-                    .fill(LinearGradient(colors: isAlert ? [Neka.rose, Color(hex: "E86F8A")] : [Neka.amber, Neka.orange],
-                                         startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .fill(LinearGradient(colors: gradient, startPoint: .topLeading, endPoint: .bottomTrailing))
             )
-            .shadow(color: (isAlert ? Neka.rose : Neka.orange).opacity(0.25), radius: 14, y: 6)
+            .shadow(color: gradient[0].opacity(0.25), radius: 14, y: 6)
             .accessibilityElement(children: .contain)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: isAlert ? "cross.case.fill" : (shortNight ? "moon.zzz.fill" : "waveform.path.ecg.rectangle.fill"))
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.white.opacity(0.22)))
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(isAlert ? "ILLNESS WATCH · ALERT" : "ILLNESS WATCH")
+                        .font(.system(size: 10, weight: .bold))
+                        .tracking(0.8)
+                        .foregroundColor(.white.opacity(0.8))
+                    if let hours = check.sleepHours {
+                        Text(String(format: "%.1f h sleep", hours))
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.white.opacity(hours < 6 ? 0.28 : 0.16)))
+                    }
+                }
+                Text(title)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(why)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var title: String {
+        if isAlert { return "Your body might be fighting something" }
+        return shortNight ? "A short night is showing in your vitals" : "A few vitals are off your normal"
+    }
+
     private var why: String {
-        let names = flagged.map { $0.name.lowercased() }
-        let list = names.count > 1 ? names.dropLast().joined(separator: ", ") + " and " + names.last! : names.first ?? "your vitals"
+        func listed(_ signals: [HealthInsights.IllnessCheck.Signal]) -> String {
+            let names = signals.map { $0.name == "HRV" ? "HRV" : $0.name.lowercased() }
+            return names.count > 1 ? names.dropLast().joined(separator: ", ") + " and " + names.last! : names.first ?? "your vitals"
+        }
+        let list = listed(flagged)
+        if shortNight {
+            let rest = normal.isEmpty ? "" : " Your \(listed(normal)) \(normal.count == 1 ? "looks" : "look") normal."
+            return "Your \(list) moved together, which one short night does on its own.\(rest) If you feel fine, sleep is the likely reason, not a cold."
+        }
         return "Overnight, your \(list) moved away from your normal together. That pattern often shows up a day or two before you feel a cold, or after a hard day, alcohol or short sleep."
     }
 
-    private var advice: [String] {
-        isAlert
-            ? ["Skip hard training today; a walk is plenty", "Aim for an extra hour of sleep tonight",
-               "Fluids and electrolytes, easy on alcohol", "If you feel feverish or achy, rest and check in with a doctor"]
-            : ["Keep today's workout light", "Get to bed a little earlier", "Drink more water than usual"]
+    private var footnote: String {
+        let nights = check.baselineNights
+        let base = nights > 0 ? "Compared with your last \(nights) nights. " : ""
+        return base + "Shaded band = your normal range. Not a diagnosis."
     }
 
-    private func signalRow(_ s: HealthInsights.IllnessCheck.Signal, flagged: Bool) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: s.icon)
+    private var advice: [String] {
+        if isAlert {
+            return ["Skip hard training today; a walk is plenty", "Aim for an extra hour of sleep tonight",
+                    "Fluids and electrolytes, easy on alcohol", "If you feel feverish or achy, rest and check in with a doctor"]
+        }
+        if shortNight {
+            return ["Moderate training is fine; save PRs for a rested day", "Get to bed 30–60 min earlier tonight",
+                    "Keep caffeine before early afternoon", "Expect HRV to bounce back after a full night"]
+        }
+        return ["Keep today's workout light", "Get to bed a little earlier", "Drink more water than usual"]
+    }
+}
+
+/// One vital: name and how far it moved, then a two-week trend with your
+/// normal band shaded and last night as the dot.
+private struct IllnessSignalRow: View {
+    let signal: HealthInsights.IllnessCheck.Signal
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: signal.icon)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 26, height: 26)
-                .background(Circle().fill(.white.opacity(flagged ? 0.28 : 0.14)))
-            Text(s.name)
-                .font(.system(size: 13, weight: flagged ? .semibold : .regular))
-                .foregroundColor(.white)
-            Spacer()
-            Text(s.value)
-                .font(.system(size: 13, weight: .bold))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(.white.opacity(signal.flagged ? 0.28 : 0.14)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(signal.name)
+                    .font(.system(size: 13, weight: signal.flagged ? .semibold : .regular))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                HStack(spacing: 5) {
+                    if !signal.change.isEmpty {
+                        Text(signal.change)
+                            .font(.system(size: 10, weight: .bold))
+                            .monospacedDigit()
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(.white.opacity(signal.flagged ? 0.3 : 0.14)))
+                    }
+                    Text(signal.usual)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+            }
+            Spacer(minLength: 4)
+            if signal.history.count >= 2 {
+                IllnessTrend(signal: signal)
+                    .frame(width: 56, height: 28)
+                    .accessibilityHidden(true)
+            }
+            Text(signal.value)
+                .font(.system(size: 14, weight: .bold))
                 .monospacedDigit()
                 .foregroundColor(.white)
-            Text(s.usual)
-                .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.75))
-            Image(systemName: flagged ? "exclamationmark.circle.fill" : "checkmark.circle")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .frame(minWidth: 52, alignment: .trailing)
+            Image(systemName: signal.flagged ? "exclamationmark.circle.fill" : "checkmark.circle")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(flagged ? 1 : 0.6))
+                .foregroundColor(.white.opacity(signal.flagged ? 1 : 0.6))
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.white.opacity(flagged ? 0.16 : 0.08)))
+        .padding(.vertical, 8)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.white.opacity(signal.flagged ? 0.16 : 0.08)))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(signal.name): \(signal.value), \(signal.usual), \(signal.change)\(signal.flagged ? ", off your normal" : "")")
+    }
+}
+
+/// History as a thin line, the normal band behind it, last night as a dot.
+private struct IllnessTrend: View {
+    let signal: HealthInsights.IllnessCheck.Signal
+
+    var body: some View {
+        Canvas { context, size in
+            let values = signal.history + [signal.current]
+            var lo = values.min() ?? 0, hi = values.max() ?? 1
+            if let band = signal.normal {
+                lo = min(lo, band.lowerBound)
+                hi = max(hi, band.upperBound)
+            }
+            let span = max(hi - lo, 0.0001)
+            let inset: CGFloat = 4
+            func point(_ i: Int, _ v: Double) -> CGPoint {
+                let x = values.count > 1 ? CGFloat(i) / CGFloat(values.count - 1) * (size.width - inset * 2) + inset : size.width / 2
+                let y = inset + (1 - CGFloat((v - lo) / span)) * (size.height - inset * 2)
+                return CGPoint(x: x, y: y)
+            }
+            if let band = signal.normal {
+                let top = point(0, band.upperBound).y, bottom = point(0, band.lowerBound).y
+                context.fill(Path(roundedRect: CGRect(x: 0, y: top, width: size.width, height: max(2, bottom - top)), cornerRadius: 3),
+                             with: .color(.white.opacity(0.16)))
+            }
+            var line = Path()
+            for (i, v) in values.enumerated() {
+                if i == 0 { line.move(to: point(i, v)) } else { line.addLine(to: point(i, v)) }
+            }
+            context.stroke(line, with: .color(.white.opacity(0.7)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            let last = point(values.count - 1, signal.current)
+            let r: CGFloat = signal.flagged ? 3.5 : 2.5
+            context.fill(Path(ellipseIn: CGRect(x: last.x - r, y: last.y - r, width: r * 2, height: r * 2)), with: .color(.white))
+        }
     }
 }
 

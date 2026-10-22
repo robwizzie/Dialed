@@ -80,8 +80,9 @@ enum HealthInsights {
     }
 
     /// Dialed's score, 0–100: duration (50), efficiency (20), deep + REM
-    /// share (20), awakenings (10). Always Dialed's own number; the watch's
-    /// score (Google / Fitbit) stays on `Night.vendorScore` for comparison.
+    /// share (20), awakenings (10), capped on short nights (see
+    /// `ScoreBreakdown.cap`). Always Dialed's own number; the watch's score
+    /// (Google / Fitbit) stays on `Night.vendorScore` for comparison.
     static func sleepScore(_ n: Night) -> Int {
         scoreBreakdown(n).total
     }
@@ -98,8 +99,21 @@ enum HealthInsights {
         var wakeUps: Double
         var stagesKnown: Bool
         var wakeUpsKnown: Bool
+        /// The most a night this short can score: great quality can't make
+        /// up for missing hours. nil from 6 h up.
+        var cap: Int? = nil
 
-        var total: Int { Int((duration + efficiency + restorative + wakeUps).rounded()) }
+        var points: Int { Int((duration + efficiency + restorative + wakeUps).rounded()) }
+        var total: Int { min(points, cap ?? 100) }
+    }
+
+    /// Under 6 h asleep tops out at "Fair" (69), under 5 h at 59.
+    static func shortNightCap(asleepMinutes: Int) -> Int? {
+        switch asleepMinutes {
+        case ..<300: return 59
+        case ..<360: return 69
+        default:     return nil
+        }
     }
 
     static func scoreBreakdown(_ n: Night) -> ScoreBreakdown {
@@ -113,7 +127,8 @@ enum HealthInsights {
         }
         let wakes = n.awakenings.map { max(0, 10 - Double($0) * 1.5) } ?? 7
         return ScoreBreakdown(duration: duration, efficiency: efficiency, restorative: restorative, wakeUps: wakes,
-                              stagesKnown: stagesKnown, wakeUpsKnown: n.awakenings != nil)
+                              stagesKnown: stagesKnown, wakeUpsKnown: n.awakenings != nil,
+                              cap: shortNightCap(asleepMinutes: n.asleepMinutes))
     }
 
     /// One night from every session that woke you on the same day. Watches
@@ -348,18 +363,40 @@ enum HealthInsights {
             let value: String
             let usual: String
             let flagged: Bool
+            /// How far from usual, in the signal's own terms ("+3 bpm", "−51%").
+            var change: String = ""
+            /// Last night's reading and the baseline nights before it, oldest
+            /// first, in the same units — for the trend line.
+            var current: Double = 0
+            var history: [Double] = []
+            /// Your normal band (usual ± the swing that flags it).
+            var normal: ClosedRange<Double>? = nil
             var id: String { name }
         }
 
         let level: Level
         let signals: [Signal]
+        /// Hours asleep last night, when known.
+        var sleepHours: Double? = nil
+        /// Nights in the baseline the signals are compared with.
+        var baselineNights: Int = 0
 
         var flaggedCount: Int { signals.filter(\.flagged).count }
+
+        /// Only resting HR and HRV moved, after under 6 h of sleep. One short
+        /// night does exactly this on its own, so it's the likelier reason
+        /// than getting sick. Temperature, breathing or oxygen moving too
+        /// rules it out.
+        var likelyShortSleep: Bool {
+            guard level == .watch, let h = sleepHours, h < 6 else { return false }
+            let sleepSensitive: Set<String> = ["Resting heart rate", "HRV"]
+            return signals.filter(\.flagged).allSatisfy { sleepSensitive.contains($0.name) }
+        }
 
         var headline: String {
             switch level {
             case .clear: return "All clear"
-            case .watch: return "Something's off"
+            case .watch: return likelyShortSleep ? "A short night is showing" : "Something's off"
             case .alert: return "Your body may be fighting something"
             }
         }
@@ -367,7 +404,11 @@ enum HealthInsights {
         var advice: String {
             switch level {
             case .clear: return "Your overnight vitals are within your normal range."
-            case .watch: return "\(flaggedCount) signals are outside your normal range. Go easy today and prioritise sleep."
+            case .watch:
+                if likelyShortSleep, let h = sleepHours {
+                    return String(format: "%.1f h of sleep raises resting HR and drops HRV on its own. If you feel fine, that's most likely all this is.", h)
+                }
+                return "\(flaggedCount) signals are outside your normal range. Go easy today and prioritise sleep."
             case .alert: return "Several vitals moved together the way they do before a cold. Rest, hydrate, and skip hard training."
             }
         }
@@ -382,50 +423,62 @@ enum HealthInsights {
                              hrv: Double?, hrvBaseline: [Double],
                              respiratory: Double?, respBaseline: [Double],
                              skinTemp: Double?, skinTempBaseline: [Double],
-                             spO2: Double?, spO2Baseline: [Double]) -> IllnessCheck? {
+                             spO2: Double?, spO2Baseline: [Double],
+                             sleepHours: Double? = nil) -> IllnessCheck? {
         let minDays = 4
         var signals: [IllnessCheck.Signal] = []
         var feverish = false
 
-        /// Flags when `value` sits `threshold` past the mean in the bad
-        /// direction — or 1.5 SD, if you normally swing more than that.
-        func off(_ value: Double, _ base: [Double], threshold: Double, worseWhenUp: Bool) -> Bool {
-            guard let m = mean(base) else { return false }
-            let limit = max(threshold, 1.5 * (standardDeviation(base) ?? 0))
-            return worseWhenUp ? value - m >= limit : m - value >= limit
+        /// The swing that counts as off: `threshold` past the mean, or 1.5 SD
+        /// if you normally swing more than that.
+        func limit(_ base: [Double], threshold: Double) -> Double {
+            max(threshold, 1.5 * (standardDeviation(base) ?? 0))
+        }
+
+        /// One signal: flagged when `value` sits past the limit in the bad
+        /// direction. `shift` moves values for display (skin temp shows as
+        /// an offset from the baseline).
+        func signal(_ name: String, _ icon: String, value v: Double, base: [Double], threshold: Double,
+                    worseWhenUp: Bool, shift: Double = 0, shown text: String, usual: String, change: String,
+                    alsoFlag: Bool = false) -> IllnessCheck.Signal {
+            let m = mean(base) ?? v
+            let l = limit(base, threshold: threshold)
+            let flagged = (worseWhenUp ? v - m >= l : m - v >= l) || alsoFlag
+            return .init(name: name, icon: icon, value: text, usual: usual, flagged: flagged, change: change,
+                         current: v - shift, history: base.map { $0 - shift }, normal: (m - l - shift)...(m + l - shift))
         }
 
         if let v = restingHR, rhrBaseline.count >= minDays, let m = mean(rhrBaseline) {
-            signals.append(.init(name: "Resting heart rate", icon: "heart.fill",
-                                 value: "\(Int(v.rounded())) bpm", usual: "usual \(Int(m.rounded()))",
-                                 flagged: off(v, rhrBaseline, threshold: 3, worseWhenUp: true)))
+            signals.append(signal("Resting heart rate", "heart.fill", value: v, base: rhrBaseline, threshold: 3,
+                                  worseWhenUp: true, shown: "\(Int(v.rounded())) bpm", usual: "usual \(Int(m.rounded()))",
+                                  change: signed(v - m, " bpm")))
         }
         if let v = hrv, hrvBaseline.count >= minDays, let m = mean(hrvBaseline) {
-            signals.append(.init(name: "HRV", icon: "waveform.path.ecg",
-                                 value: "\(Int(v.rounded())) ms", usual: "usual \(Int(m.rounded()))",
-                                 flagged: off(v, hrvBaseline, threshold: m * 0.15, worseWhenUp: false)))
+            signals.append(signal("HRV", "waveform.path.ecg", value: v, base: hrvBaseline, threshold: m * 0.15,
+                                  worseWhenUp: false, shown: "\(Int(v.rounded())) ms", usual: "usual \(Int(m.rounded()))",
+                                  change: m > 0 ? signed((v - m) / m * 100, "%") : ""))
         }
         if let v = respiratory, respBaseline.count >= minDays, let m = mean(respBaseline) {
-            signals.append(.init(name: "Breathing rate", icon: "lungs.fill",
-                                 value: String(format: "%.1f rpm", v), usual: String(format: "usual %.1f", m),
-                                 flagged: off(v, respBaseline, threshold: 1, worseWhenUp: true)))
+            signals.append(signal("Breathing rate", "lungs.fill", value: v, base: respBaseline, threshold: 1,
+                                  worseWhenUp: true, shown: String(format: "%.1f rpm", v), usual: String(format: "usual %.1f", m),
+                                  change: signed(v - m, " rpm", decimals: 1)))
         }
         if let v = skinTemp, skinTempBaseline.count >= minDays, let m = mean(skinTempBaseline) {
-            let flagged = off(v, skinTempBaseline, threshold: 0.5, worseWhenUp: true)
             feverish = v - m >= 0.8
-            signals.append(.init(name: "Skin temperature", icon: "thermometer.medium",
-                                 value: String(format: "%+.1f °C", v - m), usual: "vs your baseline",
-                                 flagged: flagged))
+            signals.append(signal("Skin temperature", "thermometer.medium", value: v, base: skinTempBaseline, threshold: 0.5,
+                                  worseWhenUp: true, shift: m, shown: String(format: "%+.1f °C", v - m), usual: "vs your baseline",
+                                  change: signed(v - m, " °C", decimals: 1)))
         }
         if let v = spO2, spO2Baseline.count >= minDays, let m = mean(spO2Baseline) {
-            signals.append(.init(name: "Blood oxygen", icon: "drop.fill",
-                                 value: String(format: "%.0f%%", v), usual: String(format: "usual %.0f", m),
-                                 flagged: off(v, spO2Baseline, threshold: 2, worseWhenUp: false) || v < 92))
+            signals.append(signal("Blood oxygen", "drop.fill", value: v, base: spO2Baseline, threshold: 2,
+                                  worseWhenUp: false, shown: String(format: "%.0f%%", v), usual: String(format: "usual %.0f", m),
+                                  change: signed(v - m, " pts"), alsoFlag: v < 92))
         }
         guard signals.count >= 2 else { return nil }
         let flagged = signals.filter(\.flagged).count
         let level: IllnessCheck.Level = flagged >= 3 || (feverish && flagged >= 2) ? .alert : (flagged == 2 ? .watch : .clear)
-        return IllnessCheck(level: level, signals: signals)
+        return IllnessCheck(level: level, signals: signals, sleepHours: sleepHours,
+                            baselineNights: signals.map(\.history.count).max() ?? 0)
     }
 
     // MARK: - Nutrition

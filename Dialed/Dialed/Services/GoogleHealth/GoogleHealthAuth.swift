@@ -56,6 +56,9 @@ final class GoogleHealthAuth: NSObject, ObservableObject {
         case stateMismatch
         case noCode(String?)
         case tokenExchangeFailed(String)
+        /// Google refused the refresh token (revoked, or the 7-day limit
+        /// while the consent screen is in Testing). Only this disconnects.
+        case refreshRejected(String)
         case notConnected
 
         var errorDescription: String? {
@@ -70,6 +73,8 @@ final class GoogleHealthAuth: NSObject, ObservableObject {
                 return "Google didn't return an authorization code\(error.map { " (\($0))" } ?? "")."
             case .tokenExchangeFailed(let detail):
                 return "Couldn't finish connecting: \(detail)"
+            case .refreshRejected:
+                return "Google ended Dialed's sign-in. Reconnect to keep syncing."
             case .notConnected:
                 return "Google Health isn't connected."
             }
@@ -163,7 +168,9 @@ final class GoogleHealthAuth: NSObject, ObservableObject {
             return fresh.accessToken
         } catch {
             // Revoked or expired (7-day limit in Testing) — ask to reconnect.
-            disconnect()
+            // Anything else (offline, timeout, a Google hiccup) keeps the
+            // tokens: the next sync just tries again.
+            if case AuthError.refreshRejected = error { disconnect() }
             throw error
         }
     }
@@ -182,7 +189,12 @@ final class GoogleHealthAuth: NSObject, ObservableObject {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
-            throw AuthError.tokenExchangeFailed("HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(body.prefix(300))")
+            let detail = "HTTP \((response as? HTTPURLResponse)?.statusCode ?? -1) \(body.prefix(300))"
+            // invalid_grant = this refresh token is dead for good.
+            if previousRefreshToken != nil, body.contains("invalid_grant") {
+                throw AuthError.refreshRejected(detail)
+            }
+            throw AuthError.tokenExchangeFailed(detail)
         }
 
         struct TokenResponse: Decodable {

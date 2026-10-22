@@ -238,7 +238,12 @@ final class HealthDetailModel: ObservableObject {
 
         // ---- Body: watch (Google) first, Apple Health to fill gaps.
         restingHR = merge(daily(snapshots) { $0.restingHeartRate }, averaged(await hkRHR ?? []))
-        hrv = merge(daily(snapshots) { $0.hrv }, averaged(await hkHRV ?? []))
+        // Not merged: the watch reports RMSSD, Apple Health SDNN, and SDNN
+        // runs much higher for the same person — a baseline mixing the two
+        // makes a normal night look like a crash. Apple Health only when
+        // the watch has no HRV at all.
+        let watchHRV = daily(snapshots) { $0.hrv }
+        hrv = watchHRV.isEmpty ? averaged(await hkHRV ?? []) : watchHRV
         respiratory = merge(daily(snapshots) { $0.breathingRate }, averaged(await hkResp ?? []))
         spO2 = merge(daily(snapshots) { $0.spO2 }, averaged((await hkO2 ?? []).map { HealthKitManager.QuantityReading(date: $0.date, value: $0.value * 100) }))
         let wrist = averaged(await hkWrist ?? [])
@@ -287,7 +292,8 @@ final class HealthDetailModel: ObservableObject {
             hrv: exact(hrv), hrvBaseline: prior(hrv),
             respiratory: exact(respiratory), respBaseline: prior(respiratory),
             skinTemp: exact(skinTemp), skinTempBaseline: prior(skinTemp),
-            spO2: exact(spO2), spO2Baseline: prior(spO2))
+            spO2: exact(spO2), spO2Baseline: prior(spO2),
+            sleepHours: lastNight?.hours)
         sleepPlan = HealthInsights.sleepPlan(history: nights.filter { $0.wakeDay <= day })
     }
 

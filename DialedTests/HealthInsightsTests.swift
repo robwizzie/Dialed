@@ -44,6 +44,16 @@ final class HealthInsightsTests: XCTestCase {
         XCTAssertEqual(b.total, 97)
     }
 
+    func testShortNightsAreCapped() {
+        // Near-perfect quality can't carry a short night to "Good".
+        let short = night(18, asleep: 294, inBed: 305, deep: 70, rem: 60, wakes: 0)
+        let b = HealthInsights.scoreBreakdown(short)
+        XCTAssertGreaterThan(b.points, 70)
+        XCTAssertEqual(b.total, 59)
+        XCTAssertEqual(HealthInsights.sleepScore(night(18, asleep: 340, inBed: 350, deep: 80, rem: 70, wakes: 0)), 69)
+        XCTAssertNil(HealthInsights.scoreBreakdown(night(18, asleep: 360)).cap)
+    }
+
     func testBedtimeAcrossMidnightCompares() {
         let late = calendar.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 0, minute: 30))!
         let early = calendar.date(from: DateComponents(year: 2026, month: 10, day: 18, hour: 23, minute: 30))!
@@ -183,6 +193,25 @@ final class HealthInsightsTests: XCTestCase {
         let sick = try XCTUnwrap(check(rhr: 63, hrv: 47, resp: 16.5, temp: nil))
         XCTAssertEqual(sick.level, .alert)
         XCTAssertEqual(sick.flaggedCount, 3)
+        // HR up + HRV down after a short night reads as the night, not a cold.
+        func withSleep(_ hours: Double?) -> HealthInsights.IllnessCheck? {
+            HealthInsights.illnessCheck(restingHR: 62, rhrBaseline: rhr, hrv: 40, hrvBaseline: hrv,
+                                        respiratory: 14.6, respBaseline: resp, skinTemp: 0.1, skinTempBaseline: temp,
+                                        spO2: 97, spO2Baseline: o2, sleepHours: hours)
+        }
+        let shortNight = try XCTUnwrap(withSleep(4.9))
+        XCTAssertEqual(shortNight.level, .watch)
+        XCTAssertTrue(shortNight.likelyShortSleep)
+        XCTAssertEqual(shortNight.headline, "A short night is showing")
+        XCTAssertEqual(shortNight.baselineNights, 5)
+        XCTAssertFalse(try XCTUnwrap(withSleep(7.5)).likelyShortSleep)
+        let hrvSignal = try XCTUnwrap(shortNight.signals.first { $0.name == "HRV" })
+        XCTAssertEqual(hrvSignal.change, "−35%")
+        XCTAssertEqual(hrvSignal.history, hrv)
+        XCTAssertEqual(hrvSignal.current, 40)
+        XCTAssertTrue(try XCTUnwrap(hrvSignal.normal).contains(62))
+        XCTAssertEqual(shortNight.signals.first { $0.name == "Resting heart rate" }?.change, "+5 bpm")
+
         // Too little history → no verdict.
         XCTAssertNil(HealthInsights.illnessCheck(restingHR: 70, rhrBaseline: [56, 57], hrv: 30, hrvBaseline: [60, 61],
                                                  respiratory: nil, respBaseline: [], skinTemp: nil, skinTempBaseline: [],
