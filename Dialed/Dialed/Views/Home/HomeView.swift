@@ -24,6 +24,7 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel = HomeViewModel()
     @StateObject private var stateModel = NowViewModel()
     @ObservedObject private var photos = ProfilePhotoStore.shared
@@ -121,6 +122,12 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
                 Task { await refreshAll(force: true) }
+            }
+            // Coming back to the app (it stays alive in the background for
+            // days) re-pulls the watch, so a night that reached Google Health
+            // after the last sync shows up. Throttled like a tab re-appear.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active { Task { await refreshAll() } }
             }
             // Requests from the bottom bar's nested menu.
             .onChange(of: router.homeSheet) { _, request in

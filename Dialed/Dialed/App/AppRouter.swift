@@ -134,6 +134,10 @@ enum QuickLog: String, Identifiable, CaseIterable {
 extension Notification.Name {
     /// Posted after a quick-log sheet closes so visible tabs re-read data.
     static let dialedDataDidChange = Notification.Name("dialedDataDidChange")
+    /// Posted after Home pulls new Pixel Watch data from Google Health, so the
+    /// Health tab re-reads it. Separate from `dialedDataDidChange`, which
+    /// would make Home sync again.
+    static let watchDataDidSync = Notification.Name("watchDataDidSync")
 }
 
 @MainActor
