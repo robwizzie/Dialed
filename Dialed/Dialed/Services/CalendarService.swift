@@ -266,7 +266,8 @@ final class GoogleCalendarAuth: NSObject, ObservableObject, ASWebAuthenticationP
             try Self.saveTokens(fresh)
             return fresh.accessToken
         } catch {
-            disconnect()
+            // Only a dead refresh token disconnects; offline keeps it.
+            if case GoogleHealthAuth.AuthError.refreshRejected = error { disconnect() }
             throw error
         }
     }
@@ -282,7 +283,11 @@ final class GoogleCalendarAuth: NSObject, ObservableObject, ASWebAuthenticationP
             .joined(separator: "&").data(using: .utf8)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw GoogleHealthAuth.AuthError.tokenExchangeFailed(String(data: data, encoding: .utf8).map { String($0.prefix(300)) } ?? "")
+            let body = String(data: data, encoding: .utf8).map { String($0.prefix(300)) } ?? ""
+            if previousRefresh != nil, body.contains("invalid_grant") {
+                throw GoogleHealthAuth.AuthError.refreshRejected(body)
+            }
+            throw GoogleHealthAuth.AuthError.tokenExchangeFailed(body)
         }
         struct TokenResponse: Decodable { let access_token: String; let refresh_token: String?; let expires_in: Int }
         let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)

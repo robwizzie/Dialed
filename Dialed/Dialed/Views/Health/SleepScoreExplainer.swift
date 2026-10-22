@@ -73,6 +73,13 @@ struct SleepScoreExplainer: View {
             bar("Deep + REM", parts.restorative, of: 20, note: stage)
             bar("Wake-ups", parts.wakeUps, of: 10,
                 note: night.awakenings.map { "\($0) wake-up\($0 == 1 ? "" : "s") · −1.5 each" } ?? "Unknown, so 7 by default")
+            if let cap = parts.cap, parts.points > cap {
+                Label("Under \(night.asleepMinutes < 300 ? 5 : 6) h asleep caps the score at \(cap) (\(parts.points) before the cap). Good quality can't fully make up for missing hours.",
+                      systemImage: "moon.zzz")
+                    .font(.system(size: 12))
+                    .foregroundColor(Neka.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
         .nekaCard()

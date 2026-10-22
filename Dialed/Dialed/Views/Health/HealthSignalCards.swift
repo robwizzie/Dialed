@@ -205,7 +205,7 @@ struct HealthIllnessCard: View {
                 Text(s.name)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(Neka.ink)
-                Text(s.usual)
+                Text(s.change.isEmpty ? s.usual : "\(s.usual) · \(s.change)")
                     .font(.system(size: 11))
                     .foregroundColor(Neka.inkSecondary)
             }
