@@ -13,6 +13,7 @@ import Charts
 
 struct HealthView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var router: AppRouter
     @StateObject private var model = HealthDetailModel()
     @State private var showClassicTrends = false
@@ -50,7 +51,10 @@ struct HealthView: View {
                 .padding(.bottom, 24)
                 .animation(.easeInOut(duration: 0.2), value: router.healthSection)
             }
-            .refreshable { await model.load(context: modelContext) }
+            .refreshable {
+                await syncWatch()
+                await model.load(context: modelContext)
+            }
             .nekaPageBackground()
             .nekaStatusBarScrim()
             .toolbar(.hidden, for: .navigationBar)
@@ -59,10 +63,28 @@ struct HealthView: View {
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
             Task { await model.load(context: modelContext) }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .watchDataDidSync)) { _ in
+            Task { await model.load(context: modelContext) }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { model.rollToToday() }
+        }
         .sheet(isPresented: $showClassicTrends) {
             PillarTrendsView()
                 .environment(\.colorScheme, .dark)
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// Pull to refresh asks Google Health for the last two nights, so a
+    /// Pixel Watch night that landed after Home's last sync shows up here.
+    private func syncWatch() async {
+        guard GoogleHealthSyncService.isConnected else { return }
+        let sync = GoogleHealthSyncService(modelContext: modelContext)
+        await sync.sync(days: 2)
+        DataDiagnostics.shared.watchError = sync.lastError
+        if sync.lastError == nil {
+            UserDefaults.standard.set(Date(), forKey: "home.lastGoogleHealthSync")
         }
     }
 

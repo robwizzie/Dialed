@@ -83,6 +83,17 @@ final class HealthDetailModel: ObservableObject {
     func shift(_ days: Int) {
         guard let next = calendar.date(byAdding: .day, value: days, to: day) else { return }
         day = min(calendar.startOfDay(for: Date()), next)
+        followsToday = isToday
+    }
+
+    /// True while you're looking at today (not a day you stepped back to).
+    private var followsToday = true
+
+    /// After midnight, a page that was showing "today" moves to the new day
+    /// instead of staying on yesterday.
+    func rollToToday() {
+        let today = calendar.startOfDay(for: Date())
+        if followsToday && day != today { day = today }
     }
 
     // MARK: - Load

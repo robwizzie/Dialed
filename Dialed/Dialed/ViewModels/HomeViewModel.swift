@@ -179,6 +179,7 @@ final class HomeViewModel: ObservableObject {
                 UserDefaults.standard.set(now, forKey: Self.lastWatchSyncKey)
                 lastWatchSync = now
             }
+            NotificationCenter.default.post(name: .watchDataDidSync, object: nil)
         } else {
             lastWatchSync = watchConnected ? lastSync : nil
             if !watchConnected { DataDiagnostics.shared.watchError = nil }
