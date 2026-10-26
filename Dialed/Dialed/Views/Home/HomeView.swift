@@ -88,8 +88,8 @@ struct HomeView: View {
                 .tracksSkyMotion(skyMotion)
             }
             .scrollIndicators(.hidden)
-            .nekaPageBackground()
-            .nekaStatusBarScrim()
+            .nekaSceneBackground(.citrus)
+            .nekaStatusBarScrim(Neka.Scene.citrus.top)
             .toolbar(.hidden, for: .navigationBar)
             .task {
                 Task { await weather.refresh() }
@@ -568,13 +568,13 @@ struct HomeView: View {
             title: "Trend weight",
             value: value,
             unit: "lb",
-            wash: .mint,
+            wash: .lime,
             showsArrow: true,
             pill: pill,
             footer: footer,
             footerTrailing: footerTrailing
         ) {
-            NekaSparkline(values: trend, color: Neka.green, fill: true)
+            NekaSparkline(values: trend, color: Neka.greenText, fill: true)
                 .frame(height: 38)
         }
     }
@@ -585,7 +585,7 @@ struct HomeView: View {
             title: "Water",
             value: "\(Int(viewModel.waterOz))",
             unit: "oz",
-            wash: .sky,
+            wash: .ice,
             showsArrow: true,
             footer: "of \(Int(viewModel.waterTargetOz)) oz",
             footerTrailing: "\(Int((min(progress, 9.99)) * 100))%"
@@ -593,7 +593,7 @@ struct HomeView: View {
             HStack(alignment: .bottom, spacing: 10) {
                 NekaBottle(progress: progress)
                     .frame(width: 26, height: 46)
-                NekaBars(values: viewModel.waterWeek, color: Neka.sky, muted: Neka.sky.opacity(0.25), spacing: 3)
+                NekaDotColumns(values: viewModel.waterWeek, color: Neka.skyText, rows: 6)
                     .frame(height: 34)
             }
             .frame(height: 46)
@@ -614,9 +614,10 @@ struct HomeView: View {
             title: "HRV",
             value: viewModel.hrv.map { "\(Int($0.rounded()))" } ?? "--",
             unit: "ms",
+            wash: .lavender,
             footer: status
         ) {
-            NekaBars(values: Array(viewModel.hrvSeries.suffix(14)), color: Neka.lavender, muted: Neka.lavender.opacity(0.3), spacing: 3)
+            NekaBars(values: Array(viewModel.hrvSeries.suffix(14)), color: Neka.lavenderText, muted: Neka.lavender.opacity(0.3), spacing: 3)
                 .frame(height: 44)
         }
     }
@@ -639,11 +640,12 @@ struct HomeView: View {
             title: "Sleep",
             value: viewModel.sleepHours.map { String(format: "%.1f", $0) } ?? "--",
             unit: "hours",
+            wash: .violet,
             footer: quality,
             footerTrailing: deltaText
         ) {
-            NekaSparkline(values: series, color: Neka.blue, showsEndDot: false)
-                .frame(height: 40)
+            NekaDotColumns(values: series, color: .white, rows: 7)
+                .frame(height: 44)
         }
     }
 
@@ -659,7 +661,7 @@ struct HomeView: View {
             title: "Resting HR",
             value: rhr.map { "\(Int($0.rounded()))" } ?? "--",
             unit: "bpm",
-            wash: .rose,
+            wash: .blush,
             footer: status,
             footerTrailing: "40–100"
         ) {
@@ -674,10 +676,11 @@ struct HomeView: View {
         return HomeMetricTile(
             title: "Activity",
             value: viewModel.steps.formatted(),
-            unit: "steps"
+            unit: "steps",
+            wash: .amber
         ) {
             VStack(alignment: .leading, spacing: 8) {
-                NekaBars(values: viewModel.stepsSeries.map(Double.init), color: Neka.ink, spacing: 4)
+                NekaDotColumns(values: viewModel.stepsSeries.map(Double.init), color: Neka.orangeText, rows: 6)
                     .frame(height: 28)
                 Text("\(Int(min(progress, 9.99) * 100))% goal")
                     .font(.system(size: 11, weight: .medium))

@@ -23,26 +23,55 @@ struct HomeMetricTile<Visual: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            NekaTileHeader(title: title, showsArrow: showsArrow)
-            NekaValue(value: value, unit: unit, size: 34)
-            if let pill {
-                NekaPill(text: pill.text, tint: pill.tint, fill: pill.fill)
+            HStack(alignment: .center) {
+                Text(title)
+                    .font(Neka.label)
+                    .foregroundColor(wash.ink.opacity(0.85))
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if showsArrow {
+                    Image(systemName: "arrow.up.right")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(wash.ink.opacity(0.8))
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(Color(light: Color.white.opacity(wash == .violet ? 0.18 : 0.45),
+                                                         dark: Color.white.opacity(0.1))))
+                }
             }
             Spacer(minLength: 4)
             visual()
                 .frame(maxWidth: .infinity)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(value)
+                    .font(Neka.hero(32))
+                    .kerning(-0.5)
+                    .foregroundColor(wash.ink)
+                    .contentTransition(.numericText())
+                    .minimumScaleFactor(0.6)
+                    .lineLimit(1)
+                if let unit {
+                    Text(unit)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(wash.inkSecondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 2)
+                if let pill {
+                    NekaPill(text: pill.text, tint: pill.tint, fill: pill.fill)
+                }
+            }
             if footer != nil || footerTrailing != nil {
                 HStack {
                     if let footer {
                         Text(footer)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Neka.inkSecondary)
+                            .foregroundColor(wash.inkSecondary)
                     }
                     Spacer(minLength: 2)
                     if let footerTrailing {
                         Text(footerTrailing)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(Neka.inkSecondary)
+                            .foregroundColor(wash.inkSecondary)
                     }
                 }
                 .lineLimit(1)
