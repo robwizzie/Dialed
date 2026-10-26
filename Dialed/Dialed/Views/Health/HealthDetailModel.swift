@@ -105,7 +105,23 @@ final class HealthDetailModel: ObservableObject {
 
     // MARK: - Load
 
+    /// A load asked for while one is running; it runs once that finishes.
+    private var reloadQueued = false
+
+    /// Loads `day`. Calls that land mid-load (data-change bursts, a day
+    /// step) fold into one more pass instead of running side by side.
     func load(context: ModelContext) async {
+        if isLoading {
+            reloadQueued = true
+            return
+        }
+        repeat {
+            reloadQueued = false
+            await performLoad(context: context)
+        } while reloadQueued
+    }
+
+    private func performLoad(context: ModelContext) async {
         isLoading = true
         defer { isLoading = false }
 

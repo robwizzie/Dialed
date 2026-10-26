@@ -33,6 +33,9 @@ struct EatingOutView: View {
     @State private var place: NearbyPlaces.Place?
     /// The menu guide the picks came from (nil = Apple Intelligence).
     @State private var guide: Restaurant?
+    @State private var menuTab: MenuTab = .fits
+
+    enum MenuTab: Hashable { case fits, full }
 
     private var settings: UserSettings { UserSettings.load() }
     /// Calories exercise earned back today.
@@ -391,13 +394,25 @@ struct EatingOutView: View {
                         query = ""
                         place = nil
                         guide = nil
+                        menuTab = .fits
                     }
                 }
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Neka.ink)
             }
 
-            if loading {
+            Picker("Show", selection: $menuTab) {
+                Text("Fits today").tag(MenuTab.fits)
+                Text("Full menu").tag(MenuTab.full)
+            }
+            .pickerStyle(.segmented)
+
+            if menuTab == .full {
+                FullMenuView(restaurant: guide?.name ?? name, guide: guide,
+                             caloriesLeft: budget.calories, proteinLeft: budget.protein) { items in
+                    logMenuItems(items, at: place?.name ?? guide?.name ?? name.capitalized)
+                }
+            } else if loading {
                 ForEach(0..<2, id: \.self) { _ in
                     RoundedRectangle(cornerRadius: Neka.cardRadius, style: .continuous)
                         .fill(Neka.surface)
@@ -567,14 +582,302 @@ struct EatingOutView: View {
         d.protein = option.protein.rounded()
         d.carbs = option.carbs.rounded()
         d.fat = option.fat.rounded()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { _ = logged.insert(option.id) }
+        logDraft(d, at: place)
+    }
+
+    /// An order built from the full menu, logged as one meal.
+    private func logMenuItems(_ items: [(item: FoodCloud.MenuItem, count: Int)], at place: String) {
+        guard !items.isEmpty else { return }
+        var d = FoodDraft()
+        d.name = "\(place): " + items.map { $0.count > 1 ? "\($0.count)× \($0.item.name)" : $0.item.name }.joined(separator: " + ")
+        d.calories = items.reduce(0) { $0 + $1.item.calories * Double($1.count) }.rounded()
+        d.protein = items.reduce(0) { $0 + $1.item.protein * Double($1.count) }.rounded()
+        d.carbs = items.reduce(0) { $0 + $1.item.carbs * Double($1.count) }.rounded()
+        d.fat = items.reduce(0) { $0 + $1.item.fat * Double($1.count) }.rounded()
+        logDraft(d, at: place)
+    }
+
+    private func logDraft(_ draft: FoodDraft, at place: String) {
+        var d = draft
         d.time = Date()
         FoodLog.add(d, context: modelContext)
         #if os(iOS)
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         #endif
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { _ = logged.insert(option.id) }
         loadToday()
         onLogged(place)
+    }
+}
+
+// MARK: - Full menu
+
+/// Every item a restaurant serves — from your Dialed server (Claude, cached
+/// a month per chain) plus Dialed's own guide — searchable, grouped by
+/// section, each tagged by whether it fits this meal. Tap + to build an
+/// order and log it as one meal.
+private struct FullMenuView: View {
+    let restaurant: String
+    let guide: Restaurant?
+    /// What this meal has to work with.
+    let caloriesLeft: Double
+    let proteinLeft: Double
+    var onLog: ([(item: FoodCloud.MenuItem, count: Int)]) -> Void
+
+    @State private var items: [FoodCloud.MenuItem] = []
+    @State private var known = true
+    @State private var fetching = false
+    @State private var error: String?
+    @State private var search = ""
+    @State private var category: String?
+    @State private var order: [FoodCloud.MenuItem: Int] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if !order.isEmpty { orderCard }
+            if !items.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(Neka.inkSecondary)
+                    TextField("Search the menu", text: $search)
+                        .font(.system(size: 15))
+                }
+                .padding(.horizontal, 14)
+                .frame(height: 44)
+                .background(Capsule().fill(Neka.surface))
+                categoryChips
+            }
+            if fetching {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(items.isEmpty
+                         ? "Getting the full menu… the first time for a restaurant can take up to a minute."
+                         : "Getting the rest of the menu…")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .nekaCard()
+            }
+            if let error {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundColor(Neka.inkSecondary)
+                    if FoodCloud.isConfigured {
+                        Button("Try again") { Task { await load() } }
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .nekaCard()
+            }
+            if !shown.isEmpty {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
+                        if index > 0 { Divider().overlay(Neka.hairline).padding(.leading, 14) }
+                        row(item)
+                    }
+                }
+                .nekaCard()
+            } else if !items.isEmpty {
+                Text("Nothing on the menu matches “\(search)”.")
+                    .font(.system(size: 13))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            if !items.isEmpty {
+                Text(known
+                     ? "Nutrition from the chain's published numbers — recipes and portions vary."
+                     : "No published nutrition for this place — a typical menu, estimated.")
+                    .font(.system(size: 11))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+        }
+        .task(id: restaurant) { await load() }
+    }
+
+    // MARK: Pieces
+
+    private var categories: [String] {
+        var seen = Set<String>()
+        return items.map(\.category).filter { seen.insert($0).inserted }
+    }
+
+    private var shown: [FoodCloud.MenuItem] {
+        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        return items.filter { item in
+            (category == nil || item.category == category)
+                && (q.isEmpty || item.name.lowercased().contains(q))
+        }
+    }
+
+    private var categoryChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 7) {
+                chip("All", selected: category == nil) { category = nil }
+                ForEach(categories, id: \.self) { c in
+                    chip(c, selected: category == c) { category = c }
+                }
+            }
+        }
+    }
+
+    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(selected ? Neka.onInk : Neka.ink)
+                .padding(.horizontal, 13)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(selected ? Neka.ink : Neka.surface))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func row(_ item: FoodCloud.MenuItem) -> some View {
+        let count = order[item] ?? 0
+        let tag = fit(item)
+        return HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.name)
+                    .font(.system(size: 14.5, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(tag.text)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(tag.ink)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(tag.fill))
+                if let tip = item.tip, !tip.isEmpty {
+                    Text(tip)
+                        .font(.system(size: 11.5, weight: .semibold))
+                        .foregroundColor(Neka.skyText)
+                }
+            }
+            Spacer(minLength: 6)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text("\(Int(item.calories))")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Text("\(Int(item.protein)) g P")
+                    .font(.system(size: 11.5))
+                    .foregroundColor(Neka.inkSecondary)
+            }
+            if count > 0 {
+                HStack(spacing: 6) {
+                    stepButton("minus") { order[item] = count > 1 ? count - 1 : nil }
+                    Text("\(count)")
+                        .font(.system(size: 14, weight: .semibold))
+                        .frame(minWidth: 14)
+                    stepButton("plus") { order[item] = count + 1 }
+                }
+            } else {
+                stepButton("plus") { order[item] = 1 }
+                    .accessibilityLabel("Add \(item.name)")
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(Neka.greenText)
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Neka.greenSoft))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var orderLines: [(item: FoodCloud.MenuItem, count: Int)] {
+        items.compactMap { item in order[item].map { (item: item, count: $0) } }
+    }
+
+    private var orderCalories: Double { orderLines.reduce(0) { $0 + $1.item.calories * Double($1.count) } }
+    private var orderProtein: Double { orderLines.reduce(0) { $0 + $1.item.protein * Double($1.count) } }
+
+    private var orderCard: some View {
+        let left = caloriesLeft - orderCalories
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Your order")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                Spacer()
+                Text("\(Int(orderCalories)) cal · \(Int(orderProtein)) g protein")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+            }
+            Text(left >= 0 ? "\(Int(left)) calories to spare for this meal" : "\(Int(-left)) over what this meal has")
+                .font(.system(size: 12))
+                .foregroundColor(left >= 0 ? Neka.greenText : Neka.roseText)
+            Button {
+                onLog(orderLines)
+                withAnimation { order = [:] }
+            } label: {
+                Text("Log order").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.nekaPrimary)
+        }
+        .padding(16)
+        .nekaCard(wash: .amber)
+    }
+
+    /// Fits / tight / over against what's left after the order so far.
+    private func fit(_ item: FoodCloud.MenuItem) -> (text: String, ink: Color, fill: Color) {
+        let after = caloriesLeft - orderCalories - item.calories
+        if after >= 100 {
+            let proteinRich = item.protein >= 25 && item.protein * 4 >= item.calories * 0.3
+            return (proteinRich ? "Fits · high protein" : "Fits", Neka.greenText, Neka.greenSoft)
+        }
+        if after >= -100 { return ("Tight", Neka.orangeText, Neka.amberSoft) }
+        return ("Over by \(Int(-after))", Neka.roseText, Neka.roseSoft)
+    }
+
+    // MARK: Load
+
+    private func load() async {
+        // Dialed's own guide shows right away; the full menu fills in after.
+        let curated = (guide?.items ?? []).map { m in
+            FoodCloud.MenuItem(name: m.name, category: Self.section(m.role), calories: m.calories,
+                               protein: m.protein, carbs: m.carbs, fat: m.fat, tip: m.tip)
+        }
+        items = curated
+        error = nil
+        guard FoodCloud.isConfigured else {
+            if curated.isEmpty {
+                error = "Full menus need your Dialed server — add it in Challenge → Live sync."
+            }
+            return
+        }
+        fetching = true
+        defer { fetching = false }
+        do {
+            let menu = try await FoodCloud.menu(for: restaurant)
+            let names = Set(menu.items.map { $0.name.lowercased() })
+            withAnimation(.easeOut(duration: 0.25)) {
+                known = menu.known
+                items = menu.items + curated.filter { !names.contains($0.name.lowercased()) }
+            }
+        } catch {
+            self.error = curated.isEmpty
+                ? "Couldn't get the menu: \(error.localizedDescription)"
+                : "Showing Dialed's picks — couldn't get the full menu (\(error.localizedDescription))."
+        }
+    }
+
+    private static func section(_ role: MenuItem.Role) -> String {
+        switch role {
+        case .main:  return "Entrées"
+        case .side:  return "Sides"
+        case .drink: return "Drinks"
+        }
     }
 }
 

@@ -119,23 +119,55 @@ enum FoodLog {
             .sorted { $0.time < $1.time }
     }
 
-    /// Distinct foods from the last two weeks, most recent first — for one-tap re-logging.
-    static func recents(context: ModelContext, limit: Int = 8) -> [FoodDraft] {
+    /// One food you've logged, folded across every time you had it.
+    struct HistoryFood: Identifiable, Equatable {
+        /// The most recent time's numbers, stamped now — ready to re-log.
+        var draft: FoodDraft
+        var count: Int
+        /// Times in the last 60 days, for ranking your usuals.
+        var recentCount: Int
+        var lastEaten: Date
+        var id: String { draft.name.lowercased() }
+    }
+
+    /// Every distinct food you've ever logged, most recent first. One
+    /// fetch of each kind, so it's fine to call when a sheet opens.
+    static func history(context: ModelContext, now: Date = Date()) -> [HistoryFood] {
         let calendar = Calendar.current
-        let start = calendar.date(byAdding: .day, value: -14, to: calendar.startOfDay(for: Date())) ?? Date()
-        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date()
-        var seen = Set<String>()
-        var out: [FoodDraft] = []
-        for food in entries(from: start, to: end, context: context).reversed() {
+        let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+        let recentStart = calendar.date(byAdding: .day, value: -60, to: now) ?? now
+        var index: [String: Int] = [:]
+        var out: [HistoryFood] = []
+        for food in entries(from: .distantPast, to: end, context: context).reversed() {
+            guard food.name != "Meal", !food.name.isEmpty else { continue }
             let key = food.name.lowercased()
-            guard food.name != "Meal", !seen.contains(key) else { continue }
-            seen.insert(key)
-            var draft = FoodDraft(food)
-            draft.time = Date()
-            out.append(draft)
-            if out.count >= limit { break }
+            let recent = food.time >= recentStart ? 1 : 0
+            if let i = index[key] {
+                out[i].count += 1
+                out[i].recentCount += recent
+            } else {
+                var draft = FoodDraft(food)
+                draft.time = now
+                index[key] = out.count
+                out.append(HistoryFood(draft: draft, count: 1, recentCount: recent, lastEaten: food.time))
+            }
         }
         return out
+    }
+
+    /// What you log most lately: had at least twice, ranked by the last 60 days.
+    static func usuals(_ history: [HistoryFood], limit: Int = 10) -> [HistoryFood] {
+        history
+            .filter { $0.count >= 2 && $0.recentCount >= 1 }
+            .sorted { ($0.recentCount, $0.lastEaten) > ($1.recentCount, $1.lastEaten) }
+            .prefix(limit)
+            .map { $0 }
+    }
+
+    /// Distinct foods, most recent first — for one-tap re-logging. Reaches
+    /// back through your whole history, not just the last two weeks.
+    static func recents(context: ModelContext, limit: Int = 8) -> [FoodDraft] {
+        history(context: context).prefix(limit).map(\.draft)
     }
 
     @discardableResult

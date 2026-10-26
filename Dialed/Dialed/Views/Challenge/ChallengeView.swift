@@ -21,7 +21,24 @@ final class ChallengeViewModel: ObservableObject {
     /// the "set up a challenge" empty state, until then.
     @Published private(set) var hasLoaded = false
 
+    private var lastRefresh = Date.distantPast
+    private var pendingRefresh: Task<Void, Never>?
+
+    /// Data-change pings arrive in bursts from every log; the race report
+    /// reads a week of days, so fold them into one refresh at most every 10 s.
+    func refreshSoon(context: ModelContext) {
+        guard pendingRefresh == nil else { return }
+        let wait = max(0.5, 10 - Date().timeIntervalSince(lastRefresh))
+        pendingRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(wait))
+            guard let self else { return }
+            await self.refresh(context: context)
+            self.pendingRefresh = nil
+        }
+    }
+
     func refresh(context: ModelContext) async {
+        lastRefresh = Date()
         defer { hasLoaded = true }
         let challenge = WeightChallenge.load()
         self.challenge = challenge
@@ -105,7 +122,7 @@ struct ChallengeView: View {
                 Task { await viewModel.refresh(context: modelContext) }
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
-                Task { await viewModel.refresh(context: modelContext) }
+                viewModel.refreshSoon(context: modelContext)
             }
             .onChange(of: router.challengeSheet) { _, request in
                 guard let request else { return }

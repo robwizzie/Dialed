@@ -17,6 +17,11 @@ struct HealthView: View {
     @EnvironmentObject private var router: AppRouter
     @StateObject private var model = HealthDetailModel()
     @State private var showClassicTrends = false
+    /// Off-screen, data changes just mark the page stale; it reloads when
+    /// you come back instead of on every log made elsewhere.
+    @State private var isVisible = false
+    @State private var isStale = false
+    @State private var pendingLoad: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -62,11 +67,19 @@ struct HealthView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .task(id: model.day) { await model.load(context: modelContext) }
+        .onAppear {
+            isVisible = true
+            if isStale {
+                isStale = false
+                scheduleLoad()
+            }
+        }
+        .onDisappear { isVisible = false }
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
-            Task { await model.load(context: modelContext) }
+            if isVisible { scheduleLoad() } else { isStale = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .watchDataDidSync)) { _ in
-            Task { await model.load(context: modelContext) }
+            if isVisible { scheduleLoad() } else { isStale = true }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.rollToToday() }
@@ -75,6 +88,16 @@ struct HealthView: View {
             PillarTrendsView()
                 .environment(\.colorScheme, .dark)
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// One reload for a burst of change notifications.
+    private func scheduleLoad() {
+        pendingLoad?.cancel()
+        pendingLoad = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            await model.load(context: modelContext)
         }
     }
 

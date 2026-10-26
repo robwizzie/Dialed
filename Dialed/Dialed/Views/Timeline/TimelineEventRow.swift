@@ -102,10 +102,15 @@ struct TimelineEventRow: View {
 
     // MARK: - Derived presentation
 
-    private var timeString: String {
+    /// Made once: building a DateFormatter per row render is slow.
+    private static let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateFormat = "h:mm a"
-        return formatter.string(from: event.timestamp)
+        return formatter
+    }()
+
+    private var timeString: String {
+        Self.timeFormatter.string(from: event.timestamp)
     }
 
     private var icon: String {

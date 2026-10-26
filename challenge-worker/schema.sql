@@ -66,3 +66,10 @@ CREATE TABLE IF NOT EXISTS reports (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (challenge_id, role)
 );
+
+-- v5: restaurant menus for food logging, cached per chain (food.js).
+CREATE TABLE IF NOT EXISTS menus (
+  chain_key TEXT PRIMARY KEY,
+  json TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);

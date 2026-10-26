@@ -63,6 +63,10 @@ struct MainTabView: View {
     // Shared with the bottom bar's nested menus and the tabs they drive.
     @StateObject private var router = AppRouter()
     @State private var keyboardVisible = false
+    /// When the quick-log sheet last opened, and when data last changed —
+    /// so closing it only re-announces a change nobody announced.
+    @State private var quickLogOpened = Date.distantPast
+    @State private var lastDataChange = Date.distantPast
 
     init() {
         // The custom bar replaces the system one. Hiding it via appearance is
@@ -112,8 +116,18 @@ struct MainTabView: View {
             withAnimation(.easeOut(duration: 0.2)) { keyboardVisible = false }
         }
         .tint(Neka.green)
+        .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
+            lastDataChange = Date()
+        }
+        .onChange(of: router.quickLog) { _, item in
+            if item != nil { quickLogOpened = Date() }
+        }
         .sheet(item: $router.quickLog, onDismiss: {
-            NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+            // Most logs already announce themselves; only nudge the tabs
+            // when the sheet changed something without saying so.
+            if lastDataChange < quickLogOpened {
+                NotificationCenter.default.post(name: .dialedDataDidChange, object: nil)
+            }
         }) { item in
             quickLogSheet(item)
         }
