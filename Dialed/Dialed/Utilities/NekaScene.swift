@@ -207,34 +207,38 @@ struct NekaDotColumns: View {
 // MARK: - Water
 
 /// Water in a glass: two slow waves at `progress` height with the percent
-/// riding the waterline. Holds still with Reduce Motion on.
+/// riding the waterline. One looping shape animation (no per-frame view
+/// updates); holds still with Reduce Motion on.
 struct NekaWaterLevel: View {
     let progress: Double
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 0 → 2π on a loop; the waves repeat every 2π, so the loop is seamless.
+    @State private var phase: Double = 0
 
     private let deep = Color(light: Color(hex: "7E9FE4"), dark: Color(hex: "2B4C8C"))
     private let shallow = Color(light: Color(hex: "A9C2F0"), dark: Color(hex: "3A63AE"))
 
     var body: some View {
-        SwiftUI.TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
-            let phase = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            GeometryReader { geo in
-                let level = CGFloat(min(1, max(0, progress)))
-                let waterline = geo.size.height * (1 - level)
-                ZStack(alignment: .topLeading) {
-                    NekaWave(phase: phase * 1.1, amplitude: 7, level: level)
-                        .fill(LinearGradient(colors: [shallow.opacity(0.95), deep], startPoint: .top, endPoint: .bottom))
-                    NekaWave(phase: phase * 0.7 + 1.6, amplitude: 4, level: level)
-                        .fill(Color.white.opacity(0.22))
-                    Text("\(Int((min(progress, 9.99) * 100).rounded()))%")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(Neka.surface.opacity(0.7)))
-                        .position(x: geo.size.width - 46, y: max(18, waterline - 20))
-                }
+        GeometryReader { geo in
+            let level = CGFloat(min(1, max(0, progress)))
+            let waterline = geo.size.height * (1 - level)
+            ZStack(alignment: .topLeading) {
+                NekaWave(phase: phase, amplitude: 7, level: level)
+                    .fill(LinearGradient(colors: [shallow.opacity(0.95), deep], startPoint: .top, endPoint: .bottom))
+                NekaWave(phase: 1.6 - phase, amplitude: 4, level: level)
+                    .fill(Color.white.opacity(0.22))
+                Text("\(Int((min(progress, 9.99) * 100).rounded()))%")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Neka.surface.opacity(0.7)))
+                    .position(x: geo.size.width - 46, y: max(18, waterline - 20))
             }
+        }
+        .onAppear {
+            guard !reduceMotion else { return }
+            withAnimation(.linear(duration: 6).repeatForever(autoreverses: false)) { phase = 2 * .pi }
         }
         .accessibilityElement()
         .accessibilityLabel("\(Int((min(progress, 9.99) * 100).rounded())) percent of goal")
@@ -246,6 +250,11 @@ struct NekaWave: Shape {
     var phase: Double
     var amplitude: CGFloat
     var level: CGFloat
+
+    var animatableData: AnimatablePair<Double, CGFloat> {
+        get { AnimatablePair(phase, level) }
+        set { phase = newValue.first; level = newValue.second }
+    }
 
     func path(in rect: CGRect) -> Path {
         let base = rect.height * (1 - level)
