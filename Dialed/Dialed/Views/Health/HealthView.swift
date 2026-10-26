@@ -97,6 +97,8 @@ struct HealthView: View {
         pendingLoad = Task {
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled else { return }
+            // Past the wait: a newer burst queues another pass instead of cancelling this one.
+            pendingLoad = nil
             await model.load(context: modelContext)
         }
     }

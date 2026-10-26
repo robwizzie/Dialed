@@ -115,10 +115,15 @@ final class HealthDetailModel: ObservableObject {
             reloadQueued = true
             return
         }
-        repeat {
-            reloadQueued = false
-            await performLoad(context: context)
-        } while reloadQueued
+        // Owned by the model, so a caller's cancellation (a day step
+        // replacing `.task(id:)`) can't cut a queued pass short.
+        let pass = Task {
+            repeat {
+                reloadQueued = false
+                await performLoad(context: context)
+            } while reloadQueued
+        }
+        await pass.value
     }
 
     private func performLoad(context: ModelContext) async {

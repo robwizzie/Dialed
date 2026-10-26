@@ -408,7 +408,9 @@ struct EatingOutView: View {
             .pickerStyle(.segmented)
 
             if menuTab == .full {
-                FullMenuView(restaurant: guide?.name ?? name, guide: guide,
+                // A nearby bar falls back to the generic bar guide; ask for the venue itself.
+                FullMenuView(restaurant: guide == RestaurantMenus.bar ? (place?.name ?? name) : (guide?.name ?? name),
+                             guide: guide,
                              caloriesLeft: budget.calories, proteinLeft: budget.protein) { items in
                     logMenuItems(items, at: place?.name ?? guide?.name ?? name.capitalized)
                 }
@@ -857,15 +859,19 @@ private struct FullMenuView: View {
             return
         }
         fetching = true
-        defer { fetching = false }
         do {
             let menu = try await FoodCloud.menu(for: restaurant)
+            // Switched restaurants mid-fetch: the newer load owns the state.
+            guard !Task.isCancelled else { return }
+            fetching = false
             let names = Set(menu.items.map { $0.name.lowercased() })
             withAnimation(.easeOut(duration: 0.25)) {
                 known = menu.known
                 items = menu.items + curated.filter { !names.contains($0.name.lowercased()) }
             }
         } catch {
+            guard !Task.isCancelled, (error as? URLError)?.code != .cancelled else { return }
+            fetching = false
             self.error = curated.isEmpty
                 ? "Couldn't get the menu: \(error.localizedDescription)"
                 : "Showing Dialed's picks — couldn't get the full menu (\(error.localizedDescription))."
