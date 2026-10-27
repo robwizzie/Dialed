@@ -18,6 +18,7 @@ struct HealthNutritionPage: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            hero
             tiles
             macroCard
             HealthInsightsCard(title: "Nutrition Insights", insights: insights)
@@ -33,59 +34,96 @@ struct HealthNutritionPage: View {
             mealTimes: model.meals.map(\.time), expectedFraction: expected)
     }
 
+    // MARK: - Hero
+
+    /// Hydration as a glass you watch fill: the wave sits at your share of
+    /// the goal, with the count read over the water and a one-tap refill.
+    private var hero: some View {
+        let scene = Neka.Scene.ice
+        let progress = n.waterTargetOz > 0 ? n.waterOz / n.waterTargetOz : 0
+        let glassesTarget = max(1, Int((n.waterTargetOz / 8).rounded()))
+        let stats = [
+            NekaStat(icon: "drop.fill", label: "Glasses", value: "\(Int(n.waterOz / 8)) of \(glassesTarget)"),
+            NekaStat(icon: "flag.fill", label: "To go", value: "\(Int(max(0, n.waterTargetOz - n.waterOz))) oz"),
+            NekaStat(icon: "flame.fill", label: "Calories", value: Int(n.calories).formatted())
+        ]
+        return VStack(alignment: .leading, spacing: 20) {
+            ZStack(alignment: .topLeading) {
+                NekaWaterLevel(progress: progress)
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Hydration")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(scene.inkSecondary)
+                    Spacer(minLength: 0)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("\(Int(n.waterOz))")
+                            .font(Neka.hero(64))
+                            .kerning(-1.5)
+                            .contentTransition(.numericText())
+                        Text("oz")
+                            .font(Neka.hero(28))
+                    }
+                    .foregroundColor(scene.ink)
+                    Text("of \(Int(n.waterTargetOz)) oz goal")
+                        .font(.system(size: 20, weight: .regular))
+                        .foregroundColor(scene.ink.opacity(0.6))
+                }
+                .padding(20)
+                .accessibilityElement(children: .combine)
+            }
+            .frame(height: 300)
+            .background(scene.glass)
+            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).stroke(scene.glassStroke, lineWidth: 1))
+            NekaInsightPill(text: waterLine, scene: scene)
+            NekaStatRow(stats: stats, scene: scene)
+            if model.isToday {
+                Button { router.quickLog = .water } label: { Text("Add Glass") }
+                    .buttonStyle(.nekaCapsule)
+            }
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+
+    private var waterLine: String {
+        let left = Int(max(0, n.waterTargetOz - n.waterOz))
+        if left == 0 { return "Goal hit — you're well hydrated today." }
+        if !model.isToday { return "Finished \(left) oz short of the goal." }
+        return waterOnPace ? "On pace — \(left) oz to go today." : "A little behind pace — a glass or two now catches you up."
+    }
+
     // MARK: - Tiles
 
     private var tiles: some View {
         let calLeft = n.calorieTarget - n.calories
         let score = HealthInsights.nutritionScore(n)
-        let glassesTarget = max(1, Int((n.waterTargetOz / 8).rounded()))
-        let glasses = Int(n.waterOz / 8)
-        return HealthTileGrid {
-            HealthTile(
-                title: "Calories", value: Int(n.calories).formatted(), unit: "calories",
-                status: n.calories == 0 ? "Nothing logged" : (calLeft >= 0 ? "On track" : "Over budget"),
-                statusColor: calLeft >= 0 ? Neka.green : Neka.rose,
-                footnote: calLeft >= 0 ? "\(Int(calLeft).formatted()) left" : "\(Int(-calLeft).formatted()) over",
-                wash: .peach
-            ) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Spacer(minLength: 0)
-                    Text("of \(Int(n.calorieTarget).formatted()) calories")
-                        .font(.system(size: 11))
-                        .foregroundColor(Neka.inkSecondary)
-                    NekaProgressBar(progress: n.calorieTarget > 0 ? min(1, n.calories / n.calorieTarget) : 0,
-                                    tint: calLeft >= 0 ? Neka.orange : Neka.rose, height: 8)
-                }
-            }
-
-            HealthTile(
-                title: "Protein", value: "\(Int(n.protein))", unit: "g",
-                status: n.protein >= n.proteinTarget * 0.9 ? "Optimal" : "Below target",
-                statusColor: n.protein >= n.proteinTarget * 0.9 ? Neka.green : Neka.orange,
-                footnote: "target \(Int(n.proteinTarget)) g",
-                wash: .mint
-            ) { HealthMiniBars(values: model.proteinHistory.map(\.value), tint: Neka.green, target: n.proteinTarget) }
-
-            HealthTile(
-                title: "Hydration", value: "\(Int(n.waterOz))", unit: "/ \(Int(n.waterTargetOz)) oz",
-                status: waterOnPace ? "On pace" : "Below pace",
-                statusColor: waterOnPace ? Neka.green : Neka.orange,
-                footnote: "\(Int(max(0, n.waterTargetOz - n.waterOz))) oz to go",
-                wash: .sky
-            ) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Spacer(minLength: 0)
-                    Text("\(glasses) of \(glassesTarget) glasses")
-                        .font(.system(size: 11))
-                        .foregroundColor(Neka.inkSecondary)
-                    HStack(spacing: 3) {
-                        ForEach(0..<min(glassesTarget, 15), id: \.self) { i in
-                            Capsule()
-                                .fill(i < glasses ? Neka.sky : Neka.sky.opacity(0.18))
-                                .frame(height: 22)
-                        }
+        return VStack(spacing: 12) {
+            HealthTileGrid {
+                HealthTile(
+                    title: "Calories", value: Int(n.calories).formatted(), unit: "calories",
+                    status: n.calories == 0 ? "Nothing logged" : (calLeft >= 0 ? "On track" : "Over budget"),
+                    statusColor: calLeft >= 0 ? Neka.green : Neka.rose,
+                    footnote: calLeft >= 0 ? "\(Int(calLeft).formatted()) left" : "\(Int(-calLeft).formatted()) over",
+                    wash: .amber
+                ) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Spacer(minLength: 0)
+                        Text("of \(Int(n.calorieTarget).formatted()) calories")
+                            .font(.system(size: 11))
+                            .foregroundColor(Neka.inkSecondary)
+                        NekaProgressBar(progress: n.calorieTarget > 0 ? min(1, n.calories / n.calorieTarget) : 0,
+                                        tint: calLeft >= 0 ? Neka.orange : Neka.rose, height: 8)
                     }
                 }
+
+                HealthTile(
+                    title: "Protein", value: "\(Int(n.protein))", unit: "g",
+                    status: n.protein >= n.proteinTarget * 0.9 ? "Optimal" : "Below target",
+                    statusColor: n.protein >= n.proteinTarget * 0.9 ? Neka.green : Neka.orange,
+                    footnote: "target \(Int(n.proteinTarget)) g",
+                    wash: .lime
+                ) { HealthMiniBars(values: model.proteinHistory.map(\.value), tint: Neka.greenText, target: n.proteinTarget) }
             }
 
             HealthTile(

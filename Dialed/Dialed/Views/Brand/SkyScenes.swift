@@ -67,7 +67,8 @@ struct DaySky: View {
         .accessibilityHidden(true)
     }
 
-    /// Pauses the sky once it scrolls out of view (iOS 18+).
+    /// Pauses the sky once it scrolls out of view (iOS 18+), or at least
+    /// when its screen goes away (iOS 17, where it otherwise never paused).
     private struct OnScreenTracker: ViewModifier {
         @Binding var onScreen: Bool
 
@@ -76,6 +77,8 @@ struct DaySky: View {
                 content.onScrollVisibilityChange(threshold: 0.05) { onScreen = $0 }
             } else {
                 content
+                    .onAppear { onScreen = true }
+                    .onDisappear { onScreen = false }
             }
         }
     }
@@ -355,15 +358,18 @@ struct NightSky: View {
         }
     }
 
+    @State private var onScreen = true
+
     var body: some View {
-        // A slow twinkle is enough; the card isn't the show.
-        SwiftUI.TimelineView(.animation(minimumInterval: 1 / 8, paused: reduceMotion)) { context in
-            let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
-            GeometryReader { geo in
-                let w = geo.size.width, h = geo.size.height
-                ZStack {
-                    LinearGradient(colors: Self.colors(SleepVisuals.DebtTier(debtHours: debtHours)),
-                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+        GeometryReader { geo in
+            let w = geo.size.width, h = geo.size.height
+            ZStack {
+                LinearGradient(colors: Self.colors(SleepVisuals.DebtTier(debtHours: debtHours)),
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                // Only the stars twinkle, so only they redraw; a slow
+                // twinkle is enough, the card isn't the show.
+                SwiftUI.TimelineView(.animation(minimumInterval: 1 / 8, paused: reduceMotion || !onScreen)) { context in
+                    let t = reduceMotion ? 0 : context.date.timeIntervalSinceReferenceDate
                     // A few faint stars, mostly up and to the right, away from the text.
                     Canvas { ctx, size in
                         for i in 0..<18 {
@@ -376,27 +382,29 @@ struct NightSky: View {
                                      with: .color(.white.opacity(twinkle * 0.6)))
                         }
                     }
-                    // A small crescent tucked in the top corner.
-                    let d = min(34, h * 0.2)
-                    Circle()
-                        .fill(LinearGradient(colors: [Color(hex: "FFF6DC"), Color(hex: "F5DFA8")], startPoint: .top, endPoint: .bottom))
-                        .frame(width: d, height: d)
-                        .mask(
-                            ZStack {
-                                Rectangle()
-                                Circle()
-                                    .frame(width: d, height: d)
-                                    .offset(x: d * 0.32, y: -d * 0.18)
-                                    .blendMode(.destinationOut)
-                            }
-                            .compositingGroup()
-                        )
-                        .shadow(color: Color(hex: "FFF4D2").opacity(0.35), radius: 8)
-                        .rotationEffect(.degrees(-18))
-                        .position(x: w - 30, y: 30)
                 }
+                // A small crescent tucked in the top corner, drawn once.
+                let d = min(34, h * 0.2)
+                Circle()
+                    .fill(LinearGradient(colors: [Color(hex: "FFF6DC"), Color(hex: "F5DFA8")], startPoint: .top, endPoint: .bottom))
+                    .frame(width: d, height: d)
+                    .mask(
+                        ZStack {
+                            Rectangle()
+                            Circle()
+                                .frame(width: d, height: d)
+                                .offset(x: d * 0.32, y: -d * 0.18)
+                                .blendMode(.destinationOut)
+                        }
+                        .compositingGroup()
+                    )
+                    .shadow(color: Color(hex: "FFF4D2").opacity(0.35), radius: 8)
+                    .rotationEffect(.degrees(-18))
+                    .position(x: w - 30, y: 30)
             }
         }
+        .onAppear { onScreen = true }
+        .onDisappear { onScreen = false }
         .accessibilityHidden(true)
     }
 }

@@ -17,6 +17,11 @@ struct HealthView: View {
     @EnvironmentObject private var router: AppRouter
     @StateObject private var model = HealthDetailModel()
     @State private var showClassicTrends = false
+    /// Off-screen, data changes just mark the page stale; it reloads when
+    /// you come back instead of on every log made elsewhere.
+    @State private var isVisible = false
+    @State private var isStale = false
+    @State private var pendingLoad: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -56,16 +61,25 @@ struct HealthView: View {
                 await syncWatch()
                 await model.load(context: modelContext)
             }
-            .nekaPageBackground()
-            .nekaStatusBarScrim()
+            .nekaSceneBackground(scene)
+            .nekaStatusBarScrim(scene.top)
+            .animation(.easeInOut(duration: 0.35), value: router.healthSection)
             .toolbar(.hidden, for: .navigationBar)
         }
         .task(id: model.day) { await model.load(context: modelContext) }
+        .onAppear {
+            isVisible = true
+            if isStale {
+                isStale = false
+                scheduleLoad()
+            }
+        }
+        .onDisappear { isVisible = false }
         .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
-            Task { await model.load(context: modelContext) }
+            if isVisible { scheduleLoad() } else { isStale = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .watchDataDidSync)) { _ in
-            Task { await model.load(context: modelContext) }
+            if isVisible { scheduleLoad() } else { isStale = true }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { model.rollToToday() }
@@ -74,6 +88,18 @@ struct HealthView: View {
             PillarTrendsView()
                 .environment(\.colorScheme, .dark)
                 .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// One reload for a burst of change notifications.
+    private func scheduleLoad() {
+        pendingLoad?.cancel()
+        pendingLoad = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            // Past the wait: a newer burst queues another pass instead of cancelling this one.
+            pendingLoad = nil
+            await model.load(context: modelContext)
         }
     }
 
@@ -91,18 +117,20 @@ struct HealthView: View {
 
     // MARK: - Header
 
+    private var scene: Neka.Scene { router.healthSection.scene }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center) {
                 Text(router.healthSection.title)
-                    .font(Neka.display(36, weight: .bold))
-                    .foregroundColor(Neka.ink)
+                    .font(Neka.display(34, weight: .medium))
+                    .foregroundColor(scene.ink)
                 Spacer()
                 dayStepper
             }
             Text(subtitle)
                 .font(.system(size: 15))
-                .foregroundColor(Neka.inkSecondary)
+                .foregroundColor(scene.inkSecondary)
         }
         .padding(.top, 12)
     }
@@ -120,7 +148,7 @@ struct HealthView: View {
             stepButton("chevron.left", enabled: model.canGoBack) { model.shift(-1) }
             Text(model.isToday ? "Today" : model.day.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()))
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Neka.inkSecondary)
+                .foregroundColor(scene.inkSecondary)
                 .frame(minWidth: 64)
                 .contentTransition(.numericText())
             stepButton("chevron.right", enabled: model.canGoForward) { model.shift(1) }
@@ -131,10 +159,10 @@ struct HealthView: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(enabled ? Neka.ink : Neka.inkTertiary)
+                .foregroundColor(scene.ink.opacity(enabled ? 1 : 0.35))
                 .frame(width: 34, height: 34)
-                .background(Circle().fill(Neka.surface))
-                .overlay(Circle().stroke(Neka.hairline, lineWidth: 0.5))
+                .background(Circle().fill(scene.glass))
+                .overlay(Circle().stroke(scene.glassStroke, lineWidth: 1))
         }
         .disabled(!enabled)
         .accessibilityLabel(icon == "chevron.left" ? "Previous day" : "Next day")
@@ -149,15 +177,28 @@ struct HealthView: View {
                 } label: {
                     Label(section.title, systemImage: section.icon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(selected ? Neka.onInk : Neka.ink)
+                        .foregroundColor(selected ? scene.onInk : scene.ink)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .frame(maxWidth: .infinity)
-                        .background(Capsule().fill(selected ? Neka.ink : Neka.surface))
-                        .overlay(Capsule().stroke(Neka.hairline, lineWidth: selected ? 0 : 0.5))
+                        .background(Capsule().fill(selected ? scene.ink : Color.clear))
                 }
                 .buttonStyle(.plain)
             }
+        }
+        .padding(4)
+        .background(Capsule().fill(scene.glass))
+        .overlay(Capsule().stroke(scene.glassStroke, lineWidth: 1))
+    }
+}
+
+extension HealthSection {
+    /// Each page's color mood: lime body, violet night, icy fuel and water.
+    var scene: Neka.Scene {
+        switch self {
+        case .body:      return .lime
+        case .sleep:     return .violet
+        case .nutrition: return .ice
         }
     }
 }

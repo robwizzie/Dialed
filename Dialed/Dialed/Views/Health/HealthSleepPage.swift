@@ -26,6 +26,7 @@ struct HealthSleepPage: View {
     var body: some View {
         VStack(spacing: 16) {
             if let night = model.lastNight {
+                hero(night)
                 scoreCard(night)
                 if model.isToday, let tonight = tonightPlan { tonightCard(tonight) }
                 totalCard(night)
@@ -60,6 +61,56 @@ struct HealthSleepPage: View {
         .padding(24)
         .frame(maxWidth: .infinity)
         .nekaCard()
+    }
+
+    // MARK: - Hero
+
+    /// Read straight off the violet wash: the night in dots, how long you
+    /// slept, how it rated, one insight, the stage split and a wind-down CTA.
+    private func hero(_ night: HealthInsights.Night) -> some View {
+        let scene = Neka.Scene.violet
+        let score = HealthInsights.sleepScore(night)
+        let insight = HealthInsights.sleepInsights(last: night, history: model.nights).first
+        let awake = night.awakeMinutes ?? max(0, night.inBedMinutes - night.asleepMinutes)
+        let stats = [
+            NekaStat(icon: "moon.fill", label: "Deep", value: night.deepMinutes.map(duration) ?? "--"),
+            NekaStat(icon: "sparkle", label: "REM", value: night.remMinutes.map(duration) ?? "--"),
+            NekaStat(icon: "eye", label: "Awake", value: duration(awake))
+        ]
+        return VStack(alignment: .leading, spacing: 20) {
+            if !model.hypnogram.isEmpty {
+                SleepDotHypnogram(segments: model.hypnogram, bedtime: night.bedtime, wake: night.wakeTime, color: scene.ink)
+                    .frame(height: 190)
+            }
+            VStack(alignment: .leading, spacing: 0) {
+                Text(heroDuration(night.asleepMinutes))
+                    .font(Neka.hero(58))
+                    .kerning(-1)
+                    .foregroundColor(scene.ink)
+                    .contentTransition(.numericText())
+                Text(HealthInsights.label(for: score))
+                    .font(.system(size: 26, weight: .regular))
+                    .foregroundColor(scene.inkSecondary)
+            }
+            .accessibilityElement(children: .combine)
+            if let insight {
+                NekaInsightPill(text: insight.text, scene: scene)
+            }
+            NekaStatRow(stats: stats, scene: scene)
+            if model.isToday, let tonight = tonightPlan {
+                Button { editingWake = Calendar.current.startOfDay(for: tonight.wake) } label: {
+                    Text("Wind down at \(tonight.windDown.formatted(date: .omitted, time: .shortened))")
+                }
+                .buttonStyle(.nekaCapsule)
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+    }
+
+    /// 372 → "6H 12M".
+    private func heroDuration(_ minutes: Int) -> String {
+        minutes >= 60 ? "\(minutes / 60)H \(minutes % 60)M" : "\(minutes)M"
     }
 
     // MARK: - Score
@@ -501,5 +552,79 @@ struct HealthSleepPage: View {
             }
         }
         .frame(minWidth: 96, alignment: .leading)
+    }
+}
+
+// MARK: - Dot hypnogram
+
+/// The night as columns of dots hanging from the top: each column reaches
+/// down to the stage you were in at that moment — the deeper the sleep,
+/// the longer the column. Stage names run down the right edge.
+struct SleepDotHypnogram: View {
+    let segments: [HealthKitManager.SleepSegment]
+    let bedtime: Date
+    let wake: Date
+    var color: Color = .white
+    var columns = 36
+    var rows = 14
+
+    private var start: Date { min(bedtime, segments.first?.start ?? bedtime) }
+    private var end: Date { max(wake, segments.map(\.end).max() ?? wake) }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Canvas { ctx, size in
+                    let total = max(60, end.timeIntervalSince(start))
+                    let colW = size.width / CGFloat(columns)
+                    let rowH = size.height / CGFloat(rows)
+                    let dot = max(2, min(colW, rowH) * 0.42)
+                    for c in 0..<columns {
+                        let t = start.addingTimeInterval(total * (Double(c) + 0.5) / Double(columns))
+                        guard let seg = segments.first(where: { $0.start <= t && t < $0.end }) else { continue }
+                        let lit = max(1, Int((Self.depth(seg.stage) * Double(rows)).rounded()))
+                        for r in 0..<lit {
+                            let rect = CGRect(x: colW * (CGFloat(c) + 0.5) - dot / 2,
+                                              y: rowH * (CGFloat(r) + 0.5) - dot / 2,
+                                              width: dot, height: dot)
+                            let fade = 1 - Double(r) / Double(rows) * 0.55
+                            ctx.fill(Path(ellipseIn: rect), with: .color(color.opacity(fade)))
+                        }
+                    }
+                }
+                VStack(alignment: .trailing) {
+                    Text("Awake")
+                    Spacer()
+                    Text("REM")
+                    Spacer()
+                    Text("Light")
+                    Spacer()
+                    Text("Deep")
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(color.opacity(0.7))
+            }
+            HStack {
+                Text(start.formatted(.dateTime.hour()))
+                Spacer()
+                Text(start.addingTimeInterval(end.timeIntervalSince(start) / 2).formatted(.dateTime.hour()))
+                Spacer()
+                Text(end.formatted(.dateTime.hour()))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(color.opacity(0.6))
+            .padding(.trailing, 46)
+        }
+        .accessibilityElement()
+        .accessibilityLabel("Sleep stages from \(start.formatted(date: .omitted, time: .shortened)) to \(end.formatted(date: .omitted, time: .shortened))")
+    }
+
+    private static func depth(_ stage: HealthKitManager.SleepStage) -> Double {
+        switch stage {
+        case .awake: return 0.25
+        case .rem:   return 0.5
+        case .light: return 0.75
+        case .deep:  return 1
+        }
     }
 }

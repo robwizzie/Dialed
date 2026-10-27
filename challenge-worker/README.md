@@ -100,3 +100,34 @@ npx wrangler deploy
 
 Until then the app still builds the report and offers "Text it" to send
 it over Messages.
+
+## Food logging (v5)
+
+The app's food logging can use this server to read meals with Claude
+instead of the on-device model: typed descriptions, meal photos, and full
+restaurant menus. Generic foods are re-priced from USDA FoodData Central
+when you add a key.
+
+| Method | Path | |
+|---|---|---|
+| POST | `/api/food/parse` | `{ text, image?, usuals? }` → itemized meal (`image` is base64 JPEG) |
+| GET | `/api/food/menu?chain=Chick-fil-A` | full menu with nutrition; cached 30 days per chain (`&refresh=1` to rebuild) |
+
+Both need the `x-create-key` header, so the server must have `CREATE_KEY`
+set, with the same key entered in the app. These routes spend your
+Anthropic credits.
+
+To turn it on:
+
+```sh
+npm install                                   # the Anthropic SDK
+npx wrangler secret put ANTHROPIC_API_KEY     # from console.anthropic.com
+npx wrangler secret put CREATE_KEY            # if you haven't already; same key in the app
+npx wrangler secret put FDC_API_KEY           # optional, free: fdc.nal.usda.gov/api-key-signup
+npx wrangler d1 execute dialed-challenge --remote --file schema.sql
+npx wrangler deploy
+```
+
+In Dialed, the server address and create key go in **Challenge → Live
+sync** (the same fields the live challenge uses). Without them the app
+keeps logging food on-device as before.

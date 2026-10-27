@@ -1493,7 +1493,9 @@ struct AppleHealthLinkSheet: View {
         errorMessage = nil
         
         // Fetch all WorkoutLogs to check which health workouts are already linked
-        let fetchDescriptor = FetchDescriptor<WorkoutLog>()
+        // Only the linked ones, and only that column.
+        var fetchDescriptor = FetchDescriptor<WorkoutLog>(predicate: #Predicate { $0.healthKitWorkoutID != nil })
+        fetchDescriptor.propertiesToFetch = [\.healthKitWorkoutID]
         if let allWorkouts = try? modelContext.fetch(fetchDescriptor) {
             linkedWorkoutIDs = Set(allWorkouts.compactMap { $0.healthKitWorkoutID })
         }

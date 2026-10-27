@@ -90,9 +90,16 @@ enum Neka {
     /// gradient that fades into the card color. Deep tinted glass in dark.
     enum Wash {
         case mint, peach, sky, rose, lavender, plain
+        /// Saturated, edge-to-edge tints for headline tiles.
+        case lime, amber, ice, violet, blush
 
         var colors: [Color] {
             switch self {
+            case .lime:     return Self.vivid("C4EFB4", "E6F7A6", dark: "26431F", "18291A")
+            case .amber:    return Self.vivid("FFC66E", "FFE2A0", dark: "4A3416", "2C2114")
+            case .ice:      return Self.vivid("B4C9F0", "DCE6F8", dark: "1C3150", "151F30")
+            case .violet:   return Self.vivid("9A6CF5", "6F3BEB", dark: "4B2A9E", "2E1A63")
+            case .blush:    return Self.vivid("FFC0CB", "FFE0D4", dark: "4A2129", "2C181C")
             case .mint:     return Self.pair("CFEFD4", "EEF8E8", dark: "1D3A27", "17241C")
             case .peach:    return Self.pair("FFE1C7", "FFF1DF", dark: "3D2A1A", "261E17")
             case .sky:      return Self.pair("D4ECFB", "ECF6FD", dark: "17324A", "16212C")
@@ -110,8 +117,25 @@ enum Neka {
             ]
         }
 
+        private static func vivid(_ l1: String, _ l2: String, dark d1: String, _ d2: String) -> [Color] {
+            [Color(light: Color(hex: l1), dark: Color(hex: d1)), Color(light: Color(hex: l2), dark: Color(hex: d2))]
+        }
+
+        var isVivid: Bool {
+            switch self {
+            case .lime, .amber, .ice, .violet, .blush: return true
+            default: return false
+            }
+        }
+
+        /// Text drawn on the wash.
+        var ink: Color { self == .violet ? .white : Neka.ink }
+        var inkSecondary: Color { self == .violet ? Color.white.opacity(0.75) : Neka.inkSecondary }
+
         var gradient: LinearGradient {
-            LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+            isVivid
+                ? LinearGradient(colors: colors, startPoint: .top, endPoint: .bottom)
+                : LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
         }
     }
 
@@ -150,11 +174,12 @@ extension View {
 
     /// Solid band behind the status bar so scrolled content doesn't run
     /// into the clock and battery on screens with a hidden nav bar.
-    func nekaStatusBarScrim() -> some View {
+    /// Pass the scene's `top` on screens with a color wash.
+    func nekaStatusBarScrim(_ color: Color = Neka.paper) -> some View {
         safeAreaInset(edge: .top, spacing: 0) {
             Color.clear
                 .frame(height: 0)
-                .background(Neka.paper.opacity(0.96))
+                .background(color.opacity(0.96))
         }
     }
 

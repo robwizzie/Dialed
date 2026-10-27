@@ -27,6 +27,7 @@ struct HealthBodyPage: View {
 
     var body: some View {
         VStack(spacing: 16) {
+            hero
             tiles
             HealthStressCard(stress: model.stress)
             HealthIllnessCard(check: model.illness, isToday: model.isToday)
@@ -45,11 +46,56 @@ struct HealthBodyPage: View {
         series.filter { $0.date <= model.day }
     }
 
+    // MARK: - Hero
+
+    /// Readiness as one big thin number on the lime wash, then a line on
+    /// how your body is carrying load and the overnight basics.
+    private var hero: some View {
+        let scene = Neka.Scene.lime
+        let breathing = model.value(on: model.respiratory)
+        let line: String? = model.stress?.summary
+            ?? (model.readiness == nil ? "Wear your watch overnight and readiness fills in by morning." : nil)
+        let stats = [
+            NekaStat(icon: "bolt.heart", label: "Stress", value: model.stress?.label ?? "--"),
+            NekaStat(icon: "moon.fill", label: "Sleep",
+                     value: model.lastNight.map { "\($0.asleepMinutes / 60)h \($0.asleepMinutes % 60)m" } ?? "--"),
+            NekaStat(icon: "lungs.fill", label: "Breathing",
+                     value: breathing.map { String(format: "%.1f /min", $0) } ?? "--")
+        ]
+        return VStack(spacing: 20) {
+            VStack(spacing: 0) {
+                Text("Readiness")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(scene.inkSecondary)
+                Text(model.readiness.map { "\($0)" } ?? "--")
+                    .font(Neka.hero(104))
+                    .kerning(-3)
+                    .foregroundColor(scene.ink)
+                    .contentTransition(.numericText())
+                Text("/100")
+                    .font(Neka.hero(22))
+                    .foregroundColor(scene.inkSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
+            if let line {
+                NekaInsightPill(text: line, scene: scene)
+            }
+            NekaStatRow(stats: stats, scene: scene)
+        }
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+
     // MARK: - Tiles
 
     private var tiles: some View {
         let rhr = model.value(on: model.restingHR)
         let hrv = model.value(on: model.hrv)
+        let weight = model.value(on: model.weight)
+        let weightText: String = weight.map { String(format: "%.1f", $0) } ?? "--"
+        let weightDelta: Double? = HealthInsights.percentChange(weight, baseline: baseline(model.weight))
+        let weightAvg: String? = HealthInsights.mean(baseline(model.weight)).map { String(format: "avg %.1f", $0) }
         let steps = model.dailySteps.last { $0.date <= model.day }?.value ?? 0
         let stepAvg = HealthInsights.mean(model.dailySteps.filter { $0.date < model.day }.map(\.value))
         // Hoisted so the tile calls stay cheap to type-check.
@@ -66,32 +112,34 @@ struct HealthBodyPage: View {
                 status: rhrStatus,
                 statusColor: (rhr ?? 0) > 75 ? Neka.orangeText : Neka.greenText,
                 footnote: rhrAvg,
-                wash: .mint
-            ) { HealthSparkline(values: upTo(model.restingHR), tint: Neka.green) }
+                wash: .lime
+            ) { HealthSparkline(values: upTo(model.restingHR), tint: Neka.greenText) }
 
             HealthTile(
                 title: "HRV", value: hrv.map { "\(Int($0.rounded()))" } ?? "--", unit: "ms",
                 delta: HealthInsights.percentChange(hrv, baseline: baseline(model.hrv)),
                 status: hrvStatus(hrv), statusColor: Neka.skyText,
                 footnote: HealthInsights.mean(baseline(model.hrv)).map { "avg \(Int($0))" },
-                wash: .sky
-            ) { HealthMiniBars(values: upTo(model.hrv).suffix(14).map(\.value), tint: Neka.sky) }
+                wash: .ice
+            ) { HealthMiniBars(values: upTo(model.hrv).suffix(14).map(\.value), tint: Neka.skyText) }
 
+            // Readiness leads the page as the hero, so this slot shows weight.
             HealthTile(
-                title: "Readiness", value: model.readiness.map { "\($0)" } ?? "--", unit: "/100",
-                status: model.readiness.map { HealthInsights.label(for: $0) } ?? "Needs HRV + sleep",
-                statusColor: (model.readiness ?? 0) >= 70 ? Neka.greenText : Neka.orangeText,
-                footnote: "estimate",
+                title: "Weight", value: weightText, unit: "lb",
+                delta: weightDelta, goodWhenUp: false,
+                status: weight == nil ? "Connect a scale" : nil,
+                statusColor: Neka.inkSecondary,
+                footnote: weightAvg,
                 wash: .lavender
-            ) { readinessGauge }
+            ) { HealthSparkline(values: upTo(model.weight), tint: Neka.lavenderText) }
 
             HealthTile(
                 title: "Steps", value: Int(steps).formatted(), unit: "",
                 delta: stepsDelta,
                 status: stepsStatus,
                 statusColor: steps >= 10_000 ? Neka.greenText : Neka.inkSecondary,
-                wash: .peach
-            ) { HealthMiniBars(values: recentSteps, tint: Neka.orange, target: 10_000) }
+                wash: .amber
+            ) { NekaDotColumns(values: recentSteps, color: Neka.orangeText, rows: 6) }
         }
     }
 
@@ -100,23 +148,6 @@ struct HealthBodyPage: View {
         if hrv >= avg * 1.05 { return "Above baseline" }
         if hrv <= avg * 0.9 { return "Below baseline" }
         return "On baseline"
-    }
-
-    private var readinessGauge: some View {
-        let value = Double(model.readiness ?? 0) / 100
-        return GeometryReader { geo in
-            ZStack(alignment: .bottom) {
-                Circle()
-                    .trim(from: 0.5, to: 1)
-                    .stroke(Neka.track, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                Circle()
-                    .trim(from: 0.5, to: 0.5 + 0.5 * value)
-                    .stroke(Neka.lavender, style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            }
-            .frame(width: min(geo.size.width, geo.size.height * 2), height: min(geo.size.width, geo.size.height * 2))
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
-            .offset(y: 4)
-        }
     }
 
     // MARK: - Calorie balance
