@@ -41,6 +41,7 @@ struct HomeView: View {
     @State private var skyMotion = SkyMotion()
     @State private var aiAvailability: AIAvailability = DialedAI.availability
     @State private var askedForHealthAccess = false
+    @State private var pendingRefresh: Task<Void, Never>?
 
     /// Switches the tab bar to the Challenge tab.
     var onOpenChallenge: () -> Void = {}
@@ -104,11 +105,13 @@ struct HomeView: View {
                     await DayRecapStore.shared.load(selectedDay, context: modelContext, force: true)
                 }
             }
+            // Settings changes re-read the phone; only a pull to refresh,
+            // coming back to the app or the sync interval pulls the watch.
             .onReceive(NotificationCenter.default.publisher(for: WeightChallenge.didChangeNotification)) { _ in
-                Task { await refreshAll(force: true) }
+                scheduleRefresh()
             }
             .onReceive(NotificationCenter.default.publisher(for: MileSettings.didChange)) { _ in
-                Task { await refreshAll(force: true) }
+                scheduleRefresh()
             }
             .onReceive(NotificationCenter.default.publisher(for: HomeLayout.didChange)) { _ in
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { layout = HomeLayout.load() }
@@ -118,7 +121,7 @@ struct HomeView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .dialedDataDidChange)) { _ in
                 // A quick log re-reads the phone; no need to pull the watch again.
-                Task { await refreshAll(force: true, syncWatch: false) }
+                scheduleRefresh()
             }
             // Coming back to the app (it stays alive in the background for
             // days) re-pulls the watch, so a night that reached Google Health
@@ -181,9 +184,21 @@ struct HomeView: View {
                     SuggestedActivityPage()
                 }
             }
-            .sheet(item: $sheet, onDismiss: { Task { await refreshAll(force: true) } }) { sheet in
+            // Closing a sheet (even Cancel) used to force a full watch sync.
+            .sheet(item: $sheet, onDismiss: { scheduleRefresh() }) { sheet in
                 sheetContent(sheet)
             }
+        }
+    }
+
+    /// One refresh for a burst of changes (a log posts, then its sheet
+    /// closes), re-reading the phone only — no watch sync.
+    private func scheduleRefresh() {
+        pendingRefresh?.cancel()
+        pendingRefresh = Task {
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            await refreshAll(force: true, syncWatch: false)
         }
     }
 

@@ -16,8 +16,11 @@
 //   POST   /api/challenges/:id/bets           propose this week's side bet { week, metric, stake }
 //   PATCH  /api/challenges/:id/bets/:betId    { action: accept|decline|cancel|paid|unpaid } and/or { score }
 //   GET    /c/:id                             the friend's page
+//   POST   /api/food/parse                    itemize a meal (app only — see food.js)
+//   GET    /api/food/menu?chain=…             a restaurant's full menu (app only)
 
 import { page } from "./page.js";
+import { parseMeal, menu } from "./food.js";
 
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
@@ -341,6 +344,16 @@ export default {
     }
 
     if (url.pathname === "/api/challenges" && request.method === "POST") return create(request, env, url);
+
+    // Food routes spend your Anthropic credits, so they always need the app's key.
+    if (url.pathname.startsWith("/api/food/")) {
+      if (!env.CREATE_KEY) return fail(403, "set CREATE_KEY on the server to use food logging");
+      if (request.headers.get("x-create-key") !== env.CREATE_KEY) return fail(403, "bad create key");
+      if (!env.ANTHROPIC_API_KEY) return fail(500, "set ANTHROPIC_API_KEY on the server");
+      if (url.pathname === "/api/food/parse" && request.method === "POST") return parseMeal(request, env);
+      if (url.pathname === "/api/food/menu" && request.method === "GET") return menu(request, env, url);
+      return fail(404, "not found");
+    }
 
     const m = url.pathname.match(/^\/api\/challenges\/([a-f0-9]{12})(\/weighins(?:\/(\d{4}-\d{2}-\d{2}))?|\/messages|\/stats|\/scale|\/reports|\/bets(?:\/([a-f0-9]{12}))?)?\/?$/);
     if (!m) return url.pathname === "/" ? new Response("Dialed challenge server is running.") : fail(404, "not found");

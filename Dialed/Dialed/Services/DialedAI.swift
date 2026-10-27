@@ -153,10 +153,23 @@ enum DialedAI {
     /// model list the ingredients and portions — then the table prices
     /// every one it knows, and the model's own numbers (sanity-checked) are
     /// used only for the rest.
-    static func estimateMeal(_ description: String, seen: [String] = []) async -> AIMealEstimate? {
+    ///
+    /// With your Dialed server set up, Claude reads the meal (and the photo
+    /// itself, not just Vision's labels) and USDA prices it — see FoodCloud.
+    /// Everything below is the offline fallback.
+    static func estimateMeal(_ description: String, seen: [String] = [], photoJPEG: Data? = nil,
+                             usuals: [FoodCloud.Usual] = []) async -> AIMealEstimate? {
         let text = description.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !seen.isEmpty else { return nil }
+        guard !text.isEmpty || !seen.isEmpty || photoJPEG != nil else { return nil }
         let combined = ([text] + seen).filter { !$0.isEmpty }.joined(separator: ", ")
+
+        if FoodCloud.isConfigured {
+            let hint = photoJPEG != nil && !seen.isEmpty ? ([text] + ["looks like: " + seen.joined(separator: ", ")]).filter { !$0.isEmpty }.joined(separator: ". ") : combined
+            if let parsed = await FoodCloud.parse(text: hint, imageJPEG: photoJPEG, usuals: usuals) {
+                return FoodCloud.estimate(parsed)
+            }
+        }
+        guard !combined.isEmpty else { return nil }
 
         let local = MealMath.estimate(combined)
         if local.isComplete {

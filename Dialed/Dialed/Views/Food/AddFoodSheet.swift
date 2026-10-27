@@ -3,10 +3,12 @@
 //  Dialed
 //
 //  The one way to add food, wherever you start: Home, the + menu, the
-//  Food log, the Nutrition page or a widget. Pick how — snap a photo
-//  (Apple Intelligence estimates it), scan a barcode, describe it, or
-//  type it in — or tap a favorite or recent. Every path ends on the same
-//  review screen, so what you confirm and how it's logged never changes.
+//  Food log, the Nutrition page or a widget. Search everything you've
+//  ever logged, re-log a usual in one tap, or pick how — snap a photo,
+//  scan a barcode, describe it, or type it in. Photos and descriptions go
+//  to Claude via your Dialed server when it's set up (FoodCloud), else
+//  Apple Intelligence on-device. Every path ends on the same review
+//  screen, so what you confirm and how it's logged never changes.
 //
 
 import SwiftUI
@@ -29,7 +31,13 @@ struct AddFoodSheet: View {
 
     @State private var stage: Stage = .pick
     @State private var favorites: [SavedMeal] = SavedMealsManager.load()
-    @State private var recents: [FoodDraft] = []
+    /// Everything you've ever logged, newest first.
+    @State private var history: [FoodLog.HistoryFood] = []
+    @State private var query = ""
+    /// How much of the history list is shown; "Show more" adds a page.
+    @State private var historyShown = 30
+    /// Text carried from search into Describe it.
+    @State private var describeSeed = ""
     @State private var didStart = false
 
     enum Stage: Equatable {
@@ -58,7 +66,7 @@ struct AddFoodSheet: View {
                     case .pick:
                         picker
                     case .photo:
-                        MealPhotoStep { draft, seen, estimate in
+                        MealPhotoStep(usuals: cloudUsuals) { draft, seen, estimate in
                             go(.review(stamped(draft), .photo(seen: seen, assumption: estimate.assumption, parts: estimate.parts)))
                         } onManual: { draft in
                             go(.review(stamped(draft), .manual))
@@ -69,7 +77,7 @@ struct AddFoodSheet: View {
                         }
                         .frame(minHeight: 560)
                     case .describe:
-                        DescribeMealStep { draft, estimate in
+                        DescribeMealStep(seed: describeSeed, usuals: cloudUsuals) { draft, estimate in
                             go(.review(stamped(draft), .described(assumption: estimate.assumption, parts: estimate.parts)))
                         } onManual: { draft in
                             go(.review(stamped(draft), .manual))
@@ -87,7 +95,7 @@ struct AddFoodSheet: View {
                                         removal: .opacity))
             }
             .scrollDismissesKeyboard(.interactively)
-            .nekaPageBackground()
+            .nekaSceneBackground(.ice)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -105,7 +113,7 @@ struct AddFoodSheet: View {
             }
         }
         .onAppear {
-            recents = FoodLog.recents(context: modelContext)
+            history = FoodLog.history(context: modelContext)
             if !didStart, let start {
                 didStart = true
                 stage = stageFor(start)
@@ -165,69 +173,266 @@ struct AddFoodSheet: View {
 
     // MARK: - Pick
 
+    /// Your most-logged foods with their numbers, so Claude can resolve
+    /// "my usual cold brew".
+    private var cloudUsuals: [FoodCloud.Usual] {
+        history.sorted { $0.count > $1.count }.prefix(40).map {
+            FoodCloud.Usual(name: $0.draft.name, calories: $0.draft.calories, protein: $0.draft.protein,
+                            carbs: $0.draft.carbs ?? 0, fat: $0.draft.fat ?? 0)
+        }
+    }
+
+    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
     private var picker: some View {
         VStack(alignment: .leading, spacing: 18) {
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    MethodTile(icon: "camera.fill", title: "Snap a meal",
-                               subtitle: DialedAI.isAvailable ? "Apple Intelligence estimates it" : "Photo, then fill in",
-                               tint: Neka.lavender, fill: Neka.lavenderSoft, sparkle: DialedAI.isAvailable) { go(.photo) }
-                    MethodTile(icon: "barcode.viewfinder", title: "Scan barcode",
-                               subtitle: "Packaged food, exact label",
-                               tint: Neka.sky, fill: Neka.skySoft) { go(.scan) }
+            searchField
+            if trimmedQuery.isEmpty {
+                methods
+                eatingOutCard
+                if !favorites.isEmpty {
+                    savedList(title: "Favorites", icon: "star.fill", items: favorites.map(FoodDraft.init))
                 }
-                HStack(spacing: 12) {
-                    MethodTile(icon: "text.bubble.fill", title: "Describe it",
-                               subtitle: "\"Chipotle bowl, double chicken\"",
-                               tint: Neka.green, fill: Neka.greenSoft, sparkle: DialedAI.isAvailable) { go(.describe) }
-                    MethodTile(icon: "square.and.pencil", title: "Enter by hand",
-                               subtitle: "Calories, protein, carbs, fat",
-                               tint: Neka.orange, fill: Neka.orangeSoft) { go(stageFor(.manual)) }
+                usualsStrip
+                historySection
+            } else {
+                searchResults
+            }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(Neka.inkSecondary)
+            TextField("Search your history or any food", text: $query)
+                .font(.system(size: 16))
+                .submitLabel(.search)
+                .onSubmit { if !trimmedQuery.isEmpty { describe(trimmedQuery) } }
+            if !query.isEmpty {
+                Button { query = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundColor(Neka.inkTertiary)
+                }
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 50)
+        .background(Capsule().fill(Neka.surface.opacity(0.8)))
+        .overlay(Capsule().stroke(Neka.Scene.ice.glassStroke, lineWidth: 1))
+    }
+
+    private var methods: some View {
+        HStack(spacing: 8) {
+            MethodChip(icon: "camera.fill", title: "Photo", tint: Neka.lavenderText) { go(.photo) }
+            MethodChip(icon: "barcode.viewfinder", title: "Barcode", tint: Neka.skyText) { go(.scan) }
+            MethodChip(icon: "text.bubble.fill", title: "Describe", tint: Neka.greenText) { describe("") }
+            MethodChip(icon: "square.and.pencil", title: "Manual", tint: Neka.orangeText) { go(stageFor(.manual)) }
+        }
+    }
+
+    // Eating out: pick a restaurant, get an order that fits today.
+    private var eatingOutCard: some View {
+        Button { go(.eatingOut) } label: {
+            HStack(spacing: 14) {
+                Text("🍽️")
+                    .font(.system(size: 26))
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(Neka.surface))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Eating out?")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                    Text(FoodCloud.isConfigured ? "Full menus, tagged by what fits today" : "Pick a restaurant — get an order that fits today")
+                        .font(.system(size: 12))
+                        .foregroundColor(Neka.inkSecondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(Neka.inkTertiary)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing))
+            )
+        }
+        .buttonStyle(.dialedScale)
+    }
+
+    @ViewBuilder
+    private var usualsStrip: some View {
+        let usuals = FoodLog.usuals(history)
+        if !usuals.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("Your usuals", icon: "repeat")
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(usuals) { food in
+                            Button { go(.review(stamped(food.draft), .saved)) } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(food.draft.name)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(Neka.ink)
+                                        .lineLimit(1)
+                                    Text("\(Int(food.draft.calories)) cal · \(food.count)×")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(Neka.inkSecondary)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .frame(maxWidth: 180, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Neka.surface))
+                            }
+                            .buttonStyle(.dialedScale)
+                            .accessibilityLabel("Add \(food.draft.name)")
+                        }
+                    }
                 }
             }
+        }
+    }
 
-            // Eating out: pick a restaurant, get an order that fits today.
-            Button { go(.eatingOut) } label: {
-                HStack(spacing: 14) {
-                    Text("🍽️")
-                        .font(.system(size: 26))
-                        .frame(width: 48, height: 48)
+    @ViewBuilder
+    private var historySection: some View {
+        if !history.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionLabel("History · \(history.count) foods", icon: "clock.arrow.circlepath")
+                historyList(Array(history.prefix(historyShown)), groupedByMonth: true)
+                if history.count > historyShown {
+                    Button("Show more") { historyShown += 50 }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(Neka.skyText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 4)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        let q = trimmedQuery.lowercased()
+        let matches = history.filter { $0.draft.name.lowercased().contains(q) }
+        VStack(alignment: .leading, spacing: 8) {
+            // Anything not in your history: Claude (or the food table) reads it.
+            Button { describe(trimmedQuery) } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(LinearGradient(colors: Neka.intelligence, startPoint: .leading, endPoint: .trailing))
+                        .frame(width: 38, height: 38)
                         .background(Circle().fill(Neka.surface))
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Eating out?")
-                            .font(.system(size: 16, weight: .semibold))
+                        Text("Look up “\(trimmedQuery)”")
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(Neka.ink)
-                        Text("Pick a restaurant — get an order that fits today")
+                            .lineLimit(1)
+                        Text("Any food, brand or restaurant item")
                             .font(.system(size: 12))
                             .foregroundColor(Neka.inkSecondary)
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.system(size: 12, weight: .bold))
                         .foregroundColor(Neka.inkTertiary)
                 }
                 .padding(14)
-                .background(
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
-                        .fill(LinearGradient(colors: [Neka.amberSoft, Neka.orangeSoft], startPoint: .leading, endPoint: .trailing))
-                )
+                .nekaCard()
             }
             .buttonStyle(.dialedScale)
-
-            if !favorites.isEmpty {
-                savedList(title: "Favorites", icon: "star.fill", items: favorites.map(FoodDraft.init))
-            }
-            if !recents.isEmpty {
-                savedList(title: "Recent", icon: "clock.arrow.circlepath", items: Array(recents.prefix(6)))
+            if !matches.isEmpty {
+                sectionLabel("From your history · \(matches.count)", icon: "clock.arrow.circlepath")
+                    .padding(.top, 6)
+                historyList(Array(matches.prefix(60)), groupedByMonth: false)
             }
         }
     }
 
+    private func describe(_ text: String) {
+        describeSeed = text
+        go(.describe)
+    }
+
+    private func sectionLabel(_ title: String, icon: String) -> some View {
+        Label(title, systemImage: icon)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(Neka.inkSecondary)
+    }
+
+    /// Rows of past foods; month headers between them when `groupedByMonth`.
+    private func historyList(_ foods: [FoodLog.HistoryFood], groupedByMonth: Bool) -> some View {
+        let calendar = Calendar.current
+        return LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(foods.enumerated()), id: \.element.id) { index, food in
+                let month = calendar.dateInterval(of: .month, for: food.lastEaten)?.start
+                let previousMonth = index > 0 ? calendar.dateInterval(of: .month, for: foods[index - 1].lastEaten)?.start : nil
+                if groupedByMonth, index > 0, month != previousMonth {
+                    Text(food.lastEaten.formatted(.dateTime.month(.wide).year()).uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .tracking(0.6)
+                        .foregroundColor(Neka.inkTertiary)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 12)
+                        .padding(.bottom, 4)
+                } else if index > 0 {
+                    Divider().overlay(Neka.hairline).padding(.leading, 14)
+                }
+                historyRow(food)
+            }
+        }
+        .nekaCard()
+    }
+
+    private func historyRow(_ food: FoodLog.HistoryFood) -> some View {
+        Button { go(.review(stamped(food.draft), .saved)) } label: {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(food.draft.name)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Neka.ink)
+                        .lineLimit(1)
+                    Text(historyMeta(food))
+                        .font(.system(size: 12))
+                        .foregroundColor(Neka.inkSecondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(Neka.green)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Add \(food.draft.name)")
+    }
+
+    /// "Sep 14 · 610 cal · 44 g · had 6×"
+    private func historyMeta(_ food: FoodLog.HistoryFood) -> String {
+        let calendar = Calendar.current
+        let when: String
+        if calendar.isDateInToday(food.lastEaten) {
+            when = "Today"
+        } else if calendar.isDateInYesterday(food.lastEaten) {
+            when = "Yesterday"
+        } else if calendar.isDate(food.lastEaten, equalTo: Date(), toGranularity: .year) {
+            when = food.lastEaten.formatted(.dateTime.month(.abbreviated).day())
+        } else {
+            when = food.lastEaten.formatted(.dateTime.month(.abbreviated).day().year())
+        }
+        var parts = [when, "\(Int(food.draft.calories)) cal", "\(Int(food.draft.protein)) g"]
+        if food.count > 1 { parts.append("had \(food.count)×") }
+        return parts.joined(separator: " · ")
+    }
+
     private func savedList(title: String, icon: String, items: [FoodDraft]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(title, systemImage: icon)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(Neka.inkSecondary)
+            sectionLabel(title, icon: icon)
             VStack(spacing: 0) {
                 ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                     if index > 0 { Divider().overlay(Neka.hairline).padding(.leading, 14) }
@@ -260,47 +465,30 @@ struct AddFoodSheet: View {
     }
 }
 
-// MARK: - Method tile
+// MARK: - Method chip
 
-private struct MethodTile: View {
+private struct MethodChip: View {
     let icon: String
     let title: String
-    let subtitle: String
     let tint: Color
-    let fill: Color
-    var sparkle = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(tint)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(Neka.surface))
-                    Spacer()
-                    if sparkle {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(LinearGradient(colors: Neka.intelligence, startPoint: .leading, endPoint: .trailing))
-                    }
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(Neka.ink)
-                    Text(subtitle)
-                        .font(.system(size: 11.5))
-                        .foregroundColor(Neka.inkSecondary)
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(tint)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Neka.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(fill))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Neka.Scene.ice.glass))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Neka.Scene.ice.glassStroke, lineWidth: 1))
         }
         .buttonStyle(.dialedScale)
     }
@@ -312,6 +500,7 @@ private struct MethodTile: View {
 /// what's right and add anything it can't see, then Apple Intelligence
 /// estimates the meal.
 private struct MealPhotoStep: View {
+    var usuals: [FoodCloud.Usual] = []
     var onEstimate: (FoodDraft, [String], AIMealEstimate) -> Void
     var onManual: (FoodDraft) -> Void
 
@@ -380,7 +569,9 @@ private struct MealPhotoStep: View {
                 Text("Snap your plate")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundColor(Neka.ink)
-                Text("Dialed spots the food on your phone, then Apple Intelligence estimates calories, protein, carbs and fat. You confirm before anything's logged.")
+                Text(FoodCloud.isConfigured
+                     ? "Claude reads your plate and prices each food from USDA data. You confirm before anything's logged."
+                     : "Dialed spots the food on your phone, then Apple Intelligence estimates calories, protein, carbs and fat. You confirm before anything's logged.")
                     .font(.system(size: 13))
                     .foregroundColor(Neka.inkSecondary)
                     .multilineTextAlignment(.center)
@@ -434,12 +625,13 @@ private struct MealPhotoStep: View {
                 } label: {
                     HStack {
                         if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
-                        Text(estimating ? "Estimating on-device…" : "Estimate it")
+                        Text(estimating ? (FoodCloud.isConfigured ? "Reading your plate…" : "Estimating on-device…") : "Estimate it")
                     }
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.nekaPrimary)
-                .disabled(estimating || (chosen.isEmpty && extra.trimmingCharacters(in: .whitespaces).isEmpty))
+                // With the server, the photo alone is enough.
+                .disabled(estimating || (!FoodCloud.isConfigured && chosen.isEmpty && extra.trimmingCharacters(in: .whitespaces).isEmpty))
                 if failed {
                     Text("Couldn't estimate that one — add a detail or two, or fill it in yourself.")
                         .font(.system(size: 12))
@@ -481,6 +673,20 @@ private struct MealPhotoStep: View {
         }
     }
 
+    /// Longest side 1280 px, JPEG 0.7 — plenty to read a plate, a few hundred KB to send.
+    private static func uploadJPEG(_ image: UIImage) -> Data? {
+        let longest = max(image.size.width, image.size.height)
+        guard longest > 0 else { return nil }
+        let scale = min(1, 1280 / longest)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let resized = UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.7)
+    }
+
     private func reset() {
         image = nil
         seen = []
@@ -493,7 +699,8 @@ private struct MealPhotoStep: View {
         estimating = true
         failed = false
         defer { estimating = false }
-        guard let r = await DialedAI.estimateMeal(extra, seen: keptItems) else {
+        let jpeg = FoodCloud.isConfigured ? image.flatMap(Self.uploadJPEG) : nil
+        guard let r = await DialedAI.estimateMeal(extra, seen: keptItems, photoJPEG: jpeg, usuals: usuals) else {
             failed = true
             return
         }
@@ -573,6 +780,9 @@ struct CameraPicker: UIViewControllerRepresentable {
 // MARK: - Describe
 
 private struct DescribeMealStep: View {
+    /// Text carried over from search.
+    var seed: String = ""
+    var usuals: [FoodCloud.Usual] = []
     var onEstimate: (FoodDraft, AIMealEstimate) -> Void
     var onManual: (FoodDraft) -> Void
 
@@ -599,7 +809,7 @@ private struct DescribeMealStep: View {
             } label: {
                 HStack {
                     if estimating { ProgressView().tint(Neka.onInk) } else { Image(systemName: "sparkles") }
-                    Text(estimating ? "Estimating on-device…" : "Estimate it")
+                    Text(estimating ? (FoodCloud.isConfigured ? "Reading it…" : "Estimating on-device…") : "Estimate it")
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -619,14 +829,17 @@ private struct DescribeMealStep: View {
             .foregroundColor(Neka.inkSecondary)
             .frame(maxWidth: .infinity)
         }
-        .onAppear { focused = true }
+        .onAppear {
+            if text.isEmpty, !seed.isEmpty { text = seed }
+            focused = true
+        }
     }
 
     private func estimate() async {
         estimating = true
         failed = false
         defer { estimating = false }
-        guard let r = await DialedAI.estimateMeal(text) else {
+        guard let r = await DialedAI.estimateMeal(text, usuals: usuals) else {
             failed = true
             return
         }
@@ -788,7 +1001,7 @@ private struct FoodReviewStep: View {
                         Text(part.name)
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(Neka.ink)
-                        Text(part.fromTable ? part.amount : "\(part.amount) · estimated")
+                        Text(part.sourceLabel.map { "\(part.amount) · \($0)" } ?? (part.fromTable ? part.amount : "\(part.amount) · estimated"))
                             .font(.system(size: 11.5))
                             .foregroundColor(Neka.inkSecondary)
                     }
@@ -920,7 +1133,7 @@ private struct FoodReviewStep: View {
             note("sparkles", "From your photo\(seen.isEmpty ? "" : " (\(seen.joined(separator: ", ")))")." + (assumption.map { " \($0)" } ?? ""))
         case .described(let assumption, let parts):
             note(parts.allSatisfy(\.fromTable) && !parts.isEmpty ? "list.bullet.rectangle" : "sparkles",
-                 assumption ?? "Estimated by Apple Intelligence.")
+                 assumption ?? (FoodCloud.isConfigured ? "Estimated by Claude." : "Estimated by Apple Intelligence."))
         case .barcode:
             note("barcode", "From the label via Open Food Facts — double-check the serving.")
         case .saved:

@@ -377,7 +377,8 @@ struct ActiveMomentsStrip: View {
                     .font(.system(size: 12, weight: .heavy, design: .rounded))
                     .foregroundColor(.white)
             }
-            .shadow(color: Neka.rose.opacity(pulse ? 0.55 : 0.15), radius: pulse ? 6 : 2)
+            // A fixed shadow: animating its radius re-rendered it every frame, forever.
+            .shadow(color: Neka.rose.opacity(0.35), radius: 4)
             .scaleEffect(pulse ? 1.06 : 1)
         case .named:
             Capsule().fill(LinearGradient(colors: [Neka.amber, Neka.orange], startPoint: .leading, endPoint: .trailing))

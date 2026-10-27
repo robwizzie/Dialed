@@ -95,8 +95,25 @@ enum EarnedCalories {
 
 extension EarnedCalories {
 
+    /// Days that are over, recently computed. Each day costs Health and
+    /// Google requests, and the race report and Home ask for a week of
+    /// them on every refresh.
+    @MainActor private static var finishedDays: [Date: (at: Date, day: Day)] = [:]
+
     @MainActor
     static func day(_ date: Date = Date(), context: ModelContext) async -> Day {
+        let start = Calendar.current.startOfDay(for: date)
+        let isPast = start < Calendar.current.startOfDay(for: Date())
+        if isPast, let hit = finishedDays[start], Date().timeIntervalSince(hit.at) < 20 * 60 {
+            return hit.day
+        }
+        let result = await computeDay(date, context: context)
+        if isPast { finishedDays[start] = (Date(), result) }
+        return result
+    }
+
+    @MainActor
+    private static func computeDay(_ date: Date, context: ModelContext) async -> Day {
         let calendar = Calendar.current
         let start = calendar.startOfDay(for: date)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? date
